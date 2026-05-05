@@ -2,10 +2,10 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/providers/ThemeProvider"
+import Providers from "@/app/providers"          // <-- changed
 import SplashScreen from "@/components/ui/SplashScreen"
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ["latin"],
   variable: '--font-inter',
 })
@@ -29,7 +29,7 @@ export default function RootLayout({
               (function() {
                 const stored = localStorage.getItem('robosocial-theme');
                 const theme = stored || 'system';
-                const resolved = theme === 'system' 
+                const resolved = theme === 'system'
                   ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
                   : theme;
                 document.documentElement.classList.add(resolved);
@@ -39,11 +39,11 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} font-sans`}>
-        <ThemeProvider defaultTheme="system">
+        <Providers>                           {/* ← now wraps ThemeProvider + SessionProvider */}
           <SplashScreen>
             {children}
           </SplashScreen>
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   )
