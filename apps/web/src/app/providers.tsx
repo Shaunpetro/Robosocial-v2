@@ -1,6 +1,8 @@
+// apps/web/src/app/providers.tsx
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { SessionProvider } from 'next-auth/react'; // ← added
 
 type Theme = 'light' | 'dark' | 'system';
 type ResolvedTheme = 'light' | 'dark';
@@ -74,4 +76,13 @@ export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error('useTheme must be used within ThemeProvider');
   return context;
+}
+
+// Wrap the whole app with both SessionProvider and ThemeProvider
+export default function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <ThemeProvider>{children}</ThemeProvider>
+    </SessionProvider>
+  );
 }

@@ -10,23 +10,24 @@ datasource db {
 }
 
 // ============================================
-// AUTHENTICATION MODELS
+// AUTHENTICATION (NEXT-AUTH V5 + JWT)
 // ============================================
 
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String?
-  sessions  Session[]
+  password  String     // bcrypt hash
+  role      UserRole   @default(USER)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  companies Company[]
 }
 
-model Session {
-  id        String   @id
-  userId    String
-  expiresAt DateTime
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum UserRole {
+  USER
+  ADMIN
 }
 
 // ============================================
@@ -37,10 +38,11 @@ model Company {
   id          String   @id @default(cuid())
   name        String
   website     String?
-  industry    String?  // Legacy field - kept for backward compatibility
+  industry    String?
   description String?
   logoUrl     String?
-  userId      String   @default("temp-user-001")
+  ownerId     String?       // FK to User (optional for backward compatibility)
+  owner       User?         @relation(fields: [ownerId], references: [id])
 
   platforms         Platform[]
   contentSettings   ContentSettings?
@@ -48,7 +50,7 @@ model Company {
   media             Media[]
   intelligence      CompanyIntelligence?
   contentQueueItems ContentQueueItem[]
-  documents         CompanyDocument[]      // NEW: Company profile documents
+  documents         CompanyDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,22 +82,17 @@ enum PlatformType {
   WORDPRESS
 }
 
-// ============================================
-// NEW: COMPANY DOCUMENTS (PDF Profiles, Brochures)
-// ============================================
-
 model CompanyDocument {
   id        String @id @default(cuid())
   companyId String
 
-  type     String // 'company_profile' | 'capability_statement' | 'brochure' | 'other'
+  type     String
   filename String
-  url      String // Vercel Blob URL or external URL
+  url      String
   mimeType String
   size     Int
 
-  // Analysis tracking
-  extractedText String?   @db.Text // Extracted text from PDF
+  extractedText String?   @db.Text
   analyzedAt    DateTime?
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -105,10 +102,6 @@ model CompanyDocument {
 
   @@index([companyId])
 }
-
-// ============================================
-// CONTENT SETTINGS (Legacy - kept for compatibility)
-// ============================================
 
 model ContentSettings {
   id        String @id @default(cuid())
@@ -135,15 +128,10 @@ model ContentSettings {
   updatedAt DateTime @updatedAt
 }
 
-// ============================================
-// MEDIA LIBRARY (SMART SYSTEM WITH LIFECYCLE)
-// ============================================
-
 model Media {
   id        String @id @default(cuid())
   companyId String
 
-  // File Information
   filename     String
   url          String
   thumbnailUrl String?
@@ -154,26 +142,21 @@ model Media {
   height       Int?
   altText      String?
 
-  // Categorization
-  pillarIds    String[] // References to ContentPillar IDs
-  tags         String[] // Custom tags (e.g., "pasta", "team photo")
-  contentTypes String[] // educational, engagement, social_proof, promotional
+  pillarIds    String[]
+  tags         String[]
+  contentTypes String[]
 
-  // Lifecycle Management
   isUsed       Boolean   @default(false)
   usedAt       DateTime?
-  usedInPostId String? // Reference to the post that used this media
-  expiresAt    DateTime // Auto-set to createdAt + 2 months
+  usedInPostId String?
+  expiresAt    DateTime
 
-  // Auto-Selection
-  autoSelect Boolean @default(true) // Include in auto-selection pool
-  priority   Int     @default(0) // Higher = selected first (for expiring soon)
+  autoSelect Boolean @default(true)
+  priority   Int     @default(0)
 
-  // Usage Tracking (for analytics)
   usageCount Int       @default(0)
   lastUsedAt DateTime?
 
-  // Relations
   company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   postMedia PostMedia[]
 
@@ -190,10 +173,6 @@ enum MediaType {
   VIDEO
   GIF
 }
-
-// ============================================
-// GENERATED POSTS & SCHEDULING
-// ============================================
 
 model GeneratedPost {
   id         String @id @default(cuid())
@@ -275,10 +254,6 @@ enum PostStatus {
   ARCHIVED
 }
 
-// ============================================
-// BULK SCHEDULE TRACKING
-// ============================================
-
 model BulkSchedule {
   id        String @id @default(cuid())
   companyId String
@@ -304,18 +279,11 @@ enum BulkScheduleStatus {
   CANCELLED
 }
 
-// ============================================
-// V3: CONTENT INTELLIGENCE SYSTEM
-// ============================================
-
 model CompanyIntelligence {
   id        String  @id @default(cuid())
   companyId String  @unique
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  // ============================================
-  // EXISTING: BRAND IDENTITY
-  // ============================================
   brandPersonality    String[]
   brandVoice          String?
   uniqueSellingPoints String[]
@@ -330,9 +298,6 @@ model CompanyIntelligence {
   industryHashtags String[]
   brandedHashtags  String[]
 
-  // ============================================
-  // EXISTING: TONE & HUMOR SETTINGS
-  // ============================================
   defaultTone     String   @default("professional")
   humorEnabled    Boolean  @default(true)
   humorStyle      String?
@@ -340,18 +305,12 @@ model CompanyIntelligence {
   humorTimes      String[]
   dayToneSchedule Json?
 
-  // ============================================
-  // EXISTING: POSTING SCHEDULE
-  // ============================================
   postsPerWeek   Int      @default(4)
   preferredDays  String[]
   preferredTimes Json?
   timezone       String   @default("Africa/Johannesburg")
   autoApprove    Boolean  @default(false)
 
-  // ============================================
-  // EXISTING: LEARNED INTELLIGENCE
-  // ============================================
   learnedBestDays    String[]
   learnedBestTimes   Json?
   learnedBestPillars Json?
@@ -369,9 +328,6 @@ model CompanyIntelligence {
   lastIntelligenceUpdate DateTime?
   weeklyPostTarget       Int?
 
-  // ============================================
-  // EXISTING: COMPETITOR ANALYSIS
-  // ============================================
   competitors    Competitor[]
   competitorGaps String[]
 
@@ -381,85 +337,43 @@ model CompanyIntelligence {
   onboardingCompleted Boolean   @default(false)
   lastResearchSync    DateTime?
 
-  // ============================================
-  // EXISTING: MEDIA CONTENT BALANCE SETTINGS
-  // ============================================
   mediaBalanceEnabled Boolean @default(true)
-  mediaPostRatio      Int     @default(60) // Percentage of posts with media (0-100)
+  mediaPostRatio      Int     @default(60)
 
-  // Content-type specific ratios (percentage with media)
   educationalMediaRatio Int @default(50)
   engagementMediaRatio  Int @default(30)
   socialProofMediaRatio Int @default(80)
   promotionalMediaRatio Int @default(70)
 
-  // Expiring media handling
   prioritizeExpiringMedia Boolean @default(true)
-  expiryWarningDays       Int     @default(7) // Days before expiry to prioritize
+  expiryWarningDays       Int     @default(7)
 
-  // ============================================
-  // NEW: DATA SOURCES FOR AI ANALYSIS
-  // ============================================
-  // Stores URLs/references to data sources used for analysis
-  // Format: { website: "url", linkedin: "url", pdfUrl: "url", manual: "text" }
   dataSources     Json?
   lastAnalyzedAt  DateTime?
-  analysisVersion Int       @default(1) // Increment on each re-analysis
+  analysisVersion Int       @default(1)
 
-  // ============================================
-  // NEW: AI ANALYSIS RESULTS
-  // ============================================
-  // Full structured analysis output from Groq
   aiAnalysis        Json?
-  aiConfidenceScore Float? // Overall confidence 0-1
+  aiConfidenceScore Float?
 
-  // Extracted & User-Confirmable Data
-  // Format: [{ code: "CONST_CE", name: "Civil Engineering", confidence: 0.95, cidbGrade: 7 }]
   extractedIndustries Json?
+  extractedServices   Json?
+  extractedUSPs       Json?
+  extractedAudience   Json?
+  extractedVoice      Json?
+  extractedSAContext  Json?
 
-  // Format: [{ name: "Structural Steel", keywords: ["steel", "structural"], isCore: true }]
-  extractedServices Json?
-
-  // Format: [{ point: "CIDB Level 7 in 5 disciplines", category: "certification", evidence: "..." }]
-  extractedUSPs Json?
-
-  // Format: { businessType: "B2B", primarySectors: ["Mining"], decisionMakers: ["Procurement Managers"], ... }
-  extractedAudience Json?
-
-  // Format: { formality: "professional", personality: ["confident", "expert"], technicalLevel: "high" }
-  extractedVoice Json?
-
-  // Format: { bbeeLevel: 2, cidbGrades: { CE: 7, GB: 7 }, provinces: ["Gauteng"], industryBodies: ["SAFCEC"] }
-  extractedSAContext Json?
-
-  // ============================================
-  // NEW: USER CONFIRMATION STATUS
-  // ============================================
   industriesConfirmed Boolean @default(false)
   servicesConfirmed   Boolean @default(false)
   uspsConfirmed       Boolean @default(false)
   audienceConfirmed   Boolean @default(false)
   voiceConfirmed      Boolean @default(false)
 
-  // ============================================
-  // NEW: BUSINESS GOAL (User Selected)
-  // ============================================
-  // Drives content strategy: 'leads' | 'awareness' | 'recruitment' | 'engagement'
   primaryBusinessGoal String?
   secondaryGoals      String[]
 
-  // ============================================
-  // NEW: AUTO-GENERATED CONTENT STRATEGY
-  // ============================================
-  // Custom content mix based on goal + audience (overrides default 40-30-20-10)
   generatedContentMix Json?
-
-  // Content themes per service/industry
-  // Format: [{ theme: "Technical Expertise", purpose: "...", topicExamples: [...], frequency: "weekly" }]
-  generatedThemes Json?
-
-  // Specific topic suggestions ready for content generation
-  generatedTopics Json?
+  generatedThemes     Json?
+  generatedTopics     Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
