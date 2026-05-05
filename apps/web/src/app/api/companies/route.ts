@@ -1,3 +1,4 @@
+// apps/web/src/app/api/companies/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
         website: website?.trim() || null,
         industry: industry?.trim() || null,
         description: description?.trim() || null,
-        userId: 'temp-user-001', // TODO: Replace with real user ID from auth
+        ownerId: null, // Will be set when auth is fully integrated
       },
       include: {
         platforms: true,
