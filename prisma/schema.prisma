@@ -17,7 +17,7 @@ model User {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String?
-  password  String     // bcrypt hash
+  password  String
   role      UserRole   @default(USER)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -31,6 +31,27 @@ enum UserRole {
 }
 
 // ============================================
+// LICENSING (Phase 2 – Safer License Key System)
+// ============================================
+
+model License {
+  id                 String        @id @default(cuid())
+  customerName       String
+  licenseKeyHash     String        @unique
+  maxSocialAccounts  Int           @default(5)
+  status             LicenseStatus @default(ACTIVE)
+  expiresAt          DateTime
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+enum LicenseStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// ============================================
 // COMPANY & PLATFORM MODELS
 // ============================================
 
@@ -41,8 +62,8 @@ model Company {
   industry    String?
   description String?
   logoUrl     String?
-  ownerId     String?       // FK to User (optional for backward compatibility)
-  owner       User?         @relation(fields: [ownerId], references: [id])
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id])
 
   platforms         Platform[]
   contentSettings   ContentSettings?
