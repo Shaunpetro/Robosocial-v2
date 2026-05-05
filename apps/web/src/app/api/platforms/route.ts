@@ -1,8 +1,9 @@
+// apps/web/src/app/api/platforms/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { PLATFORMS } from "@/lib/platforms";
 
-const TEMP_USER_ID = "temp-user-001";
+const TEMP_USER_ID = "temp-user-001"; // now used only for ownerId comparison below
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
       where.companyId = companyId;
     } else {
       where.company = {
-        userId: TEMP_USER_ID,
+        ownerId: TEMP_USER_ID,   // changed from userId
       };
     }
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    if (company.userId !== TEMP_USER_ID) {
+    if (company.ownerId !== TEMP_USER_ID) {   // changed from userId
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
