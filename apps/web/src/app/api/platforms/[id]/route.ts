@@ -1,7 +1,10 @@
+// apps/web/src/app/api/platforms/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-const TEMP_USER_ID = 'temp-user-001';
+// Temporary placeholder until we wire up real session checks in Phase 2+
+// For now, all companies have ownerId = null, so we skip the check.
+const TEMP_OWNER_ID = null; // was 'temp-user-001'
 
 export async function GET(
   request: NextRequest,
@@ -17,7 +20,7 @@ export async function GET(
           select: {
             id: true,
             name: true,
-            userId: true,
+            ownerId: true,   // ← changed from userId
           },
         },
       },
@@ -30,7 +33,8 @@ export async function GET(
       );
     }
 
-    if (platform.company.userId !== TEMP_USER_ID) {
+    // Skip auth check while ownerId is null (no user system fully active yet)
+    if (TEMP_OWNER_ID !== null && platform.company.ownerId !== TEMP_OWNER_ID) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
@@ -74,7 +78,7 @@ export async function PUT(
       include: {
         company: {
           select: {
-            userId: true,
+            ownerId: true,   // ← changed from userId
           },
         },
       },
@@ -87,7 +91,7 @@ export async function PUT(
       );
     }
 
-    if (existing.company.userId !== TEMP_USER_ID) {
+    if (TEMP_OWNER_ID !== null && existing.company.ownerId !== TEMP_OWNER_ID) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
@@ -154,7 +158,7 @@ export async function DELETE(
       include: {
         company: {
           select: {
-            userId: true,
+            ownerId: true,   // ← changed from userId
           },
         },
       },
@@ -167,7 +171,7 @@ export async function DELETE(
       );
     }
 
-    if (existing.company.userId !== TEMP_USER_ID) {
+    if (TEMP_OWNER_ID !== null && existing.company.ownerId !== TEMP_OWNER_ID) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
