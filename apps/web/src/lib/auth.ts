@@ -56,7 +56,7 @@ export const {
       }
       return session;
     },
-  ],
+  },
   session: {
     strategy: "jwt",
   },
