@@ -166,18 +166,71 @@ export default function AdminDashboard() {
       <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create License</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input type="text" placeholder="Customer Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="rounded-md border ... p-2 bg-white dark:bg-gray-700" />
-          <input type="number" placeholder="Max Social Accounts" value={maxAccounts} onChange={(e) => setMaxAccounts(Number(e.target.value))} className="... p-2" />
-          <input type="number" placeholder="Months Valid" value={monthsValid} onChange={(e) => setMonthsValid(Number(e.target.value))} className="... p-2" />
-          <input type="text" placeholder="GitHub PAT (optional)" value={githubPAT} onChange={(e) => setGithubPAT(e.target.value)} className="... p-2" />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Customer Name *
+            </label>
+            <input
+              type="text"
+              placeholder="e.g., Acme Corp"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">The organisation or person who will use this license.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Max Social Accounts *
+            </label>
+            <input
+              type="number"
+              value={maxAccounts}
+              onChange={(e) => setMaxAccounts(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">Total number of social accounts (Facebook, LinkedIn, etc.) allowed across all companies.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Months Valid *
+            </label>
+            <input
+              type="number"
+              value={monthsValid}
+              onChange={(e) => setMonthsValid(Number(e.target.value))}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">Number of months before the license expires.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              GitHub PAT (optional)
+            </label>
+            <input
+              type="text"
+              placeholder="ghp_..."
+              value={githubPAT}
+              onChange={(e) => setGithubPAT(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">Validated once during creation, never stored.</p>
+          </div>
         </div>
-        <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md">Create License</button>
+        <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">
+          Create License
+        </button>
 
         {licenseKeyGenerated && (
           <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 rounded-md">
             <p className="font-mono text-sm break-all">{licenseKeyGenerated}</p>
             <div className="flex gap-2 mt-2">
-              <button onClick={() => navigator.clipboard.writeText(licenseKeyGenerated)} className="text-xs bg-gray-200 px-2 py-1 rounded">Copy</button>
+              <button
+                onClick={() => navigator.clipboard.writeText(licenseKeyGenerated)}
+                className="text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded"
+              >
+                Copy
+              </button>
               <button onClick={clearLicenseKey} className="text-xs text-red-600">Dismiss</button>
             </div>
           </div>
@@ -189,19 +242,68 @@ export default function AdminDashboard() {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create User</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <input type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={`w-full p-2 rounded-md border ${userErrors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-700`} />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Email *
+            </label>
+            <input
+              type="email"
+              placeholder="user@example.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}
+            />
             {userErrors.email && <p className="text-red-500 text-xs mt-1">{userErrors.email}</p>}
           </div>
-          <input type="text" placeholder="Name (optional)" value={newName} onChange={(e) => setNewName(e.target.value)} className="p-2 rounded-md border ..." />
-          <div className="relative">
-            <input type={showPassword ? "text" : "password"} placeholder="Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={`w-full p-2 rounded-md border ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-700`} />
-            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm text-gray-500">👁️</button>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Name (optional)
+            </label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Min 6 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-2 text-sm text-gray-500"
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
             {userErrors.password && <p className="text-red-500 text-xs mt-1">{userErrors.password}</p>}
           </div>
         </div>
         <div className="flex gap-3 mt-4">
-          <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md">Create User</button>
-          <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setUserErrors({}); }} className="bg-gray-200 dark:bg-gray-600 px-4 py-2 rounded-md">Clear</button>
+          <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">
+            Create User
+          </button>
+          <button
+            onClick={() => {
+              setNewEmail("");
+              setNewName("");
+              setNewPassword("");
+              setUserErrors({});
+            }}
+            className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md"
+          >
+            Clear
+          </button>
         </div>
       </section>
 
@@ -209,13 +311,38 @@ export default function AdminDashboard() {
       <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Licenses</h2>
         <table className="min-w-full text-sm">
-          <thead><tr><th className="py-2 text-left">Customer</th><th className="py-2">Max</th><th className="py-2">Status</th><th className="py-2">Expires</th><th className="py-2">Action</th></tr></thead>
-          <tbody>{licenses.map((lic) => (
-            <tr key={lic.id}>
-              <td className="py-2">{lic.customerName}</td><td className="py-2 text-center">{lic.maxSocialAccounts}</td><td className="py-2 text-center">{lic.status}</td><td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
-              <td className="py-2 text-center">{lic.status === "ACTIVE" && <button onClick={() => { const key = prompt("License key to revoke:"); if (key) revokeLicense(key); }} className="text-red-600 hover:underline">Revoke</button>}</td>
+          <thead>
+            <tr>
+              <th className="py-2 text-left">Customer</th>
+              <th className="py-2">Max</th>
+              <th className="py-2">Status</th>
+              <th className="py-2">Expires</th>
+              <th className="py-2">Action</th>
             </tr>
-          ))}</tbody>
+          </thead>
+          <tbody>
+            {licenses.map((lic) => (
+              <tr key={lic.id}>
+                <td className="py-2">{lic.customerName}</td>
+                <td className="py-2 text-center">{lic.maxSocialAccounts}</td>
+                <td className="py-2 text-center">{lic.status}</td>
+                <td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
+                <td className="py-2 text-center">
+                  {lic.status === "ACTIVE" && (
+                    <button
+                      onClick={() => {
+                        const key = prompt("License key to revoke:");
+                        if (key) revokeLicense(key);
+                      }}
+                      className="text-red-600 hover:underline"
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </section>
 
@@ -223,10 +350,24 @@ export default function AdminDashboard() {
       <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Users</h2>
         <table className="min-w-full text-sm">
-          <thead><tr><th className="py-2 text-left">Email</th><th className="py-2">Name</th><th className="py-2">Role</th><th className="py-2">Created</th></tr></thead>
-          <tbody>{users.map((usr) => (
-            <tr key={usr.id}><td className="py-2">{usr.email}</td><td className="py-2 text-center">{usr.name || "-"}</td><td className="py-2 text-center">{usr.role}</td><td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td></tr>
-          ))}</tbody>
+          <thead>
+            <tr>
+              <th className="py-2 text-left">Email</th>
+              <th className="py-2">Name</th>
+              <th className="py-2">Role</th>
+              <th className="py-2">Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((usr) => (
+              <tr key={usr.id}>
+                <td className="py-2">{usr.email}</td>
+                <td className="py-2 text-center">{usr.name || "-"}</td>
+                <td className="py-2 text-center">{usr.role}</td>
+                <td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </section>
     </div>
