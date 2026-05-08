@@ -1,8 +1,7 @@
 // apps/web/src/app/(admin)/admin/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
 
 interface License {
   id: string;
@@ -21,58 +20,98 @@ interface User {
   createdAt: string;
 }
 
+const TOAST_DURATION = 4000;
+
 export default function AdminDashboard() {
-  const router = useRouter();
-  const [adminKey, setAdminKey] = useState("");
   const [licenses, setLicenses] = useState<License[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [adminKey, setAdminKey] = useState("");
 
-  // License creation form
+  // Form states
   const [customerName, setCustomerName] = useState("");
   const [maxAccounts, setMaxAccounts] = useState(5);
   const [monthsValid, setMonthsValid] = useState(1);
   const [githubPAT, setGithubPAT] = useState("");
+  const [licenseKeyGenerated, setLicenseKeyGenerated] = useState("");
 
-  // User creation form
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    const storedKey = sessionStorage.getItem("admin_key");
-    if (!storedKey) {
-      router.push("/admin/login");
-      return;
-    }
-    setAdminKey(storedKey);
-    fetchData(storedKey);
+  // Validation errors
+  const [userErrors, setUserErrors] = useState<{ email?: string; password?: string }>({});
+
+  const showToast = useCallback((type: "success" | "error", text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), TOAST_DURATION);
   }, []);
 
-  const authHeaders = (key: string) => ({
-    Authorization: `Bearer ${key}`,
+  const authHeaders = useCallback(() => ({
+    Authorization: `Bearer ${adminKey}`,
     "Content-Type": "application/json",
-  });
+  }), [adminKey]);
 
-  const fetchData = async (key: string) => {
+  const fetchData = useCallback(async () => {
     try {
       const [licRes, usrRes] = await Promise.all([
-        fetch("/api/admin/licenses", { headers: authHeaders(key) }),
-        fetch("/api/admin/users", { headers: authHeaders(key) }),
+        fetch("/api/admin/licenses", { headers: authHeaders() }),
+        fetch("/api/admin/users", { headers: authHeaders() }),
       ]);
       if (licRes.ok) setLicenses(await licRes.json());
       if (usrRes.ok) setUsers(await usrRes.json());
     } catch (err) {
-      console.error("Failed to fetch admin data", err);
+      showToast("error", "Failed to fetch data.");
+    }
+  }, [authHeaders, showToast]);
+
+  useEffect(() => {
+    const storedKey = sessionStorage.getItem("admin_key");
+    if (storedKey) {
+      setAdminKey(storedKey);
+      fetchData();
+    }
+  }, [fetchData]);
+
+  const validateUser = () => {
+    const errors: typeof userErrors = {};
+    if (!newEmail || !/^\S+@\S+\.\S+$/.test(newEmail)) errors.email = "Valid email required";
+    if (!newPassword || newPassword.length < 6) errors.password = "Min 6 characters";
+    setUserErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const createUser = async () => {
+    if (!validateUser()) return;
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ email: newEmail, name: newName, password: newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", `User ${data.user.email} created!`);
+        setNewEmail("");
+        setNewName("");
+        setNewPassword("");
+        setUserErrors({});
+        fetchData();
+      } else {
+        showToast("error", data.error || "Creation failed");
+      }
+    } catch (err) {
+      showToast("error", "Network error");
     }
   };
 
   const createLicense = async () => {
-    if (!adminKey) return;
+    if (!customerName) { showToast("error", "Customer name required"); return; }
     try {
       const res = await fetch("/api/admin/license", {
         method: "POST",
-        headers: authHeaders(adminKey),
+        headers: authHeaders(),
         body: JSON.stringify({
           customerName,
           maxSocialAccounts: maxAccounts,
@@ -82,221 +121,114 @@ export default function AdminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage(`License created! Key: ${data.licenseKey}`);
-        fetchData(adminKey);
+        setLicenseKeyGenerated(data.licenseKey);
+        showToast("success", "License created!");
+        fetchData();
       } else {
-        setMessage(`Error: ${data.error}`);
+        showToast("error", data.error || "Creation failed");
       }
-    } catch (err: any) {
-      setMessage("Network error");
+    } catch (err) {
+      showToast("error", "Network error");
     }
   };
 
   const revokeLicense = async (licenseKey: string) => {
-    if (!adminKey) return;
+    if (!confirm("Revoke this license?")) return;
     try {
       const res = await fetch("/api/admin/license", {
         method: "DELETE",
-        headers: authHeaders(adminKey),
+        headers: authHeaders(),
         body: JSON.stringify({ licenseKey }),
       });
       if (res.ok) {
-        setMessage("License revoked.");
-        fetchData(adminKey);
+        showToast("success", "License revoked.");
+        fetchData();
+      } else {
+        showToast("error", "Revoke failed");
       }
     } catch (err) {
-      setMessage("Revoke failed");
+      showToast("error", "Network error");
     }
   };
 
-  const createUser = async () => {
-    if (!adminKey) return;
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: authHeaders(adminKey),
-        body: JSON.stringify({
-          email: newEmail,
-          name: newName,
-          password: newPassword,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage(`User ${data.user.email} created!`);
-        setNewEmail("");
-        setNewName("");
-        setNewPassword("");
-        fetchData(adminKey);
-      } else {
-        setMessage(`Error: ${data.error}`);
-      }
-    } catch (err) {
-      setMessage("Network error");
-    }
-  };
+  const clearLicenseKey = () => setLicenseKeyGenerated("");
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Admin Dashboard
-        </h1>
+    <div className="space-y-8">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-md shadow-lg text-white ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
+          {toast.text}
+        </div>
+      )}
 
-        {message && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <p className="text-sm text-gray-800 dark:text-gray-200">{message}</p>
+      {/* License Creation */}
+      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create License</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input type="text" placeholder="Customer Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="rounded-md border ... p-2 bg-white dark:bg-gray-700" />
+          <input type="number" placeholder="Max Social Accounts" value={maxAccounts} onChange={(e) => setMaxAccounts(Number(e.target.value))} className="... p-2" />
+          <input type="number" placeholder="Months Valid" value={monthsValid} onChange={(e) => setMonthsValid(Number(e.target.value))} className="... p-2" />
+          <input type="text" placeholder="GitHub PAT (optional)" value={githubPAT} onChange={(e) => setGithubPAT(e.target.value)} className="... p-2" />
+        </div>
+        <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md">Create License</button>
+
+        {licenseKeyGenerated && (
+          <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 rounded-md">
+            <p className="font-mono text-sm break-all">{licenseKeyGenerated}</p>
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => navigator.clipboard.writeText(licenseKeyGenerated)} className="text-xs bg-gray-200 px-2 py-1 rounded">Copy</button>
+              <button onClick={clearLicenseKey} className="text-xs text-red-600">Dismiss</button>
+            </div>
           </div>
         )}
+      </section>
 
-        {/* Create License */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Create License
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              placeholder="Customer Name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <input
-              type="number"
-              placeholder="Max Social Accounts"
-              value={maxAccounts}
-              onChange={(e) => setMaxAccounts(Number(e.target.value))}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <input
-              type="number"
-              placeholder="Months Valid"
-              value={monthsValid}
-              onChange={(e) => setMonthsValid(Number(e.target.value))}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <input
-              type="text"
-              placeholder="GitHub PAT (optional)"
-              value={githubPAT}
-              onChange={(e) => setGithubPAT(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
+      {/* User Creation */}
+      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create User</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <input type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={`w-full p-2 rounded-md border ${userErrors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-700`} />
+            {userErrors.email && <p className="text-red-500 text-xs mt-1">{userErrors.email}</p>}
           </div>
-          <button
-            onClick={createLicense}
-            className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
-          >
-            Create License
-          </button>
-        </section>
+          <input type="text" placeholder="Name (optional)" value={newName} onChange={(e) => setNewName(e.target.value)} className="p-2 rounded-md border ..." />
+          <div className="relative">
+            <input type={showPassword ? "text" : "password"} placeholder="Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={`w-full p-2 rounded-md border ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-700`} />
+            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm text-gray-500">👁️</button>
+            {userErrors.password && <p className="text-red-500 text-xs mt-1">{userErrors.password}</p>}
+          </div>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md">Create User</button>
+          <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setUserErrors({}); }} className="bg-gray-200 dark:bg-gray-600 px-4 py-2 rounded-md">Clear</button>
+        </div>
+      </section>
 
-        {/* Create User */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Create User
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input
-              type="email"
-              placeholder="Email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <input
-              type="text"
-              placeholder="Name (optional)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-          <button
-            onClick={createUser}
-            className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
-          >
-            Create User
-          </button>
-        </section>
+      {/* License List */}
+      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Licenses</h2>
+        <table className="min-w-full text-sm">
+          <thead><tr><th className="py-2 text-left">Customer</th><th className="py-2">Max</th><th className="py-2">Status</th><th className="py-2">Expires</th><th className="py-2">Action</th></tr></thead>
+          <tbody>{licenses.map((lic) => (
+            <tr key={lic.id}>
+              <td className="py-2">{lic.customerName}</td><td className="py-2 text-center">{lic.maxSocialAccounts}</td><td className="py-2 text-center">{lic.status}</td><td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
+              <td className="py-2 text-center">{lic.status === "ACTIVE" && <button onClick={() => { const key = prompt("License key to revoke:"); if (key) revokeLicense(key); }} className="text-red-600 hover:underline">Revoke</button>}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </section>
 
-        {/* License List */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Existing Licenses
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr>
-                  <th className="py-2">Customer</th>
-                  <th className="py-2">Max</th>
-                  <th className="py-2">Status</th>
-                  <th className="py-2">Expires</th>
-                  <th className="py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {licenses.map((lic) => (
-                  <tr key={lic.id}>
-                    <td className="py-2">{lic.customerName}</td>
-                    <td className="py-2">{lic.maxSocialAccounts}</td>
-                    <td className="py-2">{lic.status}</td>
-                    <td className="py-2">{new Date(lic.expiresAt).toLocaleDateString()}</td>
-                    <td className="py-2">
-                      {lic.status === "ACTIVE" && (
-                        <button
-                          onClick={() => revokeLicense(prompt("Enter license key to revoke:") || "")}
-                          className="text-red-600 hover:underline"
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* User List */}
-        <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Users
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr>
-                  <th className="py-2">Email</th>
-                  <th className="py-2">Name</th>
-                  <th className="py-2">Role</th>
-                  <th className="py-2">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((usr) => (
-                  <tr key={usr.id}>
-                    <td className="py-2">{usr.email}</td>
-                    <td className="py-2">{usr.name || "-"}</td>
-                    <td className="py-2">{usr.role}</td>
-                    <td className="py-2">{new Date(usr.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+      {/* User List */}
+      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Users</h2>
+        <table className="min-w-full text-sm">
+          <thead><tr><th className="py-2 text-left">Email</th><th className="py-2">Name</th><th className="py-2">Role</th><th className="py-2">Created</th></tr></thead>
+          <tbody>{users.map((usr) => (
+            <tr key={usr.id}><td className="py-2">{usr.email}</td><td className="py-2 text-center">{usr.name || "-"}</td><td className="py-2 text-center">{usr.role}</td><td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td></tr>
+          ))}</tbody>
+        </table>
+      </section>
     </div>
   );
 }
