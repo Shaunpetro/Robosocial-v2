@@ -18,40 +18,51 @@ const activationFrom = process.env.ACTIVATION_FROM_EMAIL || 'Robosocial Activati
 export async function sendWelcomeEmail(
   to: string,
   temporaryPassword: string,
-  fromEmail?: string | null
+  fromEmail?: string | null,
+  licenseKey?: string | null
 ) {
   const r = getResend();
+  let html = `
+    <p>Hi,</p>
+    <p>Your Robosocial account has been created.</p>
+    <p><strong>Login:</strong> ${to}<br />
+    <strong>Password:</strong> ${temporaryPassword}</p>`;
+  if (licenseKey) {
+    html += `<p><strong>License Key:</strong> ${licenseKey}</p>
+             <p>Keep this key safe. You will need it to access the dashboard.</p>`;
+  }
+  html += `<p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Click here to log in</a></p>
+           <p>You can change your password after logging in.</p>`;
+
   await r.emails.send({
     from: fromEmail || defaultFrom,
     to,
     subject: 'Welcome to Robosocial – Your Account is Ready',
-    html: `
-      <p>Hi,</p>
-      <p>Your Robosocial account has been created.</p>
-      <p><strong>Login:</strong> ${to}<br />
-      <strong>Password:</strong> ${temporaryPassword}</p>
-      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Click here to log in</a></p>
-      <p>You can change your password after logging in.</p>
-    `,
+    html,
   });
 }
 
 export async function sendPasswordResetEmail(
   to: string,
   newPassword: string,
-  fromEmail?: string | null
+  fromEmail?: string | null,
+  licenseKey?: string | null
 ) {
   const r = getResend();
+  let html = `
+    <p>Hi,</p>
+    <p>Your password has been reset by an administrator.</p>
+    <p><strong>New Password:</strong> ${newPassword}</p>`;
+  if (licenseKey) {
+    html += `<p><strong>License Key:</strong> ${licenseKey}</p>`;
+  }
+  html += `<p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Log in here</a></p>`;
+
   await r.emails.send({
     from: fromEmail || defaultFrom,
     to,
     subject: 'Your Robosocial Password Has Been Reset',
-    html: `
-      <p>Hi,</p>
-      <p>Your password has been reset by an administrator.</p>
-      <p><strong>New Password:</strong> ${newPassword}</p>
-      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Log in here</a></p>
-    `,
+    html,
   });
 }
 

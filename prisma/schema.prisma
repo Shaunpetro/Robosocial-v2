@@ -46,6 +46,7 @@ model License {
   status             LicenseStatus @default(ACTIVE)
   expiresAt          DateTime
   fromEmail          String?       // default branded sender for this license
+  keyPreview         String?       // last 8 characters of the license key, for admin reference only
 
   users User[]
 
