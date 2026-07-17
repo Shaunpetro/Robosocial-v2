@@ -1,12 +1,16 @@
-// lib/email.ts
+// apps/web/src/lib/email.ts
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const from = process.env.EMAIL_FROM || 'Robosocial <noreply@yourdomain.com>';
+const defaultFrom = process.env.DEFAULT_FROM_EMAIL || 'Robosocial <noreply@robosocial.app>';
 
-export async function sendWelcomeEmail(to: string, temporaryPassword: string) {
+export async function sendWelcomeEmail(
+  to: string,
+  temporaryPassword: string,
+  fromEmail?: string | null
+) {
   await resend.emails.send({
-    from,
+    from: fromEmail || defaultFrom,
     to,
     subject: 'Welcome to Robosocial – Your Account is Ready',
     html: `
@@ -20,9 +24,13 @@ export async function sendWelcomeEmail(to: string, temporaryPassword: string) {
   });
 }
 
-export async function sendPasswordResetEmail(to: string, newPassword: string) {
+export async function sendPasswordResetEmail(
+  to: string,
+  newPassword: string,
+  fromEmail?: string | null
+) {
   await resend.emails.send({
-    from,
+    from: fromEmail || defaultFrom,
     to,
     subject: 'Your Robosocial Password Has Been Reset',
     html: `

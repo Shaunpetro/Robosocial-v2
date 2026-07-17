@@ -9,6 +9,7 @@ interface License {
   maxSocialAccounts: number;
   status: string;
   expiresAt: string;
+  fromEmail?: string | null;
   createdAt: string;
 }
 
@@ -18,7 +19,7 @@ interface User {
   name: string | null;
   role: string;
   licenseId: string | null;
-  license?: { customerName: string } | null;
+  license?: { customerName: string; fromEmail?: string | null } | null;
   createdAt: string;
 }
 
@@ -34,6 +35,7 @@ export default function AdminDashboard() {
   const [customerName, setCustomerName] = useState("");
   const [maxAccounts, setMaxAccounts] = useState(5);
   const [monthsValid, setMonthsValid] = useState(1);
+  const [fromEmail, setFromEmail] = useState("");
   const [licenseKeyGenerated, setLicenseKeyGenerated] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -89,7 +91,12 @@ export default function AdminDashboard() {
       const res = await fetch("/api/admin/license", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ customerName, maxSocialAccounts: maxAccounts, monthsValid }),
+        body: JSON.stringify({
+          customerName,
+          maxSocialAccounts: maxAccounts,
+          monthsValid,
+          fromEmail: fromEmail || null, // ← new field
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -242,6 +249,12 @@ export default function AdminDashboard() {
             <input type="number" value={monthsValid} onChange={(e) => setMonthsValid(Number(e.target.value))}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
           </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">From Email (branded sender)</label>
+            <input type="email" placeholder="noreply@acmecorp.co.za" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <p className="text-xs text-gray-500 mt-1">Optional – if set, emails to users under this license will appear from this address.</p>
+          </div>
         </div>
         <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create License</button>
         {licenseKeyGenerated && (
@@ -285,7 +298,7 @@ export default function AdminDashboard() {
             <select value={selectedLicenseId} onChange={(e) => setSelectedLicenseId(e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
               <option value="">None</option>
-              {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName}</option>))}
+              {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
             </select>
           </div>
         </div>
@@ -344,6 +357,7 @@ export default function AdminDashboard() {
               <th className="py-2">Max</th>
               <th className="py-2">Status</th>
               <th className="py-2">Expires</th>
+              <th className="py-2">From Email</th>
               <th className="py-2">Action</th>
             </tr>
           </thead>
@@ -354,6 +368,7 @@ export default function AdminDashboard() {
                 <td className="py-2 text-center">{lic.maxSocialAccounts}</td>
                 <td className="py-2 text-center">{lic.status}</td>
                 <td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
+                <td className="py-2 text-center">{lic.fromEmail || "-"}</td>
                 <td className="py-2 text-center">
                   {lic.status === "ACTIVE" && (
                     <button onClick={() => { const key = prompt("License key to revoke:"); if (key) revokeLicense(key); }}
@@ -387,7 +402,7 @@ export default function AdminDashboard() {
                 <select value={editLicenseId} onChange={(e) => setEditLicenseId(e.target.value)}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                   <option value="">None</option>
-                  {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName}</option>))}
+                  {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
                 </select>
               </div>
             </div>

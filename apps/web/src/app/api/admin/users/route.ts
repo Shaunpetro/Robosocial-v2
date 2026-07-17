@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/license";
 import bcrypt from "bcryptjs";
-import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email";
+import { sendWelcomeEmail } from "@/lib/email";
 import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -17,47 +19,64 @@ export async function GET(request: NextRequest) {
       name: true,
       role: true,
       licenseId: true,
-      license: { select: { customerName: true } },
+      license: { select: { customerName: true, fromEmail: true } },
       createdAt: true,
     },
   });
+
   return NextResponse.json(users);
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { email, name, password, licenseId, sendEmail } = await request.json();
-    if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Email required" }, { status: 400 });
+    }
 
-    const hashed = await bcrypt.hash(password || generateRandomPassword(), 12);
+    const hashedPassword = await bcrypt.hash(password || crypto.randomBytes(12).toString("hex"), 12);
     const user = await prisma.user.create({
       data: {
         email,
         name: name || null,
-        password: hashed,
+        password: hashedPassword,
         licenseId: licenseId || null,
       },
     });
 
-    // Send welcome email if checkbox was checked
     if (sendEmail) {
-      await sendWelcomeEmail(email, password);
+      // Get the license's fromEmail if available
+      let fromEmail = null;
+      if (licenseId) {
+        const license = await prisma.license.findUnique({ where: { id: licenseId }, select: { fromEmail: true } });
+        fromEmail = license?.fromEmail;
+      }
+      await sendWelcomeEmail(email, password || "not set", fromEmail);
     }
 
-    return NextResponse.json({ success: true, user: { id: user.id, email: user.email } }, { status: 201 });
+    return NextResponse.json(
+      { success: true, user: { id: user.id, email: user.email } },
+      { status: 201 }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { id, email, name, role, licenseId } = await request.json();
-    if (!id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    }
 
     const data: any = {};
     if (email) data.email = email;
@@ -70,8 +89,4 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-function generateRandomPassword() {
-  return crypto.randomBytes(12).toString("hex");
 }

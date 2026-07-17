@@ -7,18 +7,25 @@ import { sendPasswordResetEmail } from "@/lib/email";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { userId } = await request.json();
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { license: { select: { fromEmail: true } } },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
     const newPassword = crypto.randomBytes(12).toString("hex");
     const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
 
-    await sendPasswordResetEmail(user.email, newPassword);
+    await sendPasswordResetEmail(user.email, newPassword, user.license?.fromEmail);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
