@@ -98,9 +98,7 @@ export default function SplashScreen({ children }: { children: React.ReactNode }
                 <h1 className="text-3xl font-bold text-white tracking-tight">
                   VSHAD <span className="text-white/70">RoboSocial</span>
                 </h1>
-                <p className="text-sm text-white/50">
-                  AI-powered content automation
-                </p>
+                <p className="text-sm text-white/50">AI-powered content automation</p>
               </motion.div>
 
               <motion.div

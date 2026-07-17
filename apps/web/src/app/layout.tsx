@@ -1,25 +1,20 @@
 // apps/web/src/app/layout.tsx
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import Providers from "@/app/providers"          // <-- changed
-import SplashScreen from "@/components/ui/SplashScreen"
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import Providers from "@/app/providers";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: '--font-inter',
-})
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "VSHAD RoboSocial",
   description: "AI-powered social media content management",
-}
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -39,12 +34,8 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} font-sans`}>
-        <Providers>                           {/* ← now wraps ThemeProvider + SessionProvider */}
-          <SplashScreen>
-            {children}
-          </SplashScreen>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
-  )
+  );
 }
