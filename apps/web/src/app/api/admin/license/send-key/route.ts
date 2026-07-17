@@ -16,16 +16,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "licenseKey and email required" }, { status: 400 });
     }
 
-    // Find the license by matching the hash
+    // Find license by comparing hashes
     const licenses = await prisma.license.findMany({
       where: { status: "ACTIVE" },
     });
-    const license = licenses.find(async (l) => await bcrypt.compare(licenseKey, l.licenseKeyHash));
-    if (!license) {
+
+    let matchingLicense = null;
+    for (const lic of licenses) {
+      if (await bcrypt.compare(licenseKey, lic.licenseKeyHash)) {
+        matchingLicense = lic;
+        break;
+      }
+    }
+    if (!matchingLicense) {
       return NextResponse.json({ error: "License not found or revoked" }, { status: 404 });
     }
 
-    await sendLicenseKeyEmail(email, licenseKey, license.customerName);
+    await sendLicenseKeyEmail(email, licenseKey, matchingLicense.customerName);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

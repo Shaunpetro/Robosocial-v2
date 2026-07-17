@@ -29,11 +29,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { email, name, password, licenseId, fromEmail, sendEmail } = await request.json();
-    if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Email required" }, { status: 400 });
+    }
 
     const hashedPassword = await bcrypt.hash(password || crypto.randomBytes(12).toString("hex"), 12);
     const user = await prisma.user.create({
@@ -47,11 +51,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (sendEmail) {
-      // Determine effective sender: user's fromEmail > license's fromEmail > default
-      let effectiveFrom = user.fromEmail;
+      let effectiveFrom: string | null = user.fromEmail ?? null;
       if (!effectiveFrom && licenseId) {
-        const lic = await prisma.license.findUnique({ where: { id: licenseId }, select: { fromEmail: true } });
-        effectiveFrom = lic?.fromEmail;
+        const lic = await prisma.license.findUnique({
+          where: { id: licenseId },
+          select: { fromEmail: true },
+        });
+        effectiveFrom = lic?.fromEmail ?? null;
       }
       await sendWelcomeEmail(email, password || "not set", effectiveFrom);
     }
@@ -66,18 +72,22 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAdmin(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdmin(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { id, email, name, role, licenseId, fromEmail } = await request.json();
-    if (!id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    }
 
     const data: any = {};
     if (email) data.email = email;
     if (name !== undefined) data.name = name;
     if (role) data.role = role;
     if (licenseId !== undefined) data.licenseId = licenseId;
-    if (fromEmail !== undefined) data.fromEmail = fromEmail;  // allow clearing by setting null
+    if (fromEmail !== undefined) data.fromEmail = fromEmail ?? null;   // allow clearing
 
     const updated = await prisma.user.update({ where: { id }, data });
     return NextResponse.json({ success: true, user: { id: updated.id, email: updated.email } });
