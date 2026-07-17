@@ -44,6 +44,7 @@ model License {
   maxSocialAccounts  Int           @default(5)
   status             LicenseStatus @default(ACTIVE)
   expiresAt          DateTime
+  fromEmail          String?       // branded sender email for notifications
 
   users User[]                        // Users assigned to this license
 
