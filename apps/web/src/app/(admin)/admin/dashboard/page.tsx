@@ -19,6 +19,7 @@ interface User {
   name: string | null;
   role: string;
   licenseId: string | null;
+  fromEmail?: string | null;
   license?: { customerName: string; fromEmail?: string | null } | null;
   createdAt: string;
 }
@@ -35,7 +36,7 @@ export default function AdminDashboard() {
   const [customerName, setCustomerName] = useState("");
   const [maxAccounts, setMaxAccounts] = useState(5);
   const [monthsValid, setMonthsValid] = useState(1);
-  const [fromEmail, setFromEmail] = useState("");
+  const [licenseFromEmail, setLicenseFromEmail] = useState("");
   const [licenseKeyGenerated, setLicenseKeyGenerated] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -44,6 +45,7 @@ export default function AdminDashboard() {
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [selectedLicenseId, setSelectedLicenseId] = useState("");
+  const [userFromEmail, setUserFromEmail] = useState("");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [userErrors, setUserErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -53,6 +55,7 @@ export default function AdminDashboard() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editLicenseId, setEditLicenseId] = useState("");
+  const [editFromEmail, setEditFromEmail] = useState("");
 
   const showToast = useCallback((type: "success" | "error", text: string) => {
     setToast({ type, text });
@@ -95,7 +98,7 @@ export default function AdminDashboard() {
           customerName,
           maxSocialAccounts: maxAccounts,
           monthsValid,
-          fromEmail: fromEmail || null, // ← new field
+          fromEmail: licenseFromEmail || null,
         }),
       });
       const data = await res.json();
@@ -131,6 +134,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const sendLicenseKey = async (licenseKey: string) => {
+    const recipient = prompt("Recipient email address:");
+    if (!recipient) return;
+    try {
+      const res = await fetch("/api/admin/license/send-key", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ licenseKey, email: recipient }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", `License key emailed to ${recipient}`);
+      } else {
+        showToast("error", data.error || "Send failed");
+      }
+    } catch (err) {
+      showToast("error", "Network error");
+    }
+  };
+
   const createUser = async () => {
     if (!validateUser()) return;
     try {
@@ -142,13 +165,14 @@ export default function AdminDashboard() {
           name: newName,
           password: newPassword || undefined,
           licenseId: selectedLicenseId || null,
+          fromEmail: userFromEmail || null,
           sendEmail: sendWelcomeEmail,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         showToast("success", `User ${data.user.email} created!`);
-        setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId("");
+        setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId(""); setUserFromEmail("");
         setUserErrors({});
         fetchData();
       } else {
@@ -172,6 +196,7 @@ export default function AdminDashboard() {
     setEditName(user.name || "");
     setEditEmail(user.email);
     setEditLicenseId(user.licenseId || "");
+    setEditFromEmail(user.fromEmail || "");
   };
 
   const closeEditModal = () => setEditingUser(null);
@@ -187,6 +212,7 @@ export default function AdminDashboard() {
           name: editName,
           email: editEmail,
           licenseId: editLicenseId || null,
+          fromEmail: editFromEmail || null,
         }),
       });
       if (res.ok) {
@@ -250,10 +276,10 @@ export default function AdminDashboard() {
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">From Email (branded sender)</label>
-            <input type="email" placeholder="noreply@acmecorp.co.za" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)}
+            <label className="block text-sm font-medium mb-1">Default Sender (for users)</label>
+            <input type="email" placeholder="noreply@customer.co.za" value={licenseFromEmail} onChange={(e) => setLicenseFromEmail(e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-            <p className="text-xs text-gray-500 mt-1">Optional – if set, emails to users under this license will appear from this address.</p>
+            <p className="text-xs text-gray-500 mt-1">Optional – used when no per‑user sender is set.</p>
           </div>
         </div>
         <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create License</button>
@@ -301,6 +327,12 @@ export default function AdminDashboard() {
               {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
             </select>
           </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-1">Branded Sender (for user emails)</label>
+            <input type="email" placeholder="noreply@acmecorp.co.za" value={userFromEmail} onChange={(e) => setUserFromEmail(e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <p className="text-xs text-gray-500 mt-1">Overrides license default. Emails to this user will appear from this address.</p>
+          </div>
         </div>
         <div className="flex items-center gap-4 mt-4">
           <label className="flex items-center gap-2 text-sm">
@@ -310,7 +342,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex gap-3 mt-4">
           <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create User</button>
-          <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId(""); setUserErrors({}); }}
+          <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId(""); setUserFromEmail(""); setUserErrors({}); }}
             className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md">Clear</button>
         </div>
       </section>
@@ -325,6 +357,7 @@ export default function AdminDashboard() {
               <th className="py-2">Name</th>
               <th className="py-2">Role</th>
               <th className="py-2">License</th>
+              <th className="py-2">Sender</th>
               <th className="py-2">Created</th>
               <th className="py-2">Actions</th>
             </tr>
@@ -336,6 +369,7 @@ export default function AdminDashboard() {
                 <td className="py-2 text-center">{usr.name || "-"}</td>
                 <td className="py-2 text-center">{usr.role}</td>
                 <td className="py-2 text-center">{usr.license?.customerName || "-"}</td>
+                <td className="py-2 text-center">{usr.fromEmail || usr.license?.fromEmail || "-"}</td>
                 <td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td>
                 <td className="py-2 text-center">
                   <button onClick={() => openEditModal(usr)} className="text-indigo-600 hover:underline mr-2">Edit</button>
@@ -357,8 +391,8 @@ export default function AdminDashboard() {
               <th className="py-2">Max</th>
               <th className="py-2">Status</th>
               <th className="py-2">Expires</th>
-              <th className="py-2">From Email</th>
-              <th className="py-2">Action</th>
+              <th className="py-2">Default Sender</th>
+              <th className="py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -371,8 +405,12 @@ export default function AdminDashboard() {
                 <td className="py-2 text-center">{lic.fromEmail || "-"}</td>
                 <td className="py-2 text-center">
                   {lic.status === "ACTIVE" && (
-                    <button onClick={() => { const key = prompt("License key to revoke:"); if (key) revokeLicense(key); }}
-                      className="text-red-600 hover:underline">Revoke</button>
+                    <>
+                      <button onClick={() => { const key = prompt("License key to send/revoke:"); if (key) sendLicenseKey(key); }}
+                        className="text-green-600 hover:underline mr-2">Send Key</button>
+                      <button onClick={() => { const key = prompt("License key to revoke:"); if (key) revokeLicense(key); }}
+                        className="text-red-600 hover:underline">Revoke</button>
+                    </>
                   )}
                 </td>
               </tr>
@@ -404,6 +442,12 @@ export default function AdminDashboard() {
                   <option value="">None</option>
                   {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Branded Sender</label>
+                <input type="email" placeholder="noreply@acmecorp.co.za" value={editFromEmail} onChange={(e) => setEditFromEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                <p className="text-xs text-gray-500 mt-1">Overrides license default.</p>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-4">

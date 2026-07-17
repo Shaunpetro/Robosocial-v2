@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
     const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
 
-    await sendPasswordResetEmail(user.email, newPassword, user.license?.fromEmail);
+    // Priority: user.fromEmail > license.fromEmail > default
+    const effectiveFrom = user.fromEmail || user.license?.fromEmail || undefined;
+    await sendPasswordResetEmail(user.email, newPassword, effectiveFrom);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
