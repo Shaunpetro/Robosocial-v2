@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       email: true,
       name: true,
       role: true,
+      suspended: true,
       licenseId: true,
       fromEmail: true,
       license: {
@@ -25,6 +26,8 @@ export async function GET(request: NextRequest) {
           customerName: true,
           fromEmail: true,
           keyPreview: true,
+          status: true,
+          expiresAt: true,
         },
       },
       createdAt: true,
@@ -40,12 +43,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, name, password, licenseId, fromEmail, sendEmail, licenseKey } = await request.json();
+    const { email, name, password, licenseId, fromEmail, sendEmail, licenseKey, suspended } =
+      await request.json();
     if (!email) {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
 
-    const hashedPassword = await bcrypt.hash(password || crypto.randomBytes(12).toString("hex"), 12);
+    const generatedPassword = password || crypto.randomBytes(12).toString("hex");
+    const hashedPassword = await bcrypt.hash(generatedPassword, 12);
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -53,6 +59,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         licenseId: licenseId || null,
         fromEmail: fromEmail || null,
+        suspended: suspended || false,
       },
     });
 
@@ -65,9 +72,7 @@ export async function POST(request: NextRequest) {
         });
         effectiveFrom = lic?.fromEmail ?? null;
       }
-
-      // If the admin provided the licence key (from memory cache), include it
-      await sendWelcomeEmail(email, password || "not set", effectiveFrom, licenseKey || null);
+      await sendWelcomeEmail(email, generatedPassword, effectiveFrom, licenseKey || null);
     }
 
     return NextResponse.json(
@@ -79,14 +84,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT handler remains unchanged (from earlier working version)
 export async function PUT(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { id, email, name, role, licenseId, fromEmail } = await request.json();
+    const { id, email, name, role, licenseId, fromEmail, suspended } = await request.json();
     if (!id) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
     }
@@ -97,6 +101,7 @@ export async function PUT(request: NextRequest) {
     if (role) data.role = role;
     if (licenseId !== undefined) data.licenseId = licenseId;
     if (fromEmail !== undefined) data.fromEmail = fromEmail ?? null;
+    if (suspended !== undefined) data.suspended = suspended;
 
     const updated = await prisma.user.update({ where: { id }, data });
     return NextResponse.json({ success: true, user: { id: updated.id, email: updated.email } });

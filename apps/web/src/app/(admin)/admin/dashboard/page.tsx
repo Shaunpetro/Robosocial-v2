@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 
+// ── Type definitions ──
 interface License {
   id: string;
   customerName: string;
@@ -20,6 +21,7 @@ interface User {
   email: string;
   name: string | null;
   role: string;
+  suspended: boolean;
   licenseId: string | null;
   fromEmail?: string | null;
   license?: { customerName: string; fromEmail?: string | null; keyPreview?: string | null } | null;
@@ -29,42 +31,42 @@ interface User {
 const TOAST_DURATION = 4000;
 
 export default function AdminDashboard() {
+  // ── Global state ──
   const [licenses, setLicenses] = useState<License[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [adminKey, setAdminKey] = useState("");
   const keyCache = useRef<Record<string, string>>({});
 
-  // License form
-  const [customerName, setCustomerName] = useState("");
-  const [maxAccounts, setMaxAccounts] = useState(5);
-  const [monthsValid, setMonthsValid] = useState(1);
-  const [licenseFromEmail, setLicenseFromEmail] = useState("");
-  const [licenseKeyGenerated, setLicenseKeyGenerated] = useState("");
-  const [licenseIdGenerated, setLicenseIdGenerated] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"users" | "licenses">("users");
 
-  // User creation form
+  // User creation form (inside Users tab)
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [selectedLicenseId, setSelectedLicenseId] = useState("");
-  const [userFromEmail, setUserFromEmail] = useState("");
-  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [userErrors, setUserErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
 
-  // Edit user modal
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editLicenseId, setEditLicenseId] = useState("");
-  const [editFromEmail, setEditFromEmail] = useState("");
+  // Licence creation form (inside Licenses tab)
+  const [licCustomerName, setLicCustomerName] = useState("");
+  const [licMaxAccounts, setLicMaxAccounts] = useState(5);
+  const [licMonthsValid, setLicMonthsValid] = useState(1);
+  const [licFromEmail, setLicFromEmail] = useState("");
+  const [licAssignUserId, setLicAssignUserId] = useState("");
+  const [licKeyGenerated, setLicKeyGenerated] = useState("");
+  const [licIdGenerated, setLicIdGenerated] = useState<string | null>(null);
+  const [licCopied, setLicCopied] = useState(false);
 
-  // License users expand
-  const [expandedLicenseId, setExpandedLicenseId] = useState<string | null>(null);
-  const [licenseUsers, setLicenseUsers] = useState<Record<string, User[]>>({});
+  // User profile modal
+  const [profileUser, setProfileUser] = useState<User | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileLicenseId, setProfileLicenseId] = useState("");
+  const [profileFromEmail, setProfileFromEmail] = useState("");
+  const [profileSuspended, setProfileSuspended] = useState(false);
 
+  // ── Helpers ──
   const showToast = useCallback((type: "success" | "error", text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), TOAST_DURATION);
@@ -74,16 +76,6 @@ export default function AdminDashboard() {
     Authorization: `Bearer ${adminKey}`,
     "Content-Type": "application/json",
   }), [adminKey]);
-
-  const fetchLicenseUsers = async (licenseId: string) => {
-    try {
-      const res = await fetch(`/api/admin/licenses/${licenseId}/users`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setLicenseUsers(prev => ({ ...prev, [licenseId]: data }));
-      }
-    } catch (err) { /* ignore */ }
-  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -98,11 +90,7 @@ export default function AdminDashboard() {
         (usrData as User[]).forEach((u: User) => {
           if (u.licenseId) counts[u.licenseId] = (counts[u.licenseId] || 0) + 1;
         });
-        const licWithCounts = licData.map((lic: License) => ({
-          ...lic,
-          userCount: counts[lic.id] || 0,
-        }));
-        setLicenses(licWithCounts);
+        setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
       }
       if (usrRes.ok) setUsers(await usrRes.json());
     } catch (err) {
@@ -118,25 +106,59 @@ export default function AdminDashboard() {
     }
   }, [fetchData]);
 
-  const createLicense = async () => {
-    if (!customerName) { showToast("error", "Customer name required"); return; }
+  // ── User creation ──
+  const createUser = async () => {
+    if (!validateUser()) return;
     try {
-      const res = await fetch("/api/admin/license", {
+      const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({
-          customerName,
-          maxSocialAccounts: maxAccounts,
-          monthsValid,
-          fromEmail: licenseFromEmail || null,
-        }),
+        body: JSON.stringify({ email: newEmail, name: newName, password: newPassword || undefined }),
       });
       const data = await res.json();
       if (res.ok) {
-        setLicenseKeyGenerated(data.licenseKey);
-        setLicenseIdGenerated(data.id);
+        showToast("success", `User ${data.user.email} created!`);
+        setNewEmail(""); setNewName(""); setNewPassword(""); setUserErrors({});
+        fetchData();
+      } else {
+        showToast("error", data.error || "Creation failed");
+      }
+    } catch (err) {
+      showToast("error", "Network error");
+    }
+  };
+
+  const validateUser = () => {
+    const errors: typeof userErrors = {};
+    if (!newEmail || !/^\S+@\S+\.\S+$/.test(newEmail)) errors.email = "Valid email required";
+    if (newPassword && newPassword.length < 6) errors.password = "Min 6 characters";
+    setUserErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // ── Licence creation (with user assignment) ──
+  const createLicense = async () => {
+    if (!licCustomerName.trim()) { showToast("error", "Customer name required"); return; }
+    try {
+      const body: any = {
+        customerName: licCustomerName.trim(),
+        maxSocialAccounts: licMaxAccounts,
+        monthsValid: licMonthsValid,
+        fromEmail: licFromEmail || null,
+      };
+      if (licAssignUserId) body.userId = licAssignUserId;
+
+      const res = await fetch("/api/admin/license", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLicKeyGenerated(data.licenseKey);
+        setLicIdGenerated(data.id);
         keyCache.current[data.id] = data.licenseKey;
-        setCopied(false);
+        setLicCopied(false);
         showToast("success", "License created!");
         fetchData();
       } else {
@@ -147,27 +169,28 @@ export default function AdminDashboard() {
     }
   };
 
+  // ── Licence actions ──
   const renewLicense = async (licenseId: string) => {
     const months = prompt("How many months to renew for?", "1");
     if (!months) return;
     try {
+      const lic = licenses.find(l => l.id === licenseId);
       const res = await fetch("/api/admin/license", {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
-          customerName: licenses.find(l => l.id === licenseId)?.customerName || "",
-          maxSocialAccounts: licenses.find(l => l.id === licenseId)?.maxSocialAccounts || 5,
+          customerName: lic?.customerName || "",
+          maxSocialAccounts: lic?.maxSocialAccounts || 5,
           monthsValid: parseInt(months),
-          fromEmail: licenses.find(l => l.id === licenseId)?.fromEmail || null,
+          fromEmail: lic?.fromEmail || null,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setLicenseKeyGenerated(data.licenseKey);
-        setLicenseIdGenerated(data.id);
         keyCache.current[data.id] = data.licenseKey;
-        setCopied(false);
-        showToast("success", "License renewed! New key generated.");
+        setLicKeyGenerated(data.licenseKey);
+        setLicIdGenerated(data.id);
+        showToast("success", "License renewed!");
         fetchData();
       } else {
         showToast("error", data.error || "Renew failed");
@@ -196,108 +219,36 @@ export default function AdminDashboard() {
     }
   };
 
-  const sendLicenseKeyToUser = async (email: string, licenseId?: string) => {
-    let key = licenseId ? keyCache.current[licenseId] : undefined;
-    if (!key) {
-      key = prompt("Enter the full license key to send:") || "";
-      if (!key) return;
-    }
-    try {
-      const res = await fetch("/api/admin/license/send-key", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ licenseKey: key, email }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast("success", `License key emailed to ${email}`);
-      } else {
-        showToast("error", data.error || "Send failed");
-      }
-    } catch (err) {
-      showToast("error", "Network error");
-    }
+  // ── User profile actions ──
+  const openProfile = (user: User) => {
+    setProfileUser(user);
+    setProfileName(user.name || "");
+    setProfileEmail(user.email);
+    setProfileLicenseId(user.licenseId || "");
+    setProfileFromEmail(user.fromEmail || "");
+    setProfileSuspended(user.suspended);
   };
 
-  const toggleLicenseUsers = (licenseId: string) => {
-    if (expandedLicenseId === licenseId) {
-      setExpandedLicenseId(null);
-    } else {
-      setExpandedLicenseId(licenseId);
-      if (!licenseUsers[licenseId]) {
-        fetchLicenseUsers(licenseId);
-      }
-    }
-  };
+  const closeProfile = () => setProfileUser(null);
 
-  const createUser = async () => {
-    if (!validateUser()) return;
-    try {
-      // Retrieve licence key from cache if available
-      const licenseKey = selectedLicenseId ? keyCache.current[selectedLicenseId] : undefined;
-
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          email: newEmail,
-          name: newName,
-          password: newPassword || undefined,
-          licenseId: selectedLicenseId || null,
-          fromEmail: userFromEmail || null,
-          sendEmail: sendWelcomeEmail,
-          licenseKey, // ← pass the key if we still have it
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast("success", `User ${data.user.email} created!`);
-        setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId(""); setUserFromEmail("");
-        setUserErrors({});
-        fetchData();
-      } else {
-        showToast("error", data.error || "Creation failed");
-      }
-    } catch (err) {
-      showToast("error", "Network error");
-    }
-  };
-
-  const validateUser = () => {
-    const errors: typeof userErrors = {};
-    if (!newEmail || !/^\S+@\S+\.\S+$/.test(newEmail)) errors.email = "Valid email required";
-    if (newPassword && newPassword.length < 6) errors.password = "Min 6 characters";
-    setUserErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const openEditModal = (user: User) => {
-    setEditingUser(user);
-    setEditName(user.name || "");
-    setEditEmail(user.email);
-    setEditLicenseId(user.licenseId || "");
-    setEditFromEmail(user.fromEmail || "");
-  };
-
-  const closeEditModal = () => setEditingUser(null);
-
-  const saveUserEdit = async () => {
-    if (!editingUser) return;
+  const saveProfile = async () => {
+    if (!profileUser) return;
     try {
       const res = await fetch("/api/admin/users", {
         method: "PUT",
         headers: authHeaders(),
         body: JSON.stringify({
-          id: editingUser.id,
-          name: editName,
-          email: editEmail,
-          licenseId: editLicenseId || null,
-          fromEmail: editFromEmail || null,
+          id: profileUser.id,
+          name: profileName,
+          email: profileEmail,
+          licenseId: profileLicenseId || null,
+          fromEmail: profileFromEmail || null,
+          suspended: profileSuspended,
         }),
       });
       if (res.ok) {
         showToast("success", "User updated!");
-        closeEditModal();
+        closeProfile();
         fetchData();
       } else {
         const data = await res.json();
@@ -316,9 +267,8 @@ export default function AdminDashboard() {
         headers: authHeaders(),
         body: JSON.stringify({ userId }),
       });
-      if (res.ok) {
-        showToast("success", "Password reset email sent!");
-      } else {
+      if (res.ok) showToast("success", "Password reset email sent!");
+      else {
         const data = await res.json();
         showToast("error", data.error || "Reset failed");
       }
@@ -327,6 +277,43 @@ export default function AdminDashboard() {
     }
   };
 
+  const assignLicenseFromProfile = async () => {
+    if (!profileUser || !profileLicenseId) return;
+    // The PUT already handles updating licenseId; we just need to save the profile.
+    // So we simply call saveProfile, which updates the user including licenseId.
+    await saveProfile();
+  };
+
+  const createLicenseForProfile = async (months: number) => {
+    if (!profileUser) return;
+    try {
+      const res = await fetch("/api/admin/license", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          customerName: profileName || profileUser.email,
+          maxSocialAccounts: 5,
+          monthsValid: months,
+          fromEmail: profileFromEmail || null,
+          userId: profileUser.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        keyCache.current[data.id] = data.licenseKey;
+        showToast("success", "License created and assigned!");
+        // Reassign the new license to the profile
+        setProfileLicenseId(data.id);
+        fetchData();
+      } else {
+        showToast("error", data.error || "Creation failed");
+      }
+    } catch (err) {
+      showToast("error", "Network error");
+    }
+  };
+
+  // ── UI ──
   return (
     <div className="space-y-8">
       {/* Toast */}
@@ -336,239 +323,252 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* License Creation */}
-      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create License</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Customer Name *</label>
-            <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Max Social Accounts</label>
-            <input type="number" value={maxAccounts} onChange={(e) => setMaxAccounts(Number(e.target.value))}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Months Valid</label>
-            <input type="number" value={monthsValid} onChange={(e) => setMonthsValid(Number(e.target.value))}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Default Sender (for users)</label>
-            <input type="email" placeholder="noreply@customer.co.za" value={licenseFromEmail} onChange={(e) => setLicenseFromEmail(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-            <p className="text-xs text-gray-500 mt-1">Optional – used when no per‑user sender is set.</p>
-          </div>
-        </div>
-        <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create License</button>
-        {licenseKeyGenerated && (
-          <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 rounded-md">
-            <p className="font-mono text-sm break-all">{licenseKeyGenerated}</p>
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => { navigator.clipboard.writeText(licenseKeyGenerated); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                className="text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded">{copied ? "Copied!" : "Copy"}</button>
-              <button onClick={() => setLicenseKeyGenerated("")} className="text-xs text-red-600">Dismiss</button>
-            </div>
-          </div>
-        )}
-      </section>
+      {/* Tab Bar */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
+        <button
+          onClick={() => setActiveTab("users")}
+          className={`px-4 py-2 rounded-t-lg ${activeTab === "users" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}
+        >
+          Users
+        </button>
+        <button
+          onClick={() => setActiveTab("licenses")}
+          className={`px-4 py-2 rounded-t-lg ${activeTab === "licenses" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}
+        >
+          Licenses
+        </button>
+      </div>
 
-      {/* User Creation */}
-      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create User</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Email *</label>
-            <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-              className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
-            {userErrors.email && <p className="text-red-500 text-xs mt-1">{userErrors.email}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
-            <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Password (optional)</label>
-            <div className="relative">
-              <input type={showPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm">👁️</button>
-            </div>
-            {userErrors.password && <p className="text-red-500 text-xs mt-1">{userErrors.password}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">License</label>
-            <select value={selectedLicenseId} onChange={(e) => setSelectedLicenseId(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-              <option value="">None</option>
-              {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Branded Sender (for user emails)</label>
-            <input type="email" placeholder="noreply@acmecorp.co.za" value={userFromEmail} onChange={(e) => setUserFromEmail(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-            <p className="text-xs text-gray-500 mt-1">Overrides license default. Emails to this user will appear from this address.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 mt-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={sendWelcomeEmail} onChange={(e) => setSendWelcomeEmail(e.target.checked)} />
-            Send welcome email
-          </label>
-        </div>
-        <div className="flex gap-3 mt-4">
-          <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create User</button>
-          <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setSelectedLicenseId(""); setUserFromEmail(""); setUserErrors({}); }}
-            className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md">Clear</button>
-        </div>
-      </section>
-
-      {/* User List */}
-      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Users</h2>
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr>
-              <th className="py-2 text-left">Email</th>
-              <th className="py-2">Name</th>
-              <th className="py-2">Role</th>
-              <th className="py-2">License</th>
-              <th className="py-2">Key Preview</th>
-              <th className="py-2">Sender</th>
-              <th className="py-2">Created</th>
-              <th className="py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((usr) => (
-              <tr key={usr.id}>
-                <td className="py-2">{usr.email}</td>
-                <td className="py-2 text-center">{usr.name || "-"}</td>
-                <td className="py-2 text-center">{usr.role}</td>
-                <td className="py-2 text-center">{usr.license?.customerName || "-"}</td>
-                <td className="py-2 text-center">{usr.license?.keyPreview || "-"}</td>
-                <td className="py-2 text-center">{usr.fromEmail || usr.license?.fromEmail || "-"}</td>
-                <td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td>
-                <td className="py-2 text-center">
-                  <button onClick={() => openEditModal(usr)} className="text-indigo-600 hover:underline mr-2">Edit</button>
-                  <button onClick={() => resetPassword(usr.id)} className="text-orange-600 hover:underline mr-2">Reset Pwd</button>
-                  {usr.licenseId && (
-                    <button onClick={() => sendLicenseKeyToUser(usr.email, usr.licenseId!)}
-                      className="text-green-600 hover:underline">Send Key</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      {/* License List */}
-      <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Licenses</h2>
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr>
-              <th className="py-2 text-left">Customer</th>
-              <th className="py-2">Max</th>
-              <th className="py-2">Status</th>
-              <th className="py-2">Expires</th>
-              <th className="py-2">Key Preview</th>
-              <th className="py-2">Users</th>
-              <th className="py-2">Default Sender</th>
-              <th className="py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {licenses.map((lic) => (
-              <tr key={lic.id}>
-                <td className="py-2">
-                  <button
-                    onClick={() => toggleLicenseUsers(lic.id)}
-                    className="text-left hover:underline focus:outline-none"
-                  >
-                    {lic.customerName}
-                  </button>
-                  {expandedLicenseId === lic.id && licenseUsers[lic.id] && (
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {licenseUsers[lic.id].map(u => (
-                        <div key={u.id}>{u.email}</div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td className="py-2 text-center">{lic.maxSocialAccounts}</td>
-                <td className="py-2 text-center">{lic.status}</td>
-                <td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
-                <td className="py-2 text-center">{lic.keyPreview || "-"}</td>
-                <td className="py-2 text-center">{lic.userCount || 0}</td>
-                <td className="py-2 text-center">{lic.fromEmail || "-"}</td>
-                <td className="py-2 text-center">
-                  {lic.status === "ACTIVE" && (
-                    <>
-                      <button onClick={() => renewLicense(lic.id)}
-                        className="text-blue-600 hover:underline mr-2">Renew</button>
-                      <button onClick={() => {
-                        const email = prompt("Recipient email?");
-                        if (email) sendLicenseKeyToUser(email, lic.id);
-                      }}
-                        className="text-green-600 hover:underline mr-2">Send Key</button>
-                      <button onClick={() => {
-                        const key = keyCache.current[lic.id] || prompt("License key to revoke:");
-                        if (key) revokeLicense(key);
-                      }}
-                        className="text-red-600 hover:underline">Revoke</button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow">
-            <h2 className="text-lg font-bold mb-4">Edit User</h2>
-            <div className="space-y-3">
+      {/* ─── USERS TAB ─── */}
+      {activeTab === "users" && (
+        <>
+          {/* Create User */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create User</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                <label className="block text-sm font-medium mb-1">Email *</label>
+                <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                  className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+                {userErrors.email && <p className="text-red-500 text-xs mt-1">{userErrors.email}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Name</label>
-                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">License</label>
-                <select value={editLicenseId} onChange={(e) => setEditLicenseId(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <label className="block text-sm font-medium mb-1">Password (optional)</label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                    className={`w-full rounded-md border p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"}`} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm">👁️</button>
+                </div>
+                {userErrors.password && <p className="text-red-500 text-xs mt-1">{userErrors.password}</p>}
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button onClick={createUser} className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create User</button>
+              <button onClick={() => { setNewEmail(""); setNewName(""); setNewPassword(""); setUserErrors({}); }}
+                className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md">Clear</button>
+            </div>
+          </section>
+
+          {/* User List */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Users</h2>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="py-2 text-left">Email</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2">Role</th>
+                  <th className="py-2">Status</th>
+                  <th className="py-2">License</th>
+                  <th className="py-2">Key Preview</th>
+                  <th className="py-2">Created</th>
+                  <th className="py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((usr) => (
+                  <tr key={usr.id}>
+                    <td className="py-2">{usr.email}</td>
+                    <td className="py-2 text-center">{usr.name || "-"}</td>
+                    <td className="py-2 text-center">{usr.role}</td>
+                    <td className="py-2 text-center">{usr.suspended ? "Suspended" : "Active"}</td>
+                    <td className="py-2 text-center">{usr.license?.customerName || "-"}</td>
+                    <td className="py-2 text-center">{usr.license?.keyPreview || "-"}</td>
+                    <td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 text-center">
+                      <button onClick={() => openProfile(usr)} className="text-indigo-600 hover:underline mr-2">Edit</button>
+                      <button onClick={() => resetPassword(usr.id)} className="text-orange-600 hover:underline">Reset Pwd</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </>
+      )}
+
+      {/* ─── LICENSES TAB ─── */}
+      {activeTab === "licenses" && (
+        <>
+          {/* Create License */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create License</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                <input type="text" value={licCustomerName} onChange={(e) => setLicCustomerName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Assign to User (optional)</label>
+                <select value={licAssignUserId} onChange={(e) => { setLicAssignUserId(e.target.value); if (e.target.value) { const u = users.find(usr => usr.id === e.target.value); if (u) setLicCustomerName(u.name || u.email); } }}>
                   <option value="">None</option>
-                  {licenses.filter(l => l.status === "ACTIVE").map(l => (<option key={l.id} value={l.id}>{l.customerName} {l.fromEmail ? `(${l.fromEmail})` : ''}</option>))}
+                  {users.map(u => (<option key={u.id} value={u.id}>{u.email} ({u.name || "No name"})</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Branded Sender</label>
-                <input type="email" placeholder="noreply@acmecorp.co.za" value={editFromEmail} onChange={(e) => setEditFromEmail(e.target.value)}
+                <label className="block text-sm font-medium mb-1">Max Social Accounts</label>
+                <input type="number" value={licMaxAccounts} onChange={(e) => setLicMaxAccounts(Number(e.target.value))}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-                <p className="text-xs text-gray-500 mt-1">Overrides license default.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Months Valid</label>
+                <input type="number" value={licMonthsValid} onChange={(e) => setLicMonthsValid(Number(e.target.value))}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Default Sender (optional)</label>
+                <input type="email" placeholder="noreply@customer.co.za" value={licFromEmail} onChange={(e) => setLicFromEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
               </div>
             </div>
-            <div className="flex justify-end gap-3 mt-4">
-              <button onClick={closeEditModal} className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">Cancel</button>
-              <button onClick={saveUserEdit} className="px-4 py-2 rounded-md bg-indigo-600 text-white">Save</button>
-              {editingUser.licenseId && (
-                <button onClick={() => sendLicenseKeyToUser(editingUser.email, editingUser.licenseId!)}
-                  className="px-4 py-2 rounded-md bg-green-600 text-white">Send Key</button>
+            <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create License</button>
+            {licKeyGenerated && (
+              <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 rounded-md">
+                <p className="font-mono text-sm break-all">{licKeyGenerated}</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => { navigator.clipboard.writeText(licKeyGenerated); setLicCopied(true); setTimeout(() => setLicCopied(false), 2000); }}
+                    className="text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded">{licCopied ? "Copied!" : "Copy"}</button>
+                  <button onClick={() => setLicKeyGenerated("")} className="text-xs text-red-600">Dismiss</button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* License List */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Licenses</h2>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="py-2 text-left">Customer</th>
+                  <th className="py-2">Max</th>
+                  <th className="py-2">Status</th>
+                  <th className="py-2">Expires</th>
+                  <th className="py-2">Key Preview</th>
+                  <th className="py-2">Users</th>
+                  <th className="py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {licenses.map((lic) => (
+                  <tr key={lic.id}>
+                    <td className="py-2">{lic.customerName}</td>
+                    <td className="py-2 text-center">{lic.maxSocialAccounts}</td>
+                    <td className="py-2 text-center">{lic.status}</td>
+                    <td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
+                    <td className="py-2 text-center">{lic.keyPreview || "-"}</td>
+                    <td className="py-2 text-center">{lic.userCount || 0}</td>
+                    <td className="py-2 text-center">
+                      {lic.status === "ACTIVE" && (
+                        <>
+                          <button onClick={() => renewLicense(lic.id)} className="text-blue-600 hover:underline mr-2">Renew</button>
+                          <button onClick={() => { const key = keyCache.current[lic.id] || prompt("License key to revoke:"); if (key) revokeLicense(key); }}
+                            className="text-red-600 hover:underline">Revoke</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </>
+      )}
+
+      {/* ─── USER PROFILE MODAL ─── */}
+      {profileUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl shadow max-h-screen overflow-y-auto">
+            <h2 className="text-lg font-bold mb-4">User Profile: {profileUser.email}</h2>
+
+            {/* Basic Info */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Branded Sender</label>
+                <input type="email" value={profileFromEmail} onChange={(e) => setProfileFromEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={profileSuspended} onChange={(e) => setProfileSuspended(e.target.checked)} />
+                <label className="text-sm">Suspend account</label>
+              </div>
+            </div>
+
+            {/* License Section */}
+            <div className="mb-6 p-4 border rounded-lg">
+              <h3 className="font-semibold mb-2">License</h3>
+              {profileUser.license ? (
+                <div className="text-sm space-y-1">
+                  <p><strong>Customer:</strong> {profileUser.license.customerName}</p>
+                  <p><strong>Key Preview:</strong> {profileUser.license.keyPreview || "-"}</p>
+                  <p><strong>Status:</strong> {licenses.find(l => l.id === profileUser.licenseId)?.status || "Unknown"}</p>
+                  <p><strong>Expires:</strong> {licenses.find(l => l.id === profileUser.licenseId)?.expiresAt ? new Date(licenses.find(l => l.id === profileUser.licenseId)!.expiresAt).toLocaleDateString() : "-"}</p>
+                  <button onClick={() => { const key = keyCache.current[profileUser.licenseId!] || prompt("Enter new key to send:"); if (key) {/* send key logic */} }}
+                    className="text-xs text-green-600 mt-1">Resend Key</button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No license assigned.</p>
               )}
+
+              {/* Assign or create license */}
+              <div className="mt-4 flex gap-2">
+                <select
+                  value={profileLicenseId}
+                  onChange={(e) => setProfileLicenseId(e.target.value)}
+                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm"
+                >
+                  <option value="">-- Select existing license --</option>
+                  {licenses.filter(l => l.status === "ACTIVE").map(l => (
+                    <option key={l.id} value={l.id}>{l.customerName} ({l.keyPreview})</option>
+                  ))}
+                </select>
+                <button onClick={assignLicenseFromProfile} className="bg-indigo-600 text-white px-3 py-1 rounded-md text-sm">Assign</button>
+                <button onClick={() => { const months = prompt("Months for new license:"); if (months) createLicenseForProfile(parseInt(months)); }}
+                  className="bg-green-600 text-white px-3 py-1 rounded-md text-sm">Create & Assign</button>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex justify-end gap-3">
+              <button onClick={() => resetPassword(profileUser.id)} className="px-4 py-2 rounded-md bg-orange-600 text-white">Reset Password</button>
+              <button onClick={closeProfile} className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">Cancel</button>
+              <button onClick={saveProfile} className="px-4 py-2 rounded-md bg-indigo-600 text-white">Save</button>
             </div>
           </div>
         </div>

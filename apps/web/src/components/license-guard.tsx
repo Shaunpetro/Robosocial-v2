@@ -3,12 +3,11 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export default function LicenseGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -19,13 +18,19 @@ export default function LicenseGuard({ children }: { children: React.ReactNode }
       return;
     }
 
-    // If the user doesn't have a licenseId yet, redirect to activate
+    // If the user is suspended, redirect to a suspended page (or expired page for now)
+    if ((session.user as any).suspended) {
+      router.push("/license-expired");
+      return;
+    }
+
+    // If no license assigned, redirect to activate
     if (!(session.user as any).licenseId) {
       router.push("/activate");
       return;
     }
 
-    // Verify the licence is still valid
+    // Verify license validity
     fetch("/api/license/validate")
       .then((res) => res.json())
       .then((data) => {
@@ -34,18 +39,11 @@ export default function LicenseGuard({ children }: { children: React.ReactNode }
         }
         setChecking(false);
       })
-      .catch(() => {
-        // If the endpoint fails, still allow access but log warning
-        setChecking(false);
-      });
+      .catch(() => setChecking(false));
   }, [session, status, router]);
 
   if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Checking licence...</p>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">Checking licence...</p></div>;
   }
 
   return <>{children}</>;

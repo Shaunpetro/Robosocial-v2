@@ -27,6 +27,7 @@ model User {
   updatedAt DateTime  @updatedAt
 
   companies Company[]
+  suspended Boolean @default(false)
 }
 
 enum UserRole {
