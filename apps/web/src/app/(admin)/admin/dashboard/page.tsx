@@ -11,7 +11,7 @@ interface License {
   expiresAt: string;
   fromEmail?: string | null;
   keyPreview?: string | null;
-  userCount?: number; // we'll populate after fetch
+  userCount?: number;
   createdAt: string;
 }
 
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
   const [editLicenseId, setEditLicenseId] = useState("");
   const [editFromEmail, setEditFromEmail] = useState("");
 
-  // License users tooltip
+  // License users expand
   const [expandedLicenseId, setExpandedLicenseId] = useState<string | null>(null);
   const [licenseUsers, setLicenseUsers] = useState<Record<string, User[]>>({});
 
@@ -93,7 +93,6 @@ export default function AdminDashboard() {
       ]);
       if (licRes.ok) {
         const licData = await licRes.json();
-        // Calculate user count per license from users
         const usrData = usrRes.ok ? await usrRes.json() : users;
         const counts: Record<string, number> = {};
         (usrData as User[]).forEach((u: User) => {
@@ -109,7 +108,7 @@ export default function AdminDashboard() {
     } catch (err) {
       showToast("error", "Failed to fetch data.");
     }
-  }, [authHeaders, showToast]);
+  }, [authHeaders, showToast, users]);
 
   useEffect(() => {
     const storedKey = sessionStorage.getItem("admin_key");
@@ -234,6 +233,9 @@ export default function AdminDashboard() {
   const createUser = async () => {
     if (!validateUser()) return;
     try {
+      // Retrieve licence key from cache if available
+      const licenseKey = selectedLicenseId ? keyCache.current[selectedLicenseId] : undefined;
+
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: authHeaders(),
@@ -244,6 +246,7 @@ export default function AdminDashboard() {
           licenseId: selectedLicenseId || null,
           fromEmail: userFromEmail || null,
           sendEmail: sendWelcomeEmail,
+          licenseKey, // ← pass the key if we still have it
         }),
       });
       const data = await res.json();

@@ -59,6 +59,7 @@ export const {
   },
   session: {
     strategy: "jwt",
+    maxAge: 3 * 60 * 60, // 3 hours
   },
   pages: {
     signIn: "/login",
