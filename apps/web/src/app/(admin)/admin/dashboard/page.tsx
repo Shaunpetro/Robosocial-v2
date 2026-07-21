@@ -24,7 +24,13 @@ interface User {
   suspended: boolean;
   licenseId: string | null;
   fromEmail?: string | null;
-  license?: { customerName: string; fromEmail?: string | null; keyPreview?: string | null; status: string; expiresAt: string } | null;
+  license?: {
+    customerName: string;
+    fromEmail?: string | null;
+    keyPreview?: string | null;
+    status: string;
+    expiresAt: string;
+  } | null;
   createdAt: string;
 }
 
@@ -78,59 +84,54 @@ export default function AdminDashboard() {
     "Content-Type": "application/json",
   }), [adminKey]);
 
+  // ── Data fetching (fixed) ──
   const fetchData = useCallback(async () => {
+    if (!adminKey) return; // wait until key is set
     try {
       const headers = authHeaders();
-      console.log('[AdminDashboard] Fetching with headers:', headers);
-
       const licRes = await fetch("/api/admin/licenses", { headers });
       const usrRes = await fetch("/api/admin/users", { headers });
 
-      console.log('[AdminDashboard] Licenses status:', licRes.status, licRes.statusText);
-      console.log('[AdminDashboard] Users status:', usrRes.status, usrRes.statusText);
+      // Read user data exactly once
+      const usrData: User[] = usrRes.ok ? await usrRes.json() : [];
 
       if (licRes.ok) {
         const licData = await licRes.json();
-        const usrData = usrRes.ok ? await usrRes.json() : [];
         const counts: Record<string, number> = {};
-        (usrData as User[]).forEach((u: User) => {
+        usrData.forEach((u) => {
           if (u.licenseId) counts[u.licenseId] = (counts[u.licenseId] || 0) + 1;
         });
         setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
       } else {
-        const errText = await licRes.text();
-        console.error('[AdminDashboard] Licenses error body:', errText);
         showToast("error", "Failed to fetch licenses.");
       }
 
       if (usrRes.ok) {
-        setUsers(await usrRes.json());
+        setUsers(usrData);
       } else {
-        const errText = await usrRes.text();
-        console.error('[AdminDashboard] Users error body:', errText);
         showToast("error", "Failed to fetch users.");
       }
     } catch (err) {
-      console.error('[AdminDashboard] Fetch exception:', err);
       showToast("error", "Network error while fetching data.");
     }
-  }, [authHeaders, showToast]);
+  }, [adminKey, authHeaders, showToast]);
 
   useEffect(() => {
     const storedKey = sessionStorage.getItem("admin_key");
-    console.log('[AdminDashboard] Stored admin key:', storedKey);
     if (storedKey) {
       setAdminKey(storedKey);
-      fetchData();
     }
-  }, [fetchData]);
+  }, []);
+
+  useEffect(() => {
+    if (adminKey) fetchData();
+  }, [adminKey, fetchData]);
 
   // ── User creation ──
   const createUser = async () => {
     if (!validateUser()) return;
     try {
       const licenseKey = selectedLicenseId ? keyCache.current[selectedLicenseId] : undefined;
-
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: authHeaders(),
@@ -179,7 +180,6 @@ export default function AdminDashboard() {
         fromEmail: licFromEmail || null,
       };
       if (licAssignUserId) body.userId = licAssignUserId;
-
       const res = await fetch("/api/admin/license", {
         method: "POST",
         headers: authHeaders(),
@@ -260,7 +260,6 @@ export default function AdminDashboard() {
     setProfileFromEmail(user.fromEmail || "");
     setProfileSuspended(user.suspended);
   };
-
   const closeProfile = () => setProfileUser(null);
 
   const saveProfile = async () => {
@@ -558,7 +557,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* License Section */}
             <div className="mb-6 p-4 border rounded-lg">
               <h3 className="font-semibold mb-2">License</h3>
               {profileUser.license ? (
