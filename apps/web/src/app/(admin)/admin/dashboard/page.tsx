@@ -44,7 +44,7 @@ export default function AdminDashboard() {
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [selectedLicenseId, setSelectedLicenseId] = useState(""); // ← missing added
+  const [selectedLicenseId, setSelectedLicenseId] = useState("");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [userErrors, setUserErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -81,8 +81,13 @@ export default function AdminDashboard() {
   const fetchData = useCallback(async () => {
     try {
       const headers = authHeaders();
+      console.log('[AdminDashboard] Fetching with headers:', headers);
+
       const licRes = await fetch("/api/admin/licenses", { headers });
       const usrRes = await fetch("/api/admin/users", { headers });
+
+      console.log('[AdminDashboard] Licenses status:', licRes.status, licRes.statusText);
+      console.log('[AdminDashboard] Users status:', usrRes.status, usrRes.statusText);
 
       if (licRes.ok) {
         const licData = await licRes.json();
@@ -93,21 +98,27 @@ export default function AdminDashboard() {
         });
         setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
       } else {
+        const errText = await licRes.text();
+        console.error('[AdminDashboard] Licenses error body:', errText);
         showToast("error", "Failed to fetch licenses.");
       }
 
       if (usrRes.ok) {
         setUsers(await usrRes.json());
       } else {
+        const errText = await usrRes.text();
+        console.error('[AdminDashboard] Users error body:', errText);
         showToast("error", "Failed to fetch users.");
       }
     } catch (err) {
+      console.error('[AdminDashboard] Fetch exception:', err);
       showToast("error", "Network error while fetching data.");
     }
   }, [authHeaders, showToast]);
 
   useEffect(() => {
     const storedKey = sessionStorage.getItem("admin_key");
+    console.log('[AdminDashboard] Stored admin key:', storedKey);
     if (storedKey) {
       setAdminKey(storedKey);
       fetchData();
@@ -128,7 +139,7 @@ export default function AdminDashboard() {
           name: newName,
           password: newPassword || undefined,
           licenseId: selectedLicenseId || null,
-          fromEmail: null, // you can add a field later if needed
+          fromEmail: null,
           sendEmail: sendWelcomeEmail,
           licenseKey,
         }),
