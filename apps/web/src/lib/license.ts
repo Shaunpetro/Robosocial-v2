@@ -41,9 +41,9 @@ export async function createLicense(input: {
   monthsValid: number;
   githubPAT?: string;
   fromEmail?: string;
-}): Promise<{ licenseKey: string; expiresAt: Date; keyPreview: string }> {
+}): Promise<{ id: string; licenseKey: string; expiresAt: Date; keyPreview: string }> {
   const licenseKey = generateLicenseKey();
-  const keyPreview = licenseKey.slice(-8); // last 8 characters for admin display
+  const keyPreview = licenseKey.slice(-8);
 
   let expiresAt = new Date();
   if (input.githubPAT) {
@@ -63,7 +63,7 @@ export async function createLicense(input: {
 
   const licenseKeyHash = await bcrypt.hash(licenseKey, 12);
 
-  await prisma.license.create({
+  const created = await prisma.license.create({
     data: {
       customerName: input.customerName,
       licenseKeyHash,
@@ -75,7 +75,7 @@ export async function createLicense(input: {
     },
   });
 
-  return { licenseKey, expiresAt, keyPreview };
+  return { id: created.id, licenseKey, expiresAt, keyPreview };
 }
 
 export async function revokeLicense(licenseKey: string) {

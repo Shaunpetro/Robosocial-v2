@@ -1,41 +1,7 @@
-// apps/web/src/app/api/admin/users/route.ts
+// apps/web/src/app/api/admin/license/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { isAdmin } from "@/lib/license";
-import bcrypt from "bcryptjs";
-import { sendWelcomeEmail } from "@/lib/email";
-import crypto from "crypto";
-
-export async function GET(request: NextRequest) {
-  if (!isAdmin(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      suspended: true,
-      licenseId: true,
-      fromEmail: true,
-      license: {
-        select: {
-          customerName: true,
-          fromEmail: true,
-          keyPreview: true,
-          status: true,
-          expiresAt: true,
-        },
-      },
-      createdAt: true,
-    },
-  });
-
-  return NextResponse.json(users);
-}
+import { isAdmin, createLicense, revokeLicense } from "@/lib/license";
 
 export async function POST(request: NextRequest) {
   if (!isAdmin(request)) {
@@ -43,68 +9,65 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, name, password, licenseId, fromEmail, sendEmail, licenseKey, suspended } =
-      await request.json();
-    if (!email) {
-      return NextResponse.json({ error: "Email required" }, { status: 400 });
+    const body = await request.json();
+    const { customerName, maxSocialAccounts, monthsValid, fromEmail, userId } = body;
+
+    if (!customerName || !maxSocialAccounts || !monthsValid) {
+      return NextResponse.json(
+        { error: "Missing required fields (customerName, maxSocialAccounts, monthsValid)" },
+        { status: 400 }
+      );
     }
 
-    const generatedPassword = password || crypto.randomBytes(12).toString("hex");
-    const hashedPassword = await bcrypt.hash(generatedPassword, 12);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: name || null,
-        password: hashedPassword,
-        licenseId: licenseId || null,
-        fromEmail: fromEmail || null,
-        suspended: suspended || false,
-      },
+    const result = await createLicense({
+      customerName,
+      maxSocialAccounts,
+      monthsValid,
+      fromEmail,
     });
 
-    if (sendEmail) {
-      let effectiveFrom: string | null = user.fromEmail ?? null;
-      if (!effectiveFrom && licenseId) {
-        const lic = await prisma.license.findUnique({
-          where: { id: licenseId },
-          select: { fromEmail: true },
-        });
-        effectiveFrom = lic?.fromEmail ?? null;
-      }
-      await sendWelcomeEmail(email, generatedPassword, effectiveFrom, licenseKey || null);
+    // If a userId was provided, assign the licence to that user
+    if (userId) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { licenseId: result.id },
+      });
     }
 
     return NextResponse.json(
-      { success: true, user: { id: user.id, email: user.email } },
+      {
+        success: true,
+        id: result.id,
+        licenseKey: result.licenseKey,
+        expiresAt: result.expiresAt,
+      },
       { status: 201 }
     );
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "License creation failed" },
+      { status: 500 }
+    );
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   if (!isAdmin(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { id, email, name, role, licenseId, fromEmail, suspended } = await request.json();
-    if (!id) {
-      return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    const { licenseKey } = await request.json();
+    if (!licenseKey) {
+      return NextResponse.json({ error: "licenseKey is required" }, { status: 400 });
     }
 
-    const data: any = {};
-    if (email) data.email = email;
-    if (name !== undefined) data.name = name;
-    if (role) data.role = role;
-    if (licenseId !== undefined) data.licenseId = licenseId;
-    if (fromEmail !== undefined) data.fromEmail = fromEmail ?? null;
-    if (suspended !== undefined) data.suspended = suspended;
+    const revoked = await revokeLicense(licenseKey);
+    if (!revoked) {
+      return NextResponse.json({ error: "License not found" }, { status: 404 });
+    }
 
-    const updated = await prisma.user.update({ where: { id }, data });
-    return NextResponse.json({ success: true, user: { id: updated.id, email: updated.email } });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
