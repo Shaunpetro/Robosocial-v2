@@ -3,7 +3,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 
-// ── Type definitions (unchanged) ──
 interface License {
   id: string;
   customerName: string;
@@ -36,7 +35,7 @@ interface User {
 }
 
 const TOAST_DURATION = 4000;
-const RETRY_DELAYS = [1000, 2000, 4000]; // backoff for cold starts
+const RETRY_DELAYS = [1000, 2000, 4000];
 
 export default function AdminDashboard() {
   const [licenses, setLicenses] = useState<License[]>([]);
@@ -46,10 +45,8 @@ export default function AdminDashboard() {
   const [adminKey, setAdminKey] = useState("");
   const keyCache = useRef<Record<string, string>>({});
 
-  // Tab state
   const [activeTab, setActiveTab] = useState<"users" | "licenses">("users");
 
-  // User creation form
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -58,7 +55,6 @@ export default function AdminDashboard() {
   const [userErrors, setUserErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
 
-  // Licence creation form
   const [licCustomerName, setLicCustomerName] = useState("");
   const [licMaxAccounts, setLicMaxAccounts] = useState(5);
   const [licMonthsValid, setLicMonthsValid] = useState(1);
@@ -68,7 +64,6 @@ export default function AdminDashboard() {
   const [licIdGenerated, setLicIdGenerated] = useState<string | null>(null);
   const [licCopied, setLicCopied] = useState(false);
 
-  // User profile modal
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
@@ -76,7 +71,6 @@ export default function AdminDashboard() {
   const [profileFromEmail, setProfileFromEmail] = useState("");
   const [profileSuspended, setProfileSuspended] = useState(false);
 
-  // ── Helpers ──
   const showToast = useCallback((type: "success" | "error", text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), TOAST_DURATION);
@@ -87,16 +81,13 @@ export default function AdminDashboard() {
     "Content-Type": "application/json",
   }), [adminKey]);
 
-  // ── Fetch with retry ──
   const fetchWithRetry = async (url: string, headers: Record<string, string>) => {
     let lastError: any;
     for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
       try {
         const res = await fetch(url, { headers });
         if (res.ok) return res;
-        // If unauthorized, don't retry – key is wrong
         if (res.status === 401) return res;
-        // If server error, retry
         throw new Error(`Server error ${res.status}`);
       } catch (err) {
         lastError = err;
@@ -113,8 +104,6 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       const headers = authHeaders();
-
-      // Fetch both endpoints with retry
       const [licRes, usrRes] = await Promise.all([
         fetchWithRetry("/api/admin/licenses", headers),
         fetchWithRetry("/api/admin/users", headers),
@@ -129,9 +118,8 @@ export default function AdminDashboard() {
           if (u.licenseId) counts[u.licenseId] = (counts[u.licenseId] || 0) + 1;
         });
         setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
-      } else {
-        // Only show error if it's a 401 (real auth issue), not a server hiccup
-        if (licRes.status === 401) showToast("error", "Unauthorized – check admin key.");
+      } else if (licRes.status === 401) {
+        showToast("error", "Unauthorized – check admin key.");
       }
 
       if (usrRes.ok) {
@@ -140,7 +128,6 @@ export default function AdminDashboard() {
         showToast("error", "Unauthorized – check admin key.");
       }
     } catch (err) {
-      console.error("Fetch failed after retries:", err);
       showToast("error", "Unable to load data. Please refresh.");
     } finally {
       setIsLoading(false);
@@ -156,7 +143,6 @@ export default function AdminDashboard() {
     if (adminKey) fetchData();
   }, [adminKey, fetchData]);
 
-  // ── User creation (unchanged) ──
   const createUser = async () => {
     if (!validateUser()) return;
     try {
@@ -198,7 +184,6 @@ export default function AdminDashboard() {
     return Object.keys(errors).length === 0;
   };
 
-  // ── Licence creation (unchanged) ──
   const createLicense = async () => {
     if (!licCustomerName.trim()) { showToast("error", "Customer name required"); return; }
     try {
@@ -230,7 +215,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // ── Licence actions (unchanged) ──
   const renewLicense = async (licenseId: string) => {
     const months = prompt("How many months to renew for?", "1");
     if (!months) return;
@@ -297,7 +281,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // ── User profile modal (unchanged) ──
   const openProfile = (user: User) => {
     setProfileUser(user);
     setProfileName(user.name || "");
@@ -387,7 +370,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // ── UI ──
   return (
     <div className="space-y-8">
       {toast && (
@@ -396,13 +378,11 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Tab Bar */}
       <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
         <button onClick={() => { setActiveTab("users"); setUserErrors({}); }} className={`px-4 py-2 rounded-t-lg ${activeTab === "users" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}>Users</button>
         <button onClick={() => setActiveTab("licenses")} className={`px-4 py-2 rounded-t-lg ${activeTab === "licenses" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}>Licenses</button>
       </div>
 
-      {/* Loading state */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-2">
@@ -412,10 +392,8 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <>
-          {/* USERS TAB */}
           {activeTab === "users" && (
             <>
-              {/* Create User section – unchanged, but uses isLoading guard to avoid rendering before data */}
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
                 <h2 className="text-xl font-semibold mb-4">Create User</h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -504,22 +482,177 @@ export default function AdminDashboard() {
             </>
           )}
 
-          {/* LICENSES TAB – similar loading guard, unchanged content */}
           {activeTab === "licenses" && (
             <>
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-                {/* … licence creation form unchanged … */}
+                <h2 className="text-xl font-semibold mb-4">Create License</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                    <input type="text" value={licCustomerName} onChange={(e) => setLicCustomerName(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Assign to User (optional)</label>
+                    <select value={licAssignUserId} onChange={(e) => { setLicAssignUserId(e.target.value); if (e.target.value) { const u = users.find(usr => usr.id === e.target.value); if (u) setLicCustomerName(u.name || u.email); } }}>
+                      <option value="">None</option>
+                      {users.map(u => (<option key={u.id} value={u.id}>{u.email} ({u.name || "No name"})</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Max Social Accounts</label>
+                    <input type="number" value={licMaxAccounts} onChange={(e) => setLicMaxAccounts(Number(e.target.value))}
+                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Months Valid</label>
+                    <input type="number" value={licMonthsValid} onChange={(e) => setLicMonthsValid(Number(e.target.value))}
+                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-1">Default Sender (optional)</label>
+                    <input type="email" placeholder="noreply@customer.co.za" value={licFromEmail} onChange={(e) => setLicFromEmail(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+                  </div>
+                </div>
+                <button onClick={createLicense} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create License</button>
+                {licKeyGenerated && (
+                  <div className="mt-4 p-3 bg-green-50 dark:bg-green-900 rounded-md">
+                    <p className="font-mono text-sm break-all">{licKeyGenerated}</p>
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={() => { navigator.clipboard.writeText(licKeyGenerated); setLicCopied(true); setTimeout(() => setLicCopied(false), 2000); }}
+                        className="text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded">{licCopied ? "Copied!" : "Copy"}</button>
+                      <button onClick={() => setLicKeyGenerated("")} className="text-xs text-red-600">Dismiss</button>
+                    </div>
+                  </div>
+                )}
               </section>
+
               <section className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow overflow-x-auto">
-                {/* … licence table unchanged … */}
+                <h2 className="text-xl font-semibold mb-4">Licenses</h2>
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="py-2 text-left">Customer</th>
+                      <th className="py-2">Max</th>
+                      <th className="py-2">Status</th>
+                      <th className="py-2">Expires</th>
+                      <th className="py-2">Key Preview</th>
+                      <th className="py-2">Users</th>
+                      <th className="py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {licenses.map((lic) => (
+                      <tr key={lic.id}>
+                        <td className="py-2">{lic.customerName}</td>
+                        <td className="py-2 text-center">{lic.maxSocialAccounts}</td>
+                        <td className="py-2 text-center">{lic.status}</td>
+                        <td className="py-2 text-center">{new Date(lic.expiresAt).toLocaleDateString()}</td>
+                        <td className="py-2 text-center">{lic.keyPreview || "-"}</td>
+                        <td className="py-2 text-center">{lic.userCount || 0}</td>
+                        <td className="py-2 text-center">
+                          {lic.status === "ACTIVE" && (
+                            <>
+                              <button onClick={() => renewLicense(lic.id)} className="text-blue-600 hover:underline mr-2">Renew</button>
+                              <button onClick={() => { const key = keyCache.current[lic.id] || prompt("License key to revoke:"); if (key) revokeLicense(key); }}
+                                className="text-red-600 hover:underline">Revoke</button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </section>
             </>
           )}
         </>
       )}
 
-      {/* USER PROFILE MODAL – unchanged */}
-      {/* … rest of the component … */}
+      {profileUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl shadow max-h-screen overflow-y-auto">
+            <h2 className="text-lg font-bold mb-4">User Profile: {profileUser.email}</h2>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Branded Sender</label>
+                <input type="email" value={profileFromEmail} onChange={(e) => setProfileFromEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700" />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={profileSuspended} onChange={(e) => setProfileSuspended(e.target.checked)} />
+                <label className="text-sm">Suspend account</label>
+              </div>
+            </div>
+
+            <div className="mb-6 p-4 border rounded-lg">
+              <h3 className="font-semibold mb-2">License</h3>
+              {profileUser.license ? (
+                <div className="text-sm space-y-1">
+                  <p><strong>Customer:</strong> {profileUser.license.customerName}</p>
+                  <p><strong>Key Preview:</strong> {profileUser.license.keyPreview || "-"}</p>
+                  <p><strong>Status:</strong> {licenses.find(l => l.id === profileUser.licenseId)?.status || "Unknown"}</p>
+                  <p><strong>Expires:</strong> {licenses.find(l => l.id === profileUser.licenseId)?.expiresAt ? new Date(licenses.find(l => l.id === profileUser.licenseId)!.expiresAt).toLocaleDateString() : "-"}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No license assigned.</p>
+              )}
+              <div className="mt-4 flex gap-2">
+                <select value={profileLicenseId} onChange={(e) => setProfileLicenseId(e.target.value)}
+                  className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 p-2 bg-white dark:bg-gray-700 text-sm">
+                  <option value="">-- Select existing license --</option>
+                  {licenses.filter(l => l.status === "ACTIVE").map(l => (
+                    <option key={l.id} value={l.id}>{l.customerName} ({l.keyPreview})</option>
+                  ))}
+                </select>
+                <button onClick={assignLicenseFromProfile} className="bg-indigo-600 text-white px-3 py-1 rounded-md text-sm">Assign</button>
+                <button onClick={() => { const months = prompt("Months for new license:"); if (months) createLicenseForProfile(parseInt(months)); }}
+                  className="bg-green-600 text-white px-3 py-1 rounded-md text-sm">Create & Assign</button>
+              </div>
+            </div>
+
+            <div className="mb-6 p-4 border rounded-lg">
+              <h3 className="font-semibold mb-2">Companies & Social Accounts</h3>
+              {profileUser.companies && profileUser.companies.length > 0 ? (
+                <div className="space-y-3">
+                  {profileUser.companies.map(company => (
+                    <div key={company.id} className="bg-gray-50 dark:bg-gray-900 p-3 rounded-md">
+                      <p className="font-medium">{company.name}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {company.platforms.map(platform => (
+                          <span key={`${company.id}-${platform.type}`} className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                            {platform.type.toLowerCase()} - {platform.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No companies or platforms connected yet.</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => resetPassword(profileUser.id)} className="px-4 py-2 rounded-md bg-orange-600 text-white">Reset Password</button>
+              <button onClick={closeProfile} className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">Cancel</button>
+              <button onClick={saveProfile} className="px-4 py-2 rounded-md bg-indigo-600 text-white">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
