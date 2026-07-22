@@ -7,16 +7,43 @@ import { useRouter } from "next/navigation";
 export default function AdminLogin() {
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    // Simple validation: store key in session storage and redirect
+  const handleLogin = async () => {
     if (!key.trim()) {
       setError("Admin key is required");
       return;
     }
-    sessionStorage.setItem("admin_key", key.trim());
-    router.push("/admin/dashboard");
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/admin/licenses", {
+        headers: { Authorization: `Bearer ${key.trim()}` },
+        signal: AbortSignal.timeout(15000), // 15s timeout for cold start
+      });
+
+      if (res.status === 401) {
+        setError("Invalid admin key. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      if (!res.ok) {
+        setError("Server error. Please try again later.");
+        setLoading(false);
+        return;
+      }
+
+      // Key is valid
+      sessionStorage.setItem("admin_key", key.trim());
+      router.push("/admin/dashboard");
+    } catch (err) {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,12 +59,14 @@ export default function AdminLogin() {
           onChange={(e) => setKey(e.target.value)}
           placeholder="Enter admin key"
           className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4"
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
         />
         <button
           onClick={handleLogin}
-          className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+          disabled={loading}
+          className="w-full rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
         >
-          Enter Admin Panel
+          {loading ? "Verifying..." : "Enter Admin Panel"}
         </button>
       </div>
     </div>

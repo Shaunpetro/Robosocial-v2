@@ -109,30 +109,36 @@ export default function AdminDashboard() {
         fetchWithRetry("/api/admin/users", headers),
       ]);
 
+      if (licRes.status === 401 || usrRes.status === 401) {
+        sessionStorage.removeItem("admin_key");
+        router.push("/admin/login");
+        return;
+      }
+
       const usrData: User[] = usrRes.ok ? await usrRes.json() : [];
 
-      if (licRes.ok) {
+      if(licRes.ok) {
         const licData = await licRes.json();
         const counts: Record<string, number> = {};
         usrData.forEach((u) => {
           if (u.licenseId) counts[u.licenseId] = (counts[u.licenseId] || 0) + 1;
         });
         setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
-      } else if (licRes.status === 401) {
-        showToast("error", "Unauthorized – check admin key.");
+      } else if (licRes.status !== 401) {
+        showToast("error", "Failed to fetch users.")
       }
 
       if (usrRes.ok) {
         setUsers(usrData);
-      } else if (usrRes.status === 401) {
-        showToast("error", "Unauthorized – check admin key.");
+      } else if (usrRes.status !== 401) {
+        showToast("error", "Failed to fetch Users.");
       }
     } catch (err) {
-      showToast("error", "Unable to load data. Please refresh.");
+      showToast("error", "Unable to load data, Please refresh by pressing 'ctrl'+'shift' + c");
     } finally {
       setIsLoading(false);
     }
-  }, [adminKey, authHeaders, showToast]);
+  }, [adminKey, authHeaders, showToast, router]);
 
   useEffect(() => {
     const storedKey = sessionStorage.getItem("admin_key");
