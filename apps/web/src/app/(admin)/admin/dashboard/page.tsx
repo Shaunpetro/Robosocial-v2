@@ -109,6 +109,7 @@ export default function AdminDashboard() {
         fetchWithRetry("/api/admin/users", headers),
       ]);
 
+      // Stale key → clear and redirect to login
       if (licRes.status === 401 || usrRes.status === 401) {
         sessionStorage.removeItem("admin_key");
         router.push("/admin/login");
@@ -117,7 +118,7 @@ export default function AdminDashboard() {
 
       const usrData: User[] = usrRes.ok ? await usrRes.json() : [];
 
-      if(licRes.ok) {
+      if (licRes.ok) {
         const licData = await licRes.json();
         const counts: Record<string, number> = {};
         usrData.forEach((u) => {
@@ -125,16 +126,16 @@ export default function AdminDashboard() {
         });
         setLicenses(licData.map((lic: License) => ({ ...lic, userCount: counts[lic.id] || 0 })));
       } else if (licRes.status !== 401) {
-        showToast("error", "Failed to fetch users.")
+        showToast("error", "Failed to fetch licenses.");
       }
 
       if (usrRes.ok) {
         setUsers(usrData);
       } else if (usrRes.status !== 401) {
-        showToast("error", "Failed to fetch Users.");
+        showToast("error", "Failed to fetch users.");
       }
     } catch (err) {
-      showToast("error", "Unable to load data, Please refresh by pressing 'ctrl'+'shift' + c");
+      showToast("error", "Unable to load data. Please refresh.");
     } finally {
       setIsLoading(false);
     }
