@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function ActivatePage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,10 +32,13 @@ export default function ActivatePage() {
         body: JSON.stringify({ licenseKey: key.trim() }),
       });
       if (res.ok) {
+        const data = await res.json();
+        // Update the session so LicenseGuard sees the new licenseId
+        await update({ licenseId: data.licenseId });
         router.push("/");
       } else {
         const data = await res.json();
-        setError(data.error || "Activation failed");
+        setError(data.error || "Activation failed. Please check your key.");
       }
     } catch (err) {
       setError("Network error. Please try again.");
@@ -50,7 +53,7 @@ export default function ActivatePage() {
           Activate Your Licence
         </h1>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-          Enter the licence key you received to unlock the dashboard.
+          Enter the licence key you received from your administrator.
         </p>
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
         <input

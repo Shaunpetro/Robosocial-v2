@@ -16,19 +16,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Licence key required" }, { status: 400 });
     }
 
-    // Validate the licence
     const license = await validateLicense(licenseKey);
     if (!license) {
-      return NextResponse.json({ error: "Invalid or expired licence key" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid or expired licence key." }, { status: 400 });
     }
 
-    // Link the licence to the user
     await prisma.user.update({
       where: { id: session.user.id },
       data: { licenseId: license.id },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, licenseId: license.id });
   } catch (error: any) {
     console.error("Activation error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

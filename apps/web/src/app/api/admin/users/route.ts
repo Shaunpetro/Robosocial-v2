@@ -30,6 +30,15 @@ export async function GET(request: NextRequest) {
           expiresAt: true,
         },
       },
+      companies: {
+        select: {
+          id: true,
+          name: true,
+          platforms: {
+            select: { type: true, name: true },
+          },
+        },
+      },
       createdAt: true,
     },
   });

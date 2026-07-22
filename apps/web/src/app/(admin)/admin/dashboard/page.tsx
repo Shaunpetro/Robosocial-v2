@@ -31,6 +31,7 @@ interface User {
     status: string;
     expiresAt: string;
   } | null;
+  companies?: { id: string; name: string; platforms: { type: string; name: string }[] }[];
   createdAt: string;
 }
 
@@ -84,15 +85,14 @@ export default function AdminDashboard() {
     "Content-Type": "application/json",
   }), [adminKey]);
 
-  // ── Data fetching (fixed) ──
+  // ── Data fetching ──
   const fetchData = useCallback(async () => {
-    if (!adminKey) return; // wait until key is set
+    if (!adminKey) return;
     try {
       const headers = authHeaders();
       const licRes = await fetch("/api/admin/licenses", { headers });
       const usrRes = await fetch("/api/admin/users", { headers });
 
-      // Read user data exactly once
       const usrData: User[] = usrRes.ok ? await usrRes.json() : [];
 
       if (licRes.ok) {
@@ -118,9 +118,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const storedKey = sessionStorage.getItem("admin_key");
-    if (storedKey) {
-      setAdminKey(storedKey);
-    }
+    if (storedKey) setAdminKey(storedKey);
   }, []);
 
   useEffect(() => {
@@ -180,6 +178,7 @@ export default function AdminDashboard() {
         fromEmail: licFromEmail || null,
       };
       if (licAssignUserId) body.userId = licAssignUserId;
+
       const res = await fetch("/api/admin/license", {
         method: "POST",
         headers: authHeaders(),
@@ -246,6 +245,24 @@ export default function AdminDashboard() {
       } else {
         showToast("error", "Revoke failed");
       }
+    } catch (err) {
+      showToast("error", "Network error");
+    }
+  };
+
+  // Send license key manually (uses cache or prompts)
+  const sendLicenseKeyManually = async (email: string, licenseId: string) => {
+    const key = keyCache.current[licenseId] || prompt("Enter the full license key to send:");
+    if (!key) return;
+    try {
+      const res = await fetch("/api/admin/license/send-key", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ licenseKey: key, email }),
+      });
+      const data = await res.json();
+      if (res.ok) showToast("success", `Key sent to ${email}`);
+      else showToast("error", data.error || "Send failed");
     } catch (err) {
       showToast("error", "Network error");
     }
@@ -352,7 +369,7 @@ export default function AdminDashboard() {
 
       {/* Tab Bar */}
       <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
-        <button onClick={() => setActiveTab("users")} className={`px-4 py-2 rounded-t-lg ${activeTab === "users" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}>Users</button>
+        <button onClick={() => { setActiveTab("users"); setUserErrors({}); }} className={`px-4 py-2 rounded-t-lg ${activeTab === "users" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}>Users</button>
         <button onClick={() => setActiveTab("licenses")} className={`px-4 py-2 rounded-t-lg ${activeTab === "licenses" ? "bg-white dark:bg-gray-800 text-indigo-600 border-t border-x" : "text-gray-500"}`}>Licenses</button>
       </div>
 
@@ -433,7 +450,11 @@ export default function AdminDashboard() {
                     <td className="py-2 text-center">{new Date(usr.createdAt).toLocaleDateString()}</td>
                     <td className="py-2 text-center">
                       <button onClick={() => openProfile(usr)} className="text-indigo-600 hover:underline mr-2">Edit</button>
-                      <button onClick={() => resetPassword(usr.id)} className="text-orange-600 hover:underline">Reset Pwd</button>
+                      <button onClick={() => resetPassword(usr.id)} className="text-orange-600 hover:underline mr-2">Reset Pwd</button>
+                      {usr.licenseId && (
+                        <button onClick={() => sendLicenseKeyManually(usr.email, usr.licenseId!)}
+                          className="text-green-600 hover:underline">Send Key</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -530,11 +551,12 @@ export default function AdminDashboard() {
         </>
       )}
 
-      {/* USER PROFILE MODAL */}
+      {/* USER PROFILE MODAL – expanded with companies */}
       {profileUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl shadow max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold mb-4">User Profile: {profileUser.email}</h2>
+
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>
@@ -557,6 +579,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* License Section */}
             <div className="mb-6 p-4 border rounded-lg">
               <h3 className="font-semibold mb-2">License</h3>
               {profileUser.license ? (
@@ -581,6 +604,29 @@ export default function AdminDashboard() {
                 <button onClick={() => { const months = prompt("Months for new license:"); if (months) createLicenseForProfile(parseInt(months)); }}
                   className="bg-green-600 text-white px-3 py-1 rounded-md text-sm">Create & Assign</button>
               </div>
+            </div>
+
+            {/* Companies & Platforms Section */}
+            <div className="mb-6 p-4 border rounded-lg">
+              <h3 className="font-semibold mb-2">Companies & Social Accounts</h3>
+              {profileUser.companies && profileUser.companies.length > 0 ? (
+                <div className="space-y-3">
+                  {profileUser.companies.map(company => (
+                    <div key={company.id} className="bg-gray-50 dark:bg-gray-900 p-3 rounded-md">
+                      <p className="font-medium">{company.name}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {company.platforms.map(platform => (
+                          <span key={`${company.id}-${platform.type}`} className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                            {platform.type.toLowerCase()} - {platform.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No companies or platforms connected yet.</p>
+              )}
             </div>
 
             <div className="flex justify-end gap-3">

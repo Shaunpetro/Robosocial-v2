@@ -37,15 +37,21 @@ export const {
           email: user.email,
           name: user.name,
           role: user.role,
+          licenseId: user.licenseId,   // ← added
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.licenseId = (user as any).licenseId;   // ← added
+      }
+      // Allow updating the token after licence activation
+      if (trigger === "update" && session?.licenseId) {
+        token.licenseId = session.licenseId;
       }
       return token;
     },
@@ -53,6 +59,7 @@ export const {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
+        (session.user as any).licenseId = token.licenseId;   // ← added
       }
       return session;
     },
