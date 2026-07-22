@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 interface License {
   id: string;
@@ -70,6 +71,7 @@ export default function AdminDashboard() {
   const [profileLicenseId, setProfileLicenseId] = useState("");
   const [profileFromEmail, setProfileFromEmail] = useState("");
   const [profileSuspended, setProfileSuspended] = useState(false);
+  const router = useRouter();
 
   const showToast = useCallback((type: "success" | "error", text: string) => {
     setToast({ type, text });
