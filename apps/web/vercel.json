@@ -1,11 +1,5 @@
 {
   "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter web build",
-  "outputDirectory": ".next",
-  "crons": [
-    {
-      "path": "/api/cron/keep-warm",
-      "schedule": "*/2 * * * *"
-    }
-  ]
+  "outputDirectory": ".next"
 }
