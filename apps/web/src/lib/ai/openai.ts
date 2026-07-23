@@ -1,6 +1,7 @@
 // apps/web/src/lib/ai/openai.ts
 // Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
+// Now with competitor-aware generation
 
 import Groq from "groq-sdk";
 import {
@@ -8,13 +9,14 @@ import {
   formatInsightsForPrompt,
   type PerformanceInsights,
 } from "./analytics-insights";
+import { getCompetitorInsights } from "./competitor-insights";
 
 // Initialize Groq
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
 });
 
-// Platform-specific configurations
+// Platform-specific configurations (unchanged)
 const platformConfigs = {
   linkedin: {
     maxLength: 3000,
@@ -58,13 +60,12 @@ const platformConfigs = {
   },
 };
 
-// Tone descriptions for the AI – now with South African street spirit
+// Tone descriptions (unchanged)
 const toneDescriptions: Record<string, string> = {
   professional: "formal, business-appropriate, credible, and expert",
   casual: "relaxed, approachable, friendly, and conversational",
   friendly: "warm, personable, inclusive, and engaging",
   authoritative: "confident, expert, thought-leader, and decisive",
-  // ✨ NEW SOUTH AFRICAN SOCIAL TONES ✨
   cheeky: "witty, irreverent, bold, playfully disrespectful – like a Nando's billboard",
   banter: "casual roasting, friendly trash-talk, local street humour",
   "ultra-short": "punchy 1-3 line statement, no explanations, maximum impact per word – Magesi FC match-day energy",
@@ -124,6 +125,17 @@ export async function generateSocialContent(
   const config = platformConfigs[platform];
   const toneDesc = toneDescriptions[tone];
 
+  // Fetch competitor insights (if companyId provided)
+  let competitorInsights = "";
+  if (companyId) {
+    try {
+      const comp = await getCompetitorInsights(companyId);
+      if (comp) competitorInsights = comp;
+    } catch (e) {
+      // non-critical, ignore
+    }
+  }
+
   // Fetch performance insights if enabled and companyId provided
   let insights: PerformanceInsights | null = null;
   let insightsPrompt = "";
@@ -138,15 +150,17 @@ export async function generateSocialContent(
         minImpressions: 10,
       });
 
-      // Always format insights - the function handles all data sources including fallbacks
-      insightsPrompt = formatInsightsForPrompt(insights);
+      // Format insights, now optionally including competitor info
+      insightsPrompt = formatInsightsForPrompt(insights, competitorInsights || undefined);
     } catch (error) {
       console.warn("Failed to fetch performance insights:", error);
-      // Continue without insights
     }
+  } else if (competitorInsights) {
+    // If analytics are disabled but we have competitor data, still inject it
+    insightsPrompt = competitorInsights;
   }
 
-  // Build the enhanced prompt (now with culture-aware instructions)
+  // Build the enhanced prompt
   const prompt = buildEnhancedPrompt({
     companyName,
     companyDescription,
@@ -160,6 +174,7 @@ export async function generateSocialContent(
     includeHashtags,
     insightsPrompt,
     contentTypeContext,
+    competitorInsights,
   });
 
   try {
@@ -175,21 +190,18 @@ export async function generateSocialContent(
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75, // more creative for playful tones
-      max_tokens: tone === "ultra-short" ? 150 : 1024, // hard cap for short posts
+      temperature: tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75,
+      max_tokens: tone === "ultra-short" ? 150 : 1024,
     });
 
     let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
 
-    // Clean up any unwanted prefixes the AI might add
     content = cleanGeneratedContent(content);
 
-    // Ultra-short enforcement (safety net)
     if (tone === "ultra-short") {
       content = enforceUltraShort(content);
     }
 
-    // Extract hashtags from content
     const hashtagRegex = /#\w+/g;
     const hashtags = content.match(hashtagRegex) || [];
 
@@ -225,6 +237,7 @@ function buildEnhancedPrompt(params: {
   includeHashtags: boolean;
   insightsPrompt: string;
   contentTypeContext?: string;
+  competitorInsights?: string;
 }): string {
   const {
     companyName,
@@ -239,9 +252,9 @@ function buildEnhancedPrompt(params: {
     includeHashtags,
     insightsPrompt,
     contentTypeContext,
+    competitorInsights,
   } = params;
 
-  // Dynamic length cap for ultra-short tone (overrides platform default)
   const effectiveMaxLength = tone === "ultra-short" ? 280 : config.maxLength;
 
   let prompt = `Generate a ${platform.toUpperCase()} post for:
@@ -263,21 +276,27 @@ ${includeEmojis ? "- Include relevant emojis to enhance engagement" : "- Minimal
 ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not include hashtags"}
 `;
 
-  // Add content type context if provided (from auto-generate)
   if (contentTypeContext) {
     prompt += `
 ${contentTypeContext}
 `;
   }
 
-  // Add performance insights if available
+  // Competitor landscape (shown before analytics for context)
+  if (competitorInsights) {
+    prompt += `
+${competitorInsights}
+`;
+  }
+
+  // Performance insights
   if (insightsPrompt) {
     prompt += `
 ${insightsPrompt}
 `;
   }
 
-  // 🎯 INJECT SA SOCIAL FLAVOUR DIRECTLY INTO THE USER PROMPT
+  // SA social flavour injection
   if (tone === "ultra-short" || tone === "local") {
     prompt += `
 **ULTRA-SHORT & LOCAL MODE (MAGESI FC STYLE):**
@@ -318,7 +337,7 @@ Generate the post now:`;
 }
 
 /**
- * 🔥 NEW SYSTEM PROMPT – South African Social Native
+ * 🔥 SYSTEM PROMPT – South African Social Native
  */
 function getSystemPrompt(): string {
   return `You are a South African social media creative director who has mastered the art of ultra-short, culturally loaded, thumb-stopping posts. You live for the raw, street-smart energy of Magesi Football Club and the fearless cheek of Nando’s advertising.
@@ -340,24 +359,16 @@ You output ONLY the final post text – no meta commentary, no quotes, no "Here'
  */
 function cleanGeneratedContent(content: string): string {
   return content
-    // Remove common prefixes
     .replace(/^(Here's|Here is|Sure,|Okay,|Certainly,|Of course,).*?:\s*/i, "")
     .replace(/^(Here's a|Here is a|I've created|I created).*?:\s*/i, "")
     .replace(/^["']|["']$/g, "")
-    // Remove any "Post:" or similar labels
     .replace(/^(Post|Content|Caption|Tweet|Update):\s*/i, "")
-    // Remove trailing explanations
     .replace(/\n\n(This post|I've|I hope|Let me know|Feel free)[\s\S]*$/i, "")
-    // Remove generic "Call us now" boilerplate unless explicitly useful
-    .replace(/\n(Call|Contact) .* for (more|further) information\.?/gi, "")
+    .replace(/\n(Call|Contact) .* for (more|further) information\.?/gi, "");
 }
 
-/**
- * ✂️ Force ultra-short content to stay within Magesi territory
- */
 function enforceUltraShort(content: string): string {
-  const maxChars = 200; // hard stop
-  // Try to find last sentence end before maxChars
+  const maxChars = 200;
   const sentences = content.match(/[^\.!\?]+[\.!\?]+/g);
   if (!sentences || sentences.length === 0) {
     return content.slice(0, maxChars).trim();
@@ -369,10 +380,6 @@ function enforceUltraShort(content: string): string {
     } else {
       break;
     }
-  }
-  // If nothing was added (all sentences too long), grab first sentence up to maxChars
-  if (!result) {
-    result = sentences[0].slice(0, maxChars).trim();
   }
   return result.trim() || content.slice(0, maxChars).trim();
 }
@@ -388,7 +395,6 @@ export async function regenerateContent(
     platformConfigs[platform as keyof typeof platformConfigs] ||
     platformConfigs.linkedin;
 
-  // Fetch performance insights if companyId provided
   let insights: PerformanceInsights | null = null;
   let insightsPrompt = "";
 
@@ -434,14 +440,8 @@ Generate the improved post now:`;
   try {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
-        {
-          role: "system",
-          content: getSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "system", content: getSystemPrompt() },
+        { role: "user", content: prompt },
       ],
       model: "llama-3.3-70b-versatile",
       temperature: 0.7,
@@ -451,7 +451,6 @@ Generate the improved post now:`;
     let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
     content = cleanGeneratedContent(content);
 
-    // Extract hashtags
     const hashtagRegex = /#\w+/g;
     const hashtags = content.match(hashtagRegex) || [];
 
@@ -471,7 +470,6 @@ Generate the improved post now:`;
   }
 }
 
-// Utility function to validate content length
 export function validateContentLength(
   content: string,
   platform: keyof typeof platformConfigs
@@ -486,5 +484,4 @@ export function validateContentLength(
   return { valid: true };
 }
 
-// Export platform configs for use elsewhere
 export { platformConfigs };

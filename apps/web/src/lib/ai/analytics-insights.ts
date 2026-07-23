@@ -556,7 +556,10 @@ function buildDefaultInsights(): PerformanceInsights {
 // FORMAT INSIGHTS FOR AI PROMPT (UPDATED)
 // ============================================
 
-export function formatInsightsForPrompt(insights: PerformanceInsights): string {
+export function formatInsightsForPrompt(
+  insights: PerformanceInsights,
+  competitorInsights?: string | null
+): string {
   if (!insights.hasData) {
     return "";
   }
@@ -651,6 +654,11 @@ export function formatInsightsForPrompt(insights: PerformanceInsights): string {
     prompt += `"${topPost.content.substring(0, 300)}${topPost.content.length > 300 ? "..." : ""}"\n`;
   }
 
+  // Append competitor insights if provided
+  if (competitorInsights) {
+    prompt += `\n${competitorInsights}\n`;
+  }
+
   prompt += `\n**RECOMMENDATION**: ${
     insights.dataSource === 'performance'
       ? 'Learn from these proven patterns to create content that resonates with this audience.'
@@ -662,4 +670,22 @@ export function formatInsightsForPrompt(insights: PerformanceInsights): string {
   }\n`;
 
   return prompt;
+}
+
+/**
+ * Produces a one‑line summary of the winning patterns for use in the prompt.
+ */
+export function getWinningPatternsSummary(insights: PerformanceInsights): string {
+  if (!insights.hasData) return "";
+  const parts: string[] = [];
+  if (insights.topPerformingTopics.length > 0) {
+    parts.push(`Winning topics: ${insights.topPerformingTopics.map(t => t.topic).join(", ")}`);
+  }
+  if (insights.bestPerformingTones.length > 0) {
+    parts.push(`Best tone: ${insights.bestPerformingTones[0].tone}`);
+  }
+  if (insights.optimalContentLength.avg > 0) {
+    parts.push(`Optimal length ~${insights.optimalContentLength.avg} chars`);
+  }
+  return parts.join(". ") + ".";
 }

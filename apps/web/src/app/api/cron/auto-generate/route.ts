@@ -11,6 +11,7 @@ import {
   type ContentType,
   type ScheduledSlot,
 } from '@/lib/ai/content-strategy';
+import { runWeeklySelfOptimization } from '@/lib/ai/self-optimizer';
 
 /**
  * Enhanced Auto-Generate Cron Job
@@ -317,6 +318,14 @@ export async function GET(request: NextRequest) {
             result.errors.push(`${slot.contentType} generation failed: ${errorMsg}`);
             console.error(`[AutoGenerate] Slot error:`, errorMsg);
           }
+        }
+
+        // Weekly self-optimization after all slots are processed
+        try {
+          await runWeeklySelfOptimization(company.id);
+          console.log(`[AutoGenerate] Self-optimization completed for ${company.name}`);
+        } catch (e) {
+          console.error(`[AutoGenerate] Self-optimization failed for ${company.name}:`, e);
         }
 
       } catch (companyError) {
