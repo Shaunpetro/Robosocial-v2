@@ -20,12 +20,6 @@ import {
   type FunnelStage,
 } from '@/lib/ai/content-strategy';
 
-/**
- * POST /api/generate/bulk
- * 
- * Generates multiple posts based on intelligent content plan.
- */
-
 interface BulkGenerateRequest {
   companyId: string;
   platforms: string[];
@@ -60,7 +54,7 @@ const CONTENT_TYPE_TO_FUNNEL: Record<string, FunnelStage> = {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
     const body: BulkGenerateRequest = await request.json();
     const {
@@ -253,6 +247,12 @@ export async function POST(request: NextRequest) {
     const slots = contentPlan.schedule.slots.slice(0, targetPostCount);
     const topicQueue = [...manualTopics];
 
+    // 🔀 Shuffle slots to avoid chronological monotony
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+
     const result: GenerationResult = {
       postsGenerated: 0,
       postsQueued: 0,
@@ -261,13 +261,15 @@ export async function POST(request: NextRequest) {
       errors: [],
     };
 
+    const previousHooks: string[] = [];   // ← anti‑repetition
+
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
 
       try {
         const platform = platforms.find(p => p.type === slot.platform);
         const targetPlatform = platform || platforms[i % platforms.length];
-        
+
         if (!targetPlatform) {
           result.errors.push(`No platform available for slot ${i + 1}`);
           continue;
@@ -322,6 +324,8 @@ export async function POST(request: NextRequest) {
           includeEmojis: targetPlatform.type === 'INSTAGRAM' || targetPlatform.type === 'FACEBOOK',
           useAnalytics: true,
           contentTypeContext,
+          previousHooks,                     // ← pass history
+          isBulkGeneration: true,            // ← higher temperature
         });
 
         result.postsGenerated++;
@@ -339,6 +343,8 @@ export async function POST(request: NextRequest) {
         const matchingPillar = findMatchingPillar(slot.contentType, intel.contentPillars);
         const finalHashtags = mergeHashtags(generated.hashtags, intel.industryHashtags, intel.brandedHashtags);
         const hook = extractHook(generated.content);
+
+        previousHooks.push(hook);            // ← keep for next iteration
 
         if (intel.autoApprove) {
           await prisma.generatedPost.create({

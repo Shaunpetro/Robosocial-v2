@@ -1,7 +1,7 @@
 // apps/web/src/lib/ai/openai.ts
 // Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
-// Now with competitor-aware generation
+// Now with competitor-aware generation and anti-repetition measures
 
 import Groq from "groq-sdk";
 import {
@@ -93,6 +93,8 @@ export interface GenerateContentParams {
   includeEmojis?: boolean;
   useAnalytics?: boolean;
   contentTypeContext?: string;
+  previousHooks?: string[];            // ← anti‑repetition
+  isBulkGeneration?: boolean;          // ← bulk variety boost
 }
 
 export interface GeneratedContent {
@@ -120,6 +122,8 @@ export async function generateSocialContent(
     includeEmojis = false,
     useAnalytics = true,
     contentTypeContext,
+    previousHooks,
+    isBulkGeneration = false,
   } = params;
 
   const config = platformConfigs[platform];
@@ -175,7 +179,11 @@ export async function generateSocialContent(
     insightsPrompt,
     contentTypeContext,
     competitorInsights,
+    previousHooks,                       // ← pass to prompt builder
   });
+
+  // Boost diversity for bulk generation
+  const temperature = isBulkGeneration ? 0.9 : (tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75);
 
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -190,18 +198,21 @@ export async function generateSocialContent(
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75,
+      temperature,
       max_tokens: tone === "ultra-short" ? 150 : 1024,
     });
 
     let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
 
+    // Clean up any unwanted prefixes the AI might add
     content = cleanGeneratedContent(content);
 
+    // Ultra-short enforcement (safety net)
     if (tone === "ultra-short") {
       content = enforceUltraShort(content);
     }
 
+    // Extract hashtags from content
     const hashtagRegex = /#\w+/g;
     const hashtags = content.match(hashtagRegex) || [];
 
@@ -238,6 +249,7 @@ function buildEnhancedPrompt(params: {
   insightsPrompt: string;
   contentTypeContext?: string;
   competitorInsights?: string;
+  previousHooks?: string[];
 }): string {
   const {
     companyName,
@@ -253,8 +265,10 @@ function buildEnhancedPrompt(params: {
     insightsPrompt,
     contentTypeContext,
     competitorInsights,
+    previousHooks,
   } = params;
 
+  // Dynamic length cap for ultra-short tone (overrides platform default)
   const effectiveMaxLength = tone === "ultra-short" ? 280 : config.maxLength;
 
   let prompt = `Generate a ${platform.toUpperCase()} post for:
@@ -276,6 +290,7 @@ ${includeEmojis ? "- Include relevant emojis to enhance engagement" : "- Minimal
 ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not include hashtags"}
 `;
 
+  // Add content type context if provided (from auto-generate)
   if (contentTypeContext) {
     prompt += `
 ${contentTypeContext}
@@ -289,14 +304,23 @@ ${competitorInsights}
 `;
   }
 
-  // Performance insights
+  // Add performance insights if available
   if (insightsPrompt) {
     prompt += `
 ${insightsPrompt}
 `;
   }
 
-  // SA social flavour injection
+  // Anti-repetition: list previously generated hooks
+  if (previousHooks && previousHooks.length > 0) {
+    prompt += `\n**AVOID REPETITION:** You have already written posts with these hooks:\n`;
+    previousHooks.forEach((hook, idx) => {
+      prompt += `${idx + 1}. "${hook}"\n`;
+    });
+    prompt += `Make sure this post is completely different in topic, tone, and opening hook. Do not reuse any of those hooks.\n`;
+  }
+
+  // 🎯 INJECT SA SOCIAL FLAVOUR DIRECTLY INTO THE USER PROMPT
   if (tone === "ultra-short" || tone === "local") {
     prompt += `
 **ULTRA-SHORT & LOCAL MODE (MAGESI FC STYLE):**
@@ -367,6 +391,9 @@ function cleanGeneratedContent(content: string): string {
     .replace(/\n(Call|Contact) .* for (more|further) information\.?/gi, "");
 }
 
+/**
+ * ✂️ Force ultra-short content to stay within Magesi territory
+ */
 function enforceUltraShort(content: string): string {
   const maxChars = 200;
   const sentences = content.match(/[^\.!\?]+[\.!\?]+/g);

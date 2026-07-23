@@ -396,7 +396,7 @@ export function generateTopicSuggestion(
 
 /**
  * Main function: Generate a week's content schedule with psychology-based content types
- * 
+ *
  * FIXED: Now properly handles:
  * - preferredTimes as ["morning", "afternoon"] array format
  * - Timezone conversion (stores UTC but respects company timezone)
@@ -427,9 +427,8 @@ export function generateWeeklyContentMix(
   const adjustedWeights = calculateAdjustedWeights(primaryGoals, learnedBestPillars);
 
   // FIXED: Use scheduling-utils to properly normalize preferredTimes
-  // This handles both ["morning", "afternoon"] and { "monday": ["09:00"] } formats
   const normalizedTimes = normalizePreferredTimes(preferredTimes, preferredDays);
-  
+
   console.log('[ContentStrategy] Normalized times:', JSON.stringify(normalizedTimes));
   console.log('[ContentStrategy] Timezone:', timezone);
 
@@ -477,13 +476,23 @@ export function generateWeeklyContentMix(
     timeIndexByDay[dayName] = timeIndex + 1;
 
     // Select content type based on day psychology and balance
-    const contentType = selectContentTypeForDay(
+    let contentType = selectContentTypeForDay(
       dayName,
       usedTypes,
       adjustedWeights,
       contentTypeCounts,
       postsPerWeek
     );
+
+    // 🔄 Avoid consecutive same-type when possible
+    if (usedTypes.length > 0 && usedTypes[usedTypes.length - 1] === contentType) {
+      const dayPsych = DAY_PSYCHOLOGY[dayName.toLowerCase()];
+      const preferredList = [...(dayPsych?.primaryTypes || []), ...(dayPsych?.secondaryTypes || [])];
+      const nextType = preferredList.find(t => t !== contentType);
+      if (nextType) {
+        contentType = nextType;
+      }
+    }
 
     usedTypes.push(contentType);
     contentTypeCounts[contentType] = (contentTypeCounts[contentType] || 0) + 1;
@@ -501,7 +510,6 @@ export function generateWeeklyContentMix(
     );
 
     // FIXED: Use createScheduledDate for proper timezone handling
-    // This converts the local time to UTC for storage
     const scheduledDate = createScheduledDate(date, time, timezone);
 
     console.log(`[ContentStrategy] Slot ${postNum + 1}: ${dayName} ${time} ${timezone} → UTC: ${scheduledDate.toISOString()}`);
@@ -521,6 +529,12 @@ export function generateWeeklyContentMix(
     funnelBreakdown[typeConfig.funnelStage]++;
 
     dayIndex++;
+  }
+
+  // 🔀 Shuffle slots to avoid chronological monotony
+  for (let i = slots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [slots[i], slots[j]] = [slots[j], slots[i]];
   }
 
   return {
