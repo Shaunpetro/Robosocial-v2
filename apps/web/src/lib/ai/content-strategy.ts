@@ -263,7 +263,6 @@ export function calculateAdjustedWeights(
   primaryGoals: string[],
   learnedBestPillars?: Record<string, number> | null
 ): Record<ContentType, number> {
-  // Start with base weights
   const weights: Record<ContentType, number> = {} as Record<ContentType, number>;
 
   for (const [type, config] of Object.entries(CONTENT_TYPE_CONFIG)) {
@@ -274,7 +273,6 @@ export function calculateAdjustedWeights(
   for (const goal of primaryGoals) {
     const normalizedGoal = goal.toLowerCase();
     const adjustment = GOAL_ADJUSTMENTS[normalizedGoal];
-
     if (adjustment) {
       for (const [type, boost] of Object.entries(adjustment.contentTypeBoosts)) {
         weights[type as ContentType] = (weights[type as ContentType] || 0) + boost;
@@ -282,7 +280,15 @@ export function calculateAdjustedWeights(
     }
   }
 
-  // Normalize weights to sum to 1
+  // Apply learned best content type (give it a 10% boost)
+  if (learnedBestPillars?.contentType) {
+    const learnedType = learnedBestPillars.contentType as ContentType;
+    if (weights[learnedType] !== undefined) {
+      weights[learnedType] += 0.1;
+    }
+  }
+
+  // Normalize
   const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
   for (const type of Object.keys(weights)) {
     weights[type as ContentType] = weights[type as ContentType] / totalWeight;

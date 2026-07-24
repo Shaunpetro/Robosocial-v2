@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
       errors: [],
     };
 
-    const previousHooks: string[] = [];   // ← anti‑repetition
+    const previousHooks: string[] = [];   // anti‑repetition
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
@@ -324,8 +324,9 @@ export async function POST(request: NextRequest) {
           includeEmojis: targetPlatform.type === 'INSTAGRAM' || targetPlatform.type === 'FACEBOOK',
           useAnalytics: true,
           contentTypeContext,
-          previousHooks,                     // ← pass history
-          isBulkGeneration: true,            // ← higher temperature
+          previousHooks,                     // pass history
+          isBulkGeneration: true,            // higher temperature
+          includeMedia: true,                // NEW: try to attach media
         });
 
         result.postsGenerated++;
@@ -344,10 +345,10 @@ export async function POST(request: NextRequest) {
         const finalHashtags = mergeHashtags(generated.hashtags, intel.industryHashtags, intel.brandedHashtags);
         const hook = extractHook(generated.content);
 
-        previousHooks.push(hook);            // ← keep for next iteration
+        previousHooks.push(hook);            // keep for next iteration
 
         if (intel.autoApprove) {
-          await prisma.generatedPost.create({
+          const createdPost = await prisma.generatedPost.create({
             data: {
               companyId: company.id,
               platformId: targetPlatform.id,
@@ -366,8 +367,19 @@ export async function POST(request: NextRequest) {
           });
           result.postsScheduled++;
           console.log(`[BulkGenerate] Scheduled: ${slot.contentType} for ${slot.date}`);
+
+          // NEW: Attach media if selected
+          if (generated.selectedMedia) {
+            await prisma.postMedia.create({
+              data: {
+                postId: createdPost.id,
+                mediaId: generated.selectedMedia.id,
+                order: 0,
+              },
+            });
+          }
         } else {
-          await prisma.contentQueueItem.create({
+          const createdQueueItem = await prisma.contentQueueItem.create({
             data: {
               companyId: company.id,
               platformId: targetPlatform.id,
@@ -399,6 +411,19 @@ export async function POST(request: NextRequest) {
           });
           result.postsQueued++;
           console.log(`[BulkGenerate] Queued: ${slot.contentType} for review`);
+
+          // NEW: Attach media even to queued items (mediaId can be stored in generationContext)
+          if (generated.selectedMedia) {
+            // We can also store a reference in the generationContext for later attachment
+            const updatedContext = {
+              ...(createdQueueItem.generationContext as any),
+              selectedMediaId: generated.selectedMedia.id,
+            };
+            await prisma.contentQueueItem.update({
+              where: { id: createdQueueItem.id },
+              data: { generationContext: updatedContext },
+            });
+          }
         }
 
         if (matchingPillar) {

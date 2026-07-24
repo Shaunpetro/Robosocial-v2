@@ -14,6 +14,10 @@ import {
   Check,
   ChevronDown,
   X,
+  List,
+  Clock,
+  MapPin,
+  Edit3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CalendarDayCell } from "@/app/components/calendar/calendar-day-cell";
@@ -70,7 +74,7 @@ interface Platform {
   companyId: string;
 }
 
-type ViewMode = "month" | "week";
+type ViewMode = "month" | "week" | "list";
 
 // ---------------------------------------------------------------
 // Constants
@@ -82,7 +86,6 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Company color palette for visual distinction
 const COMPANY_COLORS = [
   { bg: "bg-blue-500", text: "text-blue-500", light: "bg-blue-100 dark:bg-blue-900/30" },
   { bg: "bg-purple-500", text: "text-purple-500", light: "bg-purple-100 dark:bg-purple-900/30" },
@@ -103,7 +106,7 @@ const STATUS_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------
-// Utility Functions
+// Utility Functions (unchanged)
 // ---------------------------------------------------------------
 
 function toLocalISOString(date: Date): string {
@@ -159,7 +162,7 @@ function formatWeekRange(start: Date, end: Date): string {
 }
 
 // ---------------------------------------------------------------
-// Multi-Select Dropdown Component
+// Multi-Select Dropdown Component (unchanged)
 // ---------------------------------------------------------------
 
 interface MultiSelectProps {
@@ -229,7 +232,6 @@ function MultiSelectDropdown({
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute top-full left-0 mt-2 z-20 w-64 max-h-80 overflow-y-auto rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-xl">
-            {/* Select All Option */}
             <button
               onClick={selectAll}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-[var(--bg-secondary)] transition-colors border-b border-[var(--border-default)]"
@@ -249,7 +251,6 @@ function MultiSelectDropdown({
               </span>
             </button>
 
-            {/* Individual Options */}
             {options.map((option) => {
               const isSelected = selected.length === 0 || selected.includes(option.id);
               return (
@@ -364,13 +365,11 @@ export default function GlobalCalendarPage() {
       if (companies.length === 0) return;
 
       try {
-        // Determine which companies to fetch platforms for
         const companyIds =
           selectedCompanyIds.length === 0
             ? companies.map((c) => c.id)
             : selectedCompanyIds;
 
-        // Fetch platforms for all selected companies
         const allPlatforms: Platform[] = [];
         for (const companyId of companyIds) {
           const res = await fetch(`/api/platforms?companyId=${companyId}`);
@@ -407,13 +406,11 @@ export default function GlobalCalendarPage() {
       const startDate = toLocalISOString(start);
       const endDate = toLocalISOString(end);
 
-      // Determine which companies to fetch posts for
       const companyIds =
         selectedCompanyIds.length === 0
           ? companies.map((c) => c.id)
           : selectedCompanyIds;
 
-      // Fetch posts for all selected companies
       const allPosts: Post[] = [];
       for (const companyId of companyIds) {
         const res = await fetch(
@@ -446,19 +443,15 @@ export default function GlobalCalendarPage() {
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
-      // Filter by platform
       if (selectedPlatformIds.length > 0) {
         if (!post.platform) return false;
         if (!selectedPlatformIds.includes(post.platform.id)) return false;
       }
-
-      // Filter by status
       if (selectedStatuses.length > 0) {
         if (!selectedStatuses.includes(post.status)) {
           return false;
         }
       }
-
       return true;
     });
   }, [posts, selectedPlatformIds, selectedStatuses]);
@@ -574,6 +567,21 @@ export default function GlobalCalendarPage() {
 
     return { year, month, monthName: MONTHS[month], days };
   }, [currentDate, filteredPosts]);
+
+  // ---------------------------------------------------------------
+  // List View Posts
+  // ---------------------------------------------------------------
+
+  const listPosts = useMemo(() => {
+    if (viewMode !== "list") return [];
+    const rangeStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const rangeEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
+    return filteredPosts.filter(post => {
+      if (!post.scheduledFor) return false;
+      const d = new Date(post.scheduledFor);
+      return d >= rangeStart && d <= rangeEnd;
+    }).sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime());
+  }, [viewMode, currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
   // Navigation
@@ -823,13 +831,15 @@ export default function GlobalCalendarPage() {
               postDate.getFullYear() === currentDate.getFullYear()
             );
           })
-        : filteredPosts.filter((post) => {
+        : viewMode === "week"
+        ? filteredPosts.filter((post) => {
             if (!post.scheduledFor) return false;
             const postDate = new Date(post.scheduledFor);
             const weekStart = getWeekStart(currentDate);
             const weekEnd = getWeekEnd(currentDate);
             return postDate >= weekStart && postDate <= weekEnd;
-          });
+          })
+        : listPosts;
 
     return {
       total: relevantPosts.length,
@@ -837,13 +847,15 @@ export default function GlobalCalendarPage() {
       published: relevantPosts.filter((p) => p.status === "PUBLISHED").length,
       draft: relevantPosts.filter((p) => p.status === "DRAFT").length,
     };
-  }, [filteredPosts, currentDate, viewMode]);
+  }, [filteredPosts, currentDate, viewMode, listPosts]);
 
   // Navigation label
   const navigationLabel =
     viewMode === "month"
       ? `${calendarData.monthName} ${calendarData.year}`
-      : formatWeekRange(weekData.weekStart, weekData.weekEnd);
+      : viewMode === "week"
+      ? formatWeekRange(weekData.weekStart, weekData.weekEnd)
+      : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
   // Platform options for dropdown
   const platformOptions = useMemo(() => {
@@ -942,6 +954,18 @@ export default function GlobalCalendarPage() {
             >
               <CalendarDays className="h-4 w-4" />
               <span className="hidden sm:inline">Week</span>
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium rounded-lg transition-all",
+                viewMode === "list"
+                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">List</span>
             </button>
           </div>
 
@@ -1156,11 +1180,92 @@ export default function GlobalCalendarPage() {
         </div>
       )}
 
-      {/* Calendar Grid */}
+      {/* Calendar Grid / List View */}
       <div className="flex-1 min-h-0 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-default)] overflow-hidden flex flex-col">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+          </div>
+        ) : viewMode === "list" ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-4">
+            <div className="space-y-3">
+              {listPosts.length === 0 ? (
+                <div className="text-center py-12 text-[var(--text-tertiary)]">
+                  No posts in this period
+                </div>
+              ) : (
+                listPosts.map(post => {
+                  const scheduledDate = post.scheduledFor ? new Date(post.scheduledFor) : null;
+                  return (
+                    <div
+                      key={post.id}
+                      className={cn(
+                        "flex items-start gap-3 p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-secondary)] cursor-pointer transition-colors",
+                        selectedPostIds.includes(post.id) && "ring-2 ring-purple-500"
+                      )}
+                      onClick={() => handlePostClick(post)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (selectionMode) togglePostSelection(post.id);
+                      }}
+                    >
+                      <div className={cn(
+                        "w-1.5 self-stretch rounded-full shrink-0",
+                        post.status === "PUBLISHED" ? "bg-green-500" :
+                        post.status === "SCHEDULED" ? "bg-blue-500" : "bg-gray-400"
+                      )} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)] mb-1">
+                          {scheduledDate && (
+                            <span className="flex items-center gap-1">
+                              <Clock size={12} />
+                              {scheduledDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                              {scheduledDate.getHours() > 0 && ` at ${scheduledDate.getHours()}:00`}
+                            </span>
+                          )}
+                          {post.platform && (
+                            <span className="flex items-center gap-1">
+                              <MapPin size={12} />
+                              {post.platform.name || post.platform.type}
+                            </span>
+                          )}
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-xs font-medium",
+                            post.status === "PUBLISHED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
+                            post.status === "SCHEDULED" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
+                            "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300"
+                          )}>
+                            {post.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-[var(--text-primary)] line-clamp-2">{post.content}</p>
+                        {post.topic && (
+                          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Topic: {post.topic}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePostClick(post); }}
+                          className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded"
+                        >
+                          <Edit3 size={14} className="text-[var(--text-secondary)]" />
+                        </button>
+                        {selectionMode && (
+                          <div className={cn(
+                            "w-5 h-5 rounded border-2 flex items-center justify-center",
+                            selectedPostIds.includes(post.id) ? "bg-purple-500 border-purple-500" : "border-[var(--border-default)]"
+                          )}>
+                            {selectedPostIds.includes(post.id) && <Check size={12} className="text-white" />}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         ) : viewMode === "month" ? (
           <>

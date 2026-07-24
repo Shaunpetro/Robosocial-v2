@@ -1,7 +1,7 @@
 // apps/web/src/lib/ai/openai.ts
 // Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
-// Now with competitor-aware generation and anti-repetition measures
+// Now with competitor-aware generation, anti-repetition measures, and media attachment
 
 import Groq from "groq-sdk";
 import {
@@ -10,6 +10,7 @@ import {
   type PerformanceInsights,
 } from "./analytics-insights";
 import { getCompetitorInsights } from "./competitor-insights";
+import { attachMediaToPost } from "./media-selector";   // NEW
 
 // Initialize Groq
 const groq = new Groq({
@@ -93,8 +94,9 @@ export interface GenerateContentParams {
   includeEmojis?: boolean;
   useAnalytics?: boolean;
   contentTypeContext?: string;
-  previousHooks?: string[];            // ← anti‑repetition
-  isBulkGeneration?: boolean;          // ← bulk variety boost
+  previousHooks?: string[];            // anti‑repetition
+  isBulkGeneration?: boolean;          // bulk variety boost
+  includeMedia?: boolean;              // NEW – attach media to post
 }
 
 export interface GeneratedContent {
@@ -104,6 +106,7 @@ export interface GeneratedContent {
   platform: string;
   analyticsUsed?: boolean;
   insights?: PerformanceInsights;
+  selectedMedia?: { id: string; url: string; type: string } | null;  // NEW
 }
 
 export async function generateSocialContent(
@@ -124,6 +127,7 @@ export async function generateSocialContent(
     contentTypeContext,
     previousHooks,
     isBulkGeneration = false,
+    includeMedia = false,    // NEW – default false to keep existing behaviour
   } = params;
 
   const config = platformConfigs[platform];
@@ -179,7 +183,7 @@ export async function generateSocialContent(
     insightsPrompt,
     contentTypeContext,
     competitorInsights,
-    previousHooks,                       // ← pass to prompt builder
+    previousHooks,
   });
 
   // Boost diversity for bulk generation
@@ -188,14 +192,8 @@ export async function generateSocialContent(
   try {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
-        {
-          role: "system",
-          content: getSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "system", content: getSystemPrompt() },
+        { role: "user", content: prompt },
       ],
       model: "llama-3.3-70b-versatile",
       temperature,
@@ -216,6 +214,23 @@ export async function generateSocialContent(
     const hashtagRegex = /#\w+/g;
     const hashtags = content.match(hashtagRegex) || [];
 
+    // ---- NEW: Media attachment ----
+    let selectedMedia = null;
+    if (includeMedia && companyId) {
+      try {
+        selectedMedia = await attachMediaToPost(
+          companyId,
+          contentTypeContext, // could be used as contentType hint (optional)
+          topic,
+          undefined,          // tags (optional)
+          undefined,          // pillarId (optional)
+          false               // forceInclude
+        );
+      } catch (mediaError) {
+        console.warn("Media selection failed, continuing without media:", mediaError);
+      }
+    }
+
     return {
       content,
       hashtags: hashtags.map((tag) => tag.replace("#", "")),
@@ -223,6 +238,7 @@ export async function generateSocialContent(
       platform,
       analyticsUsed: insights?.hasData ?? false,
       insights: insights ?? undefined,
+      selectedMedia,                // NEW – may be null
     };
   } catch (error) {
     console.error("Groq API Error:", error);
