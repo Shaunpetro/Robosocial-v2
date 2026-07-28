@@ -1,7 +1,7 @@
 // apps/web/src/app/(dashboard)/calendar/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,6 +18,10 @@ import {
   Clock,
   MapPin,
   Edit3,
+  Image as ImageIcon,
+  Send,
+  Trash2,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CalendarDayCell } from "@/app/components/calendar/calendar-day-cell";
@@ -26,7 +30,7 @@ import { PostDetailModal } from "@/app/components/calendar/post-detail-modal";
 import { BulkActions } from "@/app/components/calendar/bulk-actions";
 
 // ---------------------------------------------------------------
-// Types
+// Types (unchanged)
 // ---------------------------------------------------------------
 
 interface Company {
@@ -77,7 +81,7 @@ interface Platform {
 type ViewMode = "month" | "week" | "list";
 
 // ---------------------------------------------------------------
-// Constants
+// Constants (unchanged)
 // ---------------------------------------------------------------
 
 const DAYS_OF_WEEK = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -104,6 +108,19 @@ const STATUS_OPTIONS = [
   { value: "PUBLISHED", label: "Published", color: "bg-green-500" },
   { value: "FAILED", label: "Failed", color: "bg-red-500" },
 ];
+
+const CONTENT_TYPE_COLORS: Record<string, string> = {
+  educational: "bg-blue-500",
+  tips: "bg-cyan-500",
+  engagement: "bg-pink-500",
+  community: "bg-purple-500",
+  behindTheScenes: "bg-orange-500",
+  caseStudy: "bg-indigo-500",
+  testimonial: "bg-green-500",
+  promotional: "bg-red-500",
+  motivational: "bg-yellow-500",
+  news: "bg-teal-500",
+};
 
 // ---------------------------------------------------------------
 // Utility Functions (unchanged)
@@ -162,7 +179,7 @@ function formatWeekRange(start: Date, end: Date): string {
 }
 
 // ---------------------------------------------------------------
-// Multi-Select Dropdown Component (unchanged)
+// Multi-Select Dropdown (unchanged)
 // ---------------------------------------------------------------
 
 interface MultiSelectProps {
@@ -301,7 +318,7 @@ export default function GlobalCalendarPage() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
 
-  // Core state
+  // Core state – always start on today's date
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [posts, setPosts] = useState<Post[]>([]);
@@ -325,7 +342,10 @@ export default function GlobalCalendarPage() {
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
-  // Company color map
+  // Ref for auto‑scrolling to today
+  const calendarGridRef = useRef<HTMLDivElement>(null);
+
+  // Company color map (unchanged)
   const companyColorMap = useMemo(() => {
     const map = new Map<string, (typeof COMPANY_COLORS)[0]>();
     companies.forEach((company, index) => {
@@ -335,7 +355,7 @@ export default function GlobalCalendarPage() {
   }, [companies]);
 
   // ---------------------------------------------------------------
-  // Fetch Companies
+  // Fetch Companies (unchanged)
   // ---------------------------------------------------------------
 
   useEffect(() => {
@@ -357,7 +377,7 @@ export default function GlobalCalendarPage() {
   }, []);
 
   // ---------------------------------------------------------------
-  // Fetch Platforms (for selected companies)
+  // Fetch Platforms (unchanged)
   // ---------------------------------------------------------------
 
   useEffect(() => {
@@ -389,7 +409,7 @@ export default function GlobalCalendarPage() {
   }, [companies, selectedCompanyIds]);
 
   // ---------------------------------------------------------------
-  // Fetch Posts (for selected companies)
+  // Fetch Posts (unchanged)
   // ---------------------------------------------------------------
 
   const fetchPosts = useCallback(async () => {
@@ -438,7 +458,7 @@ export default function GlobalCalendarPage() {
   }, [fetchPosts, companiesLoading]);
 
   // ---------------------------------------------------------------
-  // Filter Posts
+  // Filter Posts (unchanged)
   // ---------------------------------------------------------------
 
   const filteredPosts = useMemo(() => {
@@ -457,7 +477,7 @@ export default function GlobalCalendarPage() {
   }, [posts, selectedPlatformIds, selectedStatuses]);
 
   // ---------------------------------------------------------------
-  // Week Data Computation
+  // Week Data Computation (unchanged)
   // ---------------------------------------------------------------
 
   const weekData = useMemo(() => {
@@ -498,7 +518,7 @@ export default function GlobalCalendarPage() {
   }, [currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Calendar Data Computation (Month View)
+  // Calendar Data Computation (Month View) – unchanged
   // ---------------------------------------------------------------
 
   const calendarData = useMemo(() => {
@@ -569,7 +589,7 @@ export default function GlobalCalendarPage() {
   }, [currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // List View Posts
+  // List View Posts (unchanged)
   // ---------------------------------------------------------------
 
   const listPosts = useMemo(() => {
@@ -584,7 +604,21 @@ export default function GlobalCalendarPage() {
   }, [viewMode, currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Navigation
+  // Scroll to today's cell when month view data is ready
+  // ---------------------------------------------------------------
+
+  useEffect(() => {
+    if (!loading && viewMode === "month" && calendarGridRef.current) {
+      // Find today's cell and scroll it into view
+      const todayCell = calendarGridRef.current.querySelector('[data-today="true"]');
+      if (todayCell) {
+        todayCell.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    }
+  }, [loading, viewMode, calendarData]);
+
+  // ---------------------------------------------------------------
+  // Navigation (unchanged)
   // ---------------------------------------------------------------
 
   const goToPrevMonth = () => {
@@ -616,7 +650,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Post Handlers
+  // Post Handlers (unchanged)
   // ---------------------------------------------------------------
 
   const togglePostSelection = (postId: string) => {
@@ -643,7 +677,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Drag and Drop
+  // Drag and Drop (unchanged)
   // ---------------------------------------------------------------
 
   const handlePostDrop = async (postId: string, newDate: Date) => {
@@ -700,7 +734,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Selection Handlers
+  // Selection Handlers (unchanged)
   // ---------------------------------------------------------------
 
   const toggleSelectionMode = () => {
@@ -724,7 +758,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Bulk Action Handlers
+  // Bulk Action Handlers (unchanged)
   // ---------------------------------------------------------------
 
   const handleBulkReschedule = async (newDate: Date) => {
@@ -802,7 +836,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Clear Filters
+  // Clear Filters (unchanged)
   // ---------------------------------------------------------------
 
   const clearAllFilters = () => {
@@ -817,7 +851,7 @@ export default function GlobalCalendarPage() {
     selectedStatuses.length > 0;
 
   // ---------------------------------------------------------------
-  // Stats
+  // Stats (unchanged)
   // ---------------------------------------------------------------
 
   const monthStats = useMemo(() => {
@@ -849,7 +883,7 @@ export default function GlobalCalendarPage() {
     };
   }, [filteredPosts, currentDate, viewMode, listPosts]);
 
-  // Navigation label
+  // Navigation label (unchanged)
   const navigationLabel =
     viewMode === "month"
       ? `${calendarData.monthName} ${calendarData.year}`
@@ -857,7 +891,7 @@ export default function GlobalCalendarPage() {
       ? formatWeekRange(weekData.weekStart, weekData.weekEnd)
       : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
-  // Platform options for dropdown
+  // Platform options for dropdown (unchanged)
   const platformOptions = useMemo(() => {
     const uniquePlatforms = new Map<string, Platform>();
     platforms.forEach((p) => {
@@ -871,7 +905,7 @@ export default function GlobalCalendarPage() {
     }));
   }, [platforms]);
 
-  // Company options for dropdown
+  // Company options for dropdown (unchanged)
   const companyOptions = useMemo(() => {
     return companies.map((c, index) => ({
       id: c.id,
@@ -879,6 +913,23 @@ export default function GlobalCalendarPage() {
       color: COMPANY_COLORS[index % COMPANY_COLORS.length].bg,
     }));
   }, [companies]);
+
+  // ---------------------------------------------------------------
+  // Quick status change (for inline actions)
+  // ---------------------------------------------------------------
+
+  const quickStatusChange = async (postId: string, status: string) => {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) fetchPosts();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // ---------------------------------------------------------------
   // Render
@@ -1196,6 +1247,7 @@ export default function GlobalCalendarPage() {
               ) : (
                 listPosts.map(post => {
                   const scheduledDate = post.scheduledFor ? new Date(post.scheduledFor) : null;
+                  const hasImage = post.postMedia?.[0]?.media?.url;
                   return (
                     <div
                       key={post.id}
@@ -1204,17 +1256,14 @@ export default function GlobalCalendarPage() {
                         selectedPostIds.includes(post.id) && "ring-2 ring-purple-500"
                       )}
                       onClick={() => handlePostClick(post)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        if (selectionMode) togglePostSelection(post.id);
-                      }}
                     >
-                      <div className={cn(
-                        "w-1.5 self-stretch rounded-full shrink-0",
-                        post.status === "PUBLISHED" ? "bg-green-500" :
-                        post.status === "SCHEDULED" ? "bg-blue-500" : "bg-gray-400"
-                      )} />
-
+                      {hasImage ? (
+                        <img src={hasImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center shrink-0">
+                          <ImageIcon size={20} className="text-[var(--text-tertiary)]" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)] mb-1">
                           {scheduledDate && (
@@ -1244,7 +1293,6 @@ export default function GlobalCalendarPage() {
                           <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Topic: {post.topic}</p>
                         )}
                       </div>
-
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handlePostClick(post); }}
@@ -1282,12 +1330,11 @@ export default function GlobalCalendarPage() {
             </div>
 
             {/* Month body scroll container */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div ref={calendarGridRef} className="flex-1 min-h-0 overflow-y-auto">
               <div
                 className="grid grid-cols-7"
                 style={{
-                  gridTemplateRows: "repeat(6, minmax(8.5rem, 1fr))",
-                  height: "auto",
+                  gridTemplateRows: "repeat(6, minmax(7rem, 1fr))",
                 }}
               >
                 {calendarData.days.map((day) => {
@@ -1309,6 +1356,7 @@ export default function GlobalCalendarPage() {
                       selectionMode={selectionMode}
                       selectedPostIds={selectedPostIds}
                       onToggleSelection={togglePostSelection}
+                      onQuickStatusChange={quickStatusChange}
                     />
                   );
                 })}

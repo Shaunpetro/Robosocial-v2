@@ -57,7 +57,7 @@ export default function CompanySwitcher({ companies }: CompanySwitcherProps) {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
 
-  const handleSelectCompany = (companyId: string) => {
+  const handleSelectCompany = (companyId: string) => { 
     if (currentCompanyId) {
       const subPath = pathname.replace(`/companies/${currentCompanyId}`, '')
       router.push(`/companies/${companyId}${subPath}`)
