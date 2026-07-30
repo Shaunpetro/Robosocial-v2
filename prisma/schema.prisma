@@ -322,9 +322,9 @@ model CompanySpecialDatesConfig {
   companyId        String   @unique
   enabled          Boolean  @default(false)
   holidaySets      String[] @default([])
-  logoMediaId      String?
+  logoMediaId      String?  @unique
   logoMedia        Media?   @relation(name: "LogoMedia", fields: [logoMediaId], references: [id], onDelete: SetNull)
-  generatedMediaId String?
+  generatedMediaId String?  @unique
   generatedMedia   Media?   @relation(name: "GeneratedMedia", fields: [generatedMediaId], references: [id], onDelete: SetNull)
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
