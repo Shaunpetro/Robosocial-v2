@@ -527,4 +527,68 @@ export function validateContentLength(
   return { valid: true };
 }
 
+/**
+ * NEW: Generate a post specifically for a special date (holiday, awareness day).
+ */
+export async function generateSpecialDatePost(params: {
+  companyId: string;
+  companyName: string;
+  companyIndustry?: string;
+  platform: "linkedin" | "twitter" | "facebook" | "instagram" | "wordpress";
+  platformId: string;
+  dateName: string;
+  dateDescription: string;
+  hashtags: string[];
+  tone?: string;
+  contentTypeContext?: string;
+}): Promise<GeneratedContent & { specialDateId: string }> {
+  const {
+    companyId,
+    companyName,
+    companyIndustry,
+    platform,
+    platformId,
+    dateName,
+    dateDescription,
+    hashtags,
+    tone = "professional",
+    contentTypeContext,
+  } = params;
+
+  const specialPrompt = `
+**SPECIAL DATE POST – ${dateName}**
+Date significance: ${dateDescription}
+Hashtags to include: ${hashtags.join(', ')}
+Tone: ${tone}
+
+Create a post that acknowledges this day in a way that is authentic to ${companyName}.
+- Connect the day's theme to the company's values or industry (${companyIndustry || 'general'}).
+- Don't force a connection if it's not genuine; instead, share a thoughtful message.
+- Use the suggested hashtags naturally within the post or at the end.
+- Keep it appropriate for the ${platform} platform.
+
+${contentTypeContext || ''}
+`;
+
+  // Reuse the existing generation pipeline with the special prompt as topic
+  const result = await generateSocialContent({
+    companyId,
+    companyName,
+    companyDescription: `${companyName} – ${companyIndustry || 'business'}`,
+    companyIndustry,
+    platform,
+    platformId,
+    topic: specialPrompt,
+    tone: tone as any,
+    includeHashtags: true,
+    includeEmojis: platform === 'instagram' || platform === 'facebook',
+    useAnalytics: false,
+  });
+
+  return {
+    ...result,
+    specialDateId: `special-date:${dateName}`,
+  };
+}
+
 export { platformConfigs };

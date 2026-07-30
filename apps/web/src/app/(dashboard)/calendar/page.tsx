@@ -109,19 +109,6 @@ const STATUS_OPTIONS = [
   { value: "FAILED", label: "Failed", color: "bg-red-500" },
 ];
 
-const CONTENT_TYPE_COLORS: Record<string, string> = {
-  educational: "bg-blue-500",
-  tips: "bg-cyan-500",
-  engagement: "bg-pink-500",
-  community: "bg-purple-500",
-  behindTheScenes: "bg-orange-500",
-  caseStudy: "bg-indigo-500",
-  testimonial: "bg-green-500",
-  promotional: "bg-red-500",
-  motivational: "bg-yellow-500",
-  news: "bg-teal-500",
-};
-
 // ---------------------------------------------------------------
 // Utility Functions (unchanged)
 // ---------------------------------------------------------------
@@ -518,7 +505,7 @@ export default function GlobalCalendarPage() {
   }, [currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Calendar Data Computation (Month View) – unchanged
+  // Calendar Data Computation (Month View)
   // ---------------------------------------------------------------
 
   const calendarData = useMemo(() => {
@@ -604,15 +591,14 @@ export default function GlobalCalendarPage() {
   }, [viewMode, currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Scroll to today's cell when month view data is ready
+  // Scroll to today's cell – NOW SCROLL TO TOP (first line = current week)
   // ---------------------------------------------------------------
 
   useEffect(() => {
     if (!loading && viewMode === "month" && calendarGridRef.current) {
-      // Find today's cell and scroll it into view
       const todayCell = calendarGridRef.current.querySelector('[data-today="true"]');
       if (todayCell) {
-        todayCell.scrollIntoView({ block: "center", behavior: "smooth" });
+        todayCell.scrollIntoView({ block: "start", behavior: "smooth" });
       }
     }
   }, [loading, viewMode, calendarData]);
@@ -650,7 +636,7 @@ export default function GlobalCalendarPage() {
   };
 
   // ---------------------------------------------------------------
-  // Post Handlers (unchanged)
+  // Post Handlers
   // ---------------------------------------------------------------
 
   const togglePostSelection = (postId: string) => {
@@ -915,7 +901,7 @@ export default function GlobalCalendarPage() {
   }, [companies]);
 
   // ---------------------------------------------------------------
-  // Quick status change (for inline actions)
+  // Quick status change (for inline actions) – now wired to cell
   // ---------------------------------------------------------------
 
   const quickStatusChange = async (postId: string, status: string) => {
@@ -968,6 +954,89 @@ export default function GlobalCalendarPage() {
       </div>
     );
   }
+
+  // The month grid is only used for sm+ screens; on mobile we show a vertical stack.
+  const MonthGrid = () => (
+    <div className="hidden sm:block h-full">
+      {/* Days of Week Header */}
+      <div className="grid grid-cols-7 border-b border-[var(--border-default)] flex-shrink-0">
+        {DAYS_OF_WEEK.map((day) => (
+          <div
+            key={day}
+            className="py-2 text-center text-xs font-semibold text-[var(--text-tertiary)] tracking-wider border-r border-[var(--border-subtle)] last:border-r-0"
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Month body scroll container */}
+      <div ref={calendarGridRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div
+          className="grid grid-cols-7"
+          style={{ gridTemplateRows: "repeat(6, minmax(7rem, 1fr))" }}
+        >
+          {calendarData.days.map((day) => {
+            const key = getLocalDateString(day.date);
+            return (
+              <CalendarDayCell
+                key={key}
+                date={day.date}
+                isCurrentMonth={day.isCurrentMonth}
+                isToday={day.isToday}
+                posts={day.posts}
+                onPostClick={handlePostClick}
+                onPostDrop={handlePostDrop}
+                isDragOver={
+                  dragOverDate?.toDateString() === day.date.toDateString()
+                }
+                onDragOver={setDragOverDate}
+                onDragLeave={() => setDragOverDate(null)}
+                selectionMode={selectionMode}
+                selectedPostIds={selectedPostIds}
+                onToggleSelection={togglePostSelection}
+                onQuickStatusChange={quickStatusChange}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Mobile month view: vertically stacked day cards
+  const MobileMonthList = () => (
+    <div className="sm:hidden flex flex-col gap-2 p-2 overflow-y-auto flex-1 min-h-0">
+      {calendarData.days.map((day) => {
+        const key = getLocalDateString(day.date);
+        return (
+          <div key={key} className="border border-[var(--border-subtle)] rounded-lg p-1.5">
+            <div className="text-xs font-semibold text-[var(--text-primary)] mb-1">
+              {day.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              {day.isToday && (
+                <span className="ml-1 px-1 py-0.5 bg-brand-500 text-white text-[10px] rounded-full">Today</span>
+              )}
+            </div>
+            <CalendarDayCell
+              date={day.date}
+              isCurrentMonth={day.isCurrentMonth}
+              isToday={day.isToday}
+              posts={day.posts}
+              onPostClick={handlePostClick}
+              onPostDrop={handlePostDrop}
+              isDragOver={false}
+              onDragOver={() => {}}
+              onDragLeave={() => {}}
+              selectionMode={selectionMode}
+              selectedPostIds={selectedPostIds}
+              onToggleSelection={togglePostSelection}
+              onQuickStatusChange={quickStatusChange}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col p-4 md:p-6 overflow-hidden">
@@ -1317,51 +1386,8 @@ export default function GlobalCalendarPage() {
           </div>
         ) : viewMode === "month" ? (
           <>
-            {/* Days of Week Header */}
-            <div className="grid grid-cols-7 border-b border-[var(--border-default)] flex-shrink-0">
-              {DAYS_OF_WEEK.map((day) => (
-                <div
-                  key={day}
-                  className="py-2 text-center text-xs font-semibold text-[var(--text-tertiary)] tracking-wider border-r border-[var(--border-subtle)] last:border-r-0"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Month body scroll container */}
-            <div ref={calendarGridRef} className="flex-1 min-h-0 overflow-y-auto">
-              <div
-                className="grid grid-cols-7"
-                style={{
-                  gridTemplateRows: "repeat(6, minmax(7rem, 1fr))",
-                }}
-              >
-                {calendarData.days.map((day) => {
-                  const key = getLocalDateString(day.date);
-                  return (
-                    <CalendarDayCell
-                      key={key}
-                      date={day.date}
-                      isCurrentMonth={day.isCurrentMonth}
-                      isToday={day.isToday}
-                      posts={day.posts}
-                      onPostClick={handlePostClick}
-                      onPostDrop={handlePostDrop}
-                      isDragOver={
-                        dragOverDate?.toDateString() === day.date.toDateString()
-                      }
-                      onDragOver={setDragOverDate}
-                      onDragLeave={() => setDragOverDate(null)}
-                      selectionMode={selectionMode}
-                      selectedPostIds={selectedPostIds}
-                      onToggleSelection={togglePostSelection}
-                      onQuickStatusChange={quickStatusChange}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+            <MonthGrid />
+            <MobileMonthList />
           </>
         ) : (
           <CalendarWeekView
@@ -1371,6 +1397,7 @@ export default function GlobalCalendarPage() {
             selectionMode={selectionMode}
             selectedPostIds={selectedPostIds}
             onToggleSelection={togglePostSelection}
+            onQuickStatusChange={quickStatusChange}
           />
         )}
       </div>

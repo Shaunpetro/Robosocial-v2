@@ -15,6 +15,8 @@ function getResend() {
 const defaultFrom = process.env.DEFAULT_FROM_EMAIL || 'Robosocial <noreply@robosocial.app>';
 const activationFrom = process.env.ACTIVATION_FROM_EMAIL || 'Robosocial Activations <activations@atgsa.co.za>';
 
+// ---------- Existing emails ----------
+
 export async function sendWelcomeEmail(
   to: string,
   temporaryPassword: string,
@@ -81,6 +83,73 @@ export async function sendLicenseKeyEmail(
       <p>Your license key for <strong>${customerName}</strong> is:</p>
       <p><code>${licenseKey}</code></p>
       <p>Keep this key safe. You will need it to access the dashboard.</p>
+    `,
+  });
+}
+
+// ---------- NEW: Media-specific emails ----------
+
+export async function sendMediaCleanupReminderEmail(
+  to: string,
+  companyName: string,
+  mediaCount: number
+) {
+  const r = getResend();
+  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  await r.emails.send({
+    from: defaultFrom,
+    to,
+    subject: `📸 Your media library for ${companyName} has been cleaned up`,
+    html: `
+      <p>Hi,</p>
+      <p>Your media library for <strong>${companyName}</strong> has been automatically cleaned up.</p>
+      <p>${mediaCount} expired file(s) were removed because they were older than 14 days.</p>
+      <p>If your library is now empty, we recommend uploading fresh media to keep your content engaging.</p>
+      <p>
+        <a href="${dashboardUrl}/media" style="background:#6366f1;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;">
+          Upload New Media
+        </a>
+      </p>
+      <p>Best regards,<br/>The Robosocial Team</p>
+    `,
+  });
+}
+
+export async function sendMediaHealthReportEmail(
+  to: string,
+  companyName: string,
+  report: {
+    totalMedia: number;
+    unusedMedia: number;
+    expiringSoon: number;
+    recommendations: string[];
+    suggestedTypes: string[];
+  }
+) {
+  const r = getResend();
+  const { totalMedia, unusedMedia, expiringSoon, recommendations, suggestedTypes } = report;
+  const recsHtml = recommendations.length
+    ? `<ul>${recommendations.map(r => `<li>${r}</li>`).join('')}</ul>`
+    : '<p>No specific recommendations at this time.</p>';
+  const typesHtml = suggestedTypes.length
+    ? suggestedTypes.join(', ')
+    : 'various formats';
+
+  await r.emails.send({
+    from: defaultFrom,
+    to,
+    subject: `📊 Media Library Health Report for ${companyName}`,
+    html: `
+      <h2>Media Health Report – ${companyName}</h2>
+      <p><strong>Total files:</strong> ${totalMedia}</p>
+      <p><strong>Unused / not attached to any post:</strong> ${unusedMedia}</p>
+      <p><strong>Expiring within 7 days:</strong> ${expiringSoon}</p>
+      <h3>Recommendations</h3>
+      ${recsHtml}
+      <h3>Suggested content types to focus on</h3>
+      <p>${typesHtml}</p>
+      <p>Keep your library fresh to maintain high engagement!</p>
+      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/media">View Media Library</a></p>
     `,
   });
 }

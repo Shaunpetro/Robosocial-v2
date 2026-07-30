@@ -1,7 +1,7 @@
 // apps/web/src/app/components/calendar/media-library-view.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Upload,
   Image as ImageIcon,
@@ -13,9 +13,9 @@ import {
   X,
   Check,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { UploadButton, UploadDropzone } from "@/lib/uploadthing-components";
 
 interface Media {
   id: string;
@@ -49,6 +49,11 @@ export function MediaLibraryView({
   const [showUpload, setShowUpload] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchMedia();
@@ -64,49 +69,14 @@ export function MediaLibraryView({
       const res = await fetch(`/api/media?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setMedia(data);
+        const mediaArray = Array.isArray(data) ? data : data.media || data.data || [];
+        setMedia(mediaArray);
       }
     } catch (error) {
       console.error("Failed to fetch media:", error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleUploadComplete = async (res: any[]) => {
-    console.log("=== handleUploadComplete called ===");
-    console.log("Response:", res);
-    
-    for (const file of res) {
-      try {
-        console.log("Saving to database:", file);
-        const isVideo = file.name?.match(/\.(mp4|webm|mov|avi)$/i);
-        
-        const saveRes = await fetch("/api/media", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyId: companyId || "temp-company",
-            filename: file.name,
-            url: file.url,
-            type: isVideo ? "VIDEO" : "IMAGE",
-            size: file.size || 0,
-          }),
-        });
-        
-        if (saveRes.ok) {
-          console.log("Saved to database successfully");
-        } else {
-          console.error("Failed to save to database:", await saveRes.text());
-        }
-      } catch (err) {
-        console.error("Failed to save media:", err);
-      }
-    }
-    
-    fetchMedia();
-    setShowUpload(false);
-    setUploading(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -145,6 +115,106 @@ export function MediaLibraryView({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
+  // ---- Upload handlers (now using /api/media/upload like the modal) ----
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleFiles = async (files: FileList) => {
+    if (!companyId) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadProgress(0);
+
+    const totalFiles = files.length;
+    let uploadedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+      const validVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+      const allValidTypes = [...validImageTypes, ...validVideoTypes, 'application/pdf'];
+
+      if (!allValidTypes.includes(file.type)) {
+        errors.push(`Invalid file type: ${file.name}`);
+        continue;
+      }
+
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        errors.push(`File too large: ${file.name} (max 50MB)`);
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("companyId", companyId);
+
+        const res = await fetch("/api/media/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (res.ok) {
+          uploadedCount++;
+          setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
+        } else {
+          const errorData = await res.json().catch(() => ({ error: "Upload failed" }));
+          errors.push(`${file.name}: ${errorData.error || "Upload failed"}`);
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
+        errors.push(`${file.name}: Network error`);
+      }
+    }
+
+    setUploading(false);
+
+    if (uploadedCount > 0) {
+      setUploadSuccess(`Successfully uploaded ${uploadedCount} file(s)`);
+      await fetchMedia();
+      setShowUpload(false);
+    }
+
+    if (errors.length > 0) {
+      setUploadError(errors.join("; "));
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (uploadedCount > 0) {
+      setTimeout(() => setUploadSuccess(null), 3000);
+    }
+  };
+
   const filteredMedia = media.filter((m) =>
     m.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -154,16 +224,16 @@ export function MediaLibraryView({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
             🖼️ Media Library
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">
             {media.length} files
           </p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors font-medium"
         >
           <Upload className="h-4 w-4" />
           Upload
@@ -171,21 +241,19 @@ export function MediaLibraryView({
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-4 mb-6">
-        {/* Search */}
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
           <input
             type="text"
             placeholder="Search files..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border border-[var(--border-default)] rounded-lg bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 
-        {/* Filter */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+        <div className="flex items-center gap-1 bg-[var(--bg-secondary)] p-1 rounded-lg">
           {(["all", "IMAGE", "VIDEO"] as const).map((type) => (
             <button
               key={type}
@@ -193,8 +261,8 @@ export function MediaLibraryView({
               className={cn(
                 "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 filterType === type
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-600 dark:text-gray-400"
+                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
+                  : "text-[var(--text-secondary)]"
               )}
             >
               {type === "all" ? "All" : type === "IMAGE" ? "Images" : "Videos"}
@@ -202,15 +270,14 @@ export function MediaLibraryView({
           ))}
         </div>
 
-        {/* View Mode */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+        <div className="flex items-center gap-1 bg-[var(--bg-secondary)] p-1 rounded-lg">
           <button
             onClick={() => setViewMode("grid")}
             className={cn(
               "p-2 rounded-md transition-colors",
               viewMode === "grid"
-                ? "bg-white dark:bg-gray-700 shadow-sm"
-                : "text-gray-600 dark:text-gray-400"
+                ? "bg-[var(--bg-primary)] shadow-sm"
+                : "text-[var(--text-secondary)]"
             )}
           >
             <Grid className="h-4 w-4" />
@@ -220,8 +287,8 @@ export function MediaLibraryView({
             className={cn(
               "p-2 rounded-md transition-colors",
               viewMode === "list"
-                ? "bg-white dark:bg-gray-700 shadow-sm"
-                : "text-gray-600 dark:text-gray-400"
+                ? "bg-[var(--bg-primary)] shadow-sm"
+                : "text-[var(--text-secondary)]"
             )}
           >
             <List className="h-4 w-4" />
@@ -231,13 +298,13 @@ export function MediaLibraryView({
 
       {/* Selection Info */}
       {selectionMode && selectedMedia.length > 0 && (
-        <div className="mb-4 px-4 py-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
-          <span className="text-sm text-blue-700 dark:text-blue-300">
+        <div className="mb-4 px-4 py-2 bg-brand-500/10 border border-brand-500/20 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-brand-600 dark:text-brand-400">
             {selectedMedia.length} of {maxSelection} selected
           </span>
           <button
             onClick={() => onSelectionChange?.([])}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-brand-600 hover:underline"
           >
             Clear selection
           </button>
@@ -248,28 +315,27 @@ export function MediaLibraryView({
       <div className="flex-1 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : filteredMedia.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-              <ImageIcon className="h-8 w-8 text-gray-400" />
+            <div className="p-4 rounded-full bg-[var(--bg-secondary)] mb-4">
+              <ImageIcon className="h-8 w-8 text-[var(--text-tertiary)]" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            <h3 className="text-lg font-medium text-[var(--text-primary)]">
               No media found
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-[var(--text-tertiary)] mt-1">
               Upload your first image or video
             </p>
             <button
               onClick={() => setShowUpload(true)}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              className="mt-4 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 text-sm font-medium"
             >
               Upload Media
             </button>
           </div>
         ) : viewMode === "grid" ? (
-          /* Grid View */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {filteredMedia.map((item) => (
               <div
@@ -278,13 +344,13 @@ export function MediaLibraryView({
                 className={cn(
                   "group relative aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer",
                   selectedMedia.includes(item.id)
-                    ? "border-blue-500 ring-2 ring-blue-500/20"
-                    : "border-transparent hover:border-gray-300 dark:hover:border-gray-600"
+                    ? "border-brand-500 ring-2 ring-brand-500/20"
+                    : "border-transparent hover:border-[var(--border-hover)]"
                 )}
               >
                 {item.type === "VIDEO" ? (
-                  <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-                    <Video className="h-8 w-8 text-white" />
+                  <div className="absolute inset-0 bg-[var(--bg-secondary)] flex items-center justify-center">
+                    <Video className="h-8 w-8 text-[var(--text-tertiary)]" />
                   </div>
                 ) : (
                   <img
@@ -294,14 +360,13 @@ export function MediaLibraryView({
                   />
                 )}
 
-                {/* Selection checkbox */}
                 {selectionMode && (
                   <div
                     className={cn(
                       "absolute top-2 left-2 h-6 w-6 rounded-full border-2 flex items-center justify-center",
                       selectedMedia.includes(item.id)
-                        ? "bg-blue-500 border-blue-500"
-                        : "bg-white/80 border-gray-300"
+                        ? "bg-brand-500 border-brand-500"
+                        : "bg-white/80 border-[var(--border-default)]"
                     )}
                   >
                     {selectedMedia.includes(item.id) && (
@@ -310,7 +375,6 @@ export function MediaLibraryView({
                   </div>
                 )}
 
-                {/* Hover actions */}
                 {!selectionMode && (
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <button
@@ -339,7 +403,6 @@ export function MediaLibraryView({
             ))}
           </div>
         ) : (
-          /* List View */
           <div className="space-y-2">
             {filteredMedia.map((item) => (
               <div
@@ -348,8 +411,8 @@ export function MediaLibraryView({
                 className={cn(
                   "flex items-center gap-4 p-3 rounded-lg border transition-all cursor-pointer",
                   selectedMedia.includes(item.id)
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                    : "border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    ? "border-brand-500 bg-brand-500/5"
+                    : "border-[var(--border-default)] hover:bg-[var(--bg-secondary)]"
                 )}
               >
                 {selectionMode && (
@@ -357,8 +420,8 @@ export function MediaLibraryView({
                     className={cn(
                       "h-5 w-5 rounded border-2 flex items-center justify-center flex-shrink-0",
                       selectedMedia.includes(item.id)
-                        ? "bg-blue-500 border-blue-500"
-                        : "border-gray-300"
+                        ? "bg-brand-500 border-brand-500"
+                        : "border-[var(--border-default)]"
                     )}
                   >
                     {selectedMedia.includes(item.id) && (
@@ -367,10 +430,10 @@ export function MediaLibraryView({
                   </div>
                 )}
 
-                <div className="h-12 w-12 rounded overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-gray-800">
+                <div className="h-12 w-12 rounded overflow-hidden flex-shrink-0 bg-[var(--bg-secondary)]">
                   {item.type === "VIDEO" ? (
                     <div className="h-full w-full flex items-center justify-center">
-                      <Video className="h-5 w-5 text-gray-400" />
+                      <Video className="h-5 w-5 text-[var(--text-tertiary)]" />
                     </div>
                   ) : (
                     <img
@@ -382,10 +445,10 @@ export function MediaLibraryView({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {item.filename}
                   </p>
-                  <p className="text-xs text-gray-500">{item.type} • {formatSize(item.size)}</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{item.type} • {formatSize(item.size)}</p>
                 </div>
 
                 {!selectionMode && (
@@ -394,7 +457,7 @@ export function MediaLibraryView({
                       e.stopPropagation();
                       handleDelete(item.id);
                     }}
-                    className="p-2 text-gray-400 hover:text-red-500"
+                    className="p-2 text-[var(--text-tertiary)] hover:text-red-500"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -405,126 +468,103 @@ export function MediaLibraryView({
         )}
       </div>
 
-      {/* Upload Modal */}
+      {/* Upload Modal (now uses the same drag-and-drop logic) */}
       {showUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-950 rounded-xl shadow-xl w-full max-w-lg mx-4">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-xl w-full max-w-lg mx-4 border border-[var(--border-default)]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                 Upload Media
               </h2>
               <button
                 onClick={() => setShowUpload(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Content */}
             <div className="p-6">
               {uploading ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-blue-500 mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">Uploading...</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-6">
-                  {/* Upload Dropzone */}
-                  <div className="w-full">
-                    <UploadDropzone
-                      endpoint="mediaUploader"
-                      onBeforeUploadBegin={(files) => {
-                        console.log("=== BEFORE UPLOAD ===");
-                        console.log("Files:", files.map(f => f.name));
-                        setUploading(true);
-                        return files;
-                      }}
-                      onUploadBegin={(fileName) => {
-                        console.log("=== UPLOAD BEGIN ===");
-                        console.log("File:", fileName);
-                      }}
-                      onClientUploadComplete={(res) => {
-                        console.log("=== CLIENT UPLOAD COMPLETE ===");
-                        console.log("Response:", res);
-                        if (res && res.length > 0) {
-                          handleUploadComplete(res);
-                        } else {
-                          setUploading(false);
-                          alert("Upload completed but no files received");
-                        }
-                      }}
-                      onUploadError={(error: Error) => {
-                        console.log("=== UPLOAD ERROR ===");
-                        console.log("Error:", error);
-                        setUploading(false);
-                        alert(`Upload failed: ${error.message}`);
-                      }}
-                      onUploadAborted={() => {
-                        console.log("=== UPLOAD ABORTED ===");
-                        setUploading(false);
-                      }}
-                      config={{ mode: "auto" }}
-                      appearance={{
-                        container: "border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors",
-                        label: "text-gray-600 dark:text-gray-400",
-                        allowedContent: "text-gray-500 dark:text-gray-500 text-sm mt-2",
-                        button: "bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg mt-4 ut-uploading:bg-blue-500",
-                        uploadIcon: "text-gray-400 w-12 h-12",
-                      }}
+                  <Loader2 className="h-12 w-12 animate-spin text-brand-500 mb-4" />
+                  <p className="text-[var(--text-primary)]">Uploading...</p>
+                  <div className="w-64 h-2 bg-[var(--bg-tertiary)] rounded-full mt-4 overflow-hidden">
+                    <div
+                      className="h-full bg-brand-500 transition-all"
+                      style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
-
-                  {/* Divider */}
-                  <div className="flex items-center gap-4 w-full">
-                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                    <span className="text-sm text-gray-500">or</span>
-                    <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                  </div>
-
-                  {/* Upload Button Alternative */}
-                  <UploadButton
-                    endpoint="mediaUploader"
-                    onBeforeUploadBegin={(files) => {
-                      console.log("=== BUTTON BEFORE UPLOAD ===");
-                      console.log("Files:", files.map(f => f.name));
-                      setUploading(true);
-                      return files;
-                    }}
-                    onUploadBegin={(fileName) => {
-                      console.log("=== BUTTON UPLOAD BEGIN ===");
-                      console.log("File:", fileName);
-                    }}
-                    onClientUploadComplete={(res) => {
-                      console.log("=== BUTTON UPLOAD COMPLETE ===");
-                      console.log("Response:", res);
-                      if (res && res.length > 0) {
-                        handleUploadComplete(res);
-                      } else {
-                        setUploading(false);
-                        alert("Upload completed but no files received");
-                      }
-                    }}
-                    onUploadError={(error: Error) => {
-                      console.log("=== BUTTON UPLOAD ERROR ===");
-                      console.log("Error:", error);
-                      setUploading(false);
-                      alert(`Upload failed: ${error.message}`);
-                    }}
-                    appearance={{
-                      button: "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium px-6 py-2.5 rounded-lg transition-colors",
-                      allowedContent: "hidden",
-                    }}
-                    content={{
-                      button: "Choose Files",
-                    }}
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center",
+                    dragActive
+                      ? "border-brand-500 bg-brand-500/10"
+                      : "border-[var(--border-default)] hover:border-[var(--border-hover)]"
+                  )}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime,application/pdf"
+                    onChange={handleFileInput}
+                    className="hidden"
+                    id="library-upload-input"
                   />
+                  <label
+                    htmlFor="library-upload-input"
+                    className="flex flex-col items-center cursor-pointer"
+                  >
+                    <div className={cn(
+                      "p-4 rounded-full mb-4 transition-colors",
+                      dragActive ? "bg-brand-500/10" : "bg-[var(--bg-secondary)]"
+                    )}>
+                      <Upload className={cn(
+                        "h-10 w-10 transition-colors",
+                        dragActive ? "text-brand-500" : "text-[var(--text-tertiary)]"
+                      )} />
+                    </div>
+                    <p className="text-lg font-medium text-[var(--text-primary)]">
+                      {dragActive ? "Drop files here" : "Click to upload"}
+                    </p>
+                    <p className="text-sm text-[var(--text-tertiary)] mt-1">
+                      or drag and drop files here
+                    </p>
+                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        JPG, PNG, GIF, WebP
+                      </span>
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        MP4, WebM
+                      </span>
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        PDF
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                      Maximum file size: 50MB
+                    </p>
+                  </label>
+                </div>
+              )}
 
-                  <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-                    Supported: JPG, PNG, GIF, WebP, MP4, WebM<br />
-                    Max 8MB for images, 64MB for videos
-                  </p>
+              {uploadError && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span className="flex-1">{uploadError}</span>
+                </div>
+              )}
+              {uploadSuccess && (
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg text-green-700 dark:text-green-300 text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  {uploadSuccess}
                 </div>
               )}
             </div>

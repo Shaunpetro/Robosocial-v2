@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { MediaType } from "@prisma/client";
 import { UTApi } from "uploadthing/server";
+import { analyseMedia } from "@/lib/ai/media-analysis";
 
 const utapi = new UTApi();
 
 function getMediaType(mimeType: string): MediaType {
   if (mimeType.startsWith("image/")) return MediaType.IMAGE;
   if (mimeType.startsWith("video/")) return MediaType.VIDEO;
-  // PDFs and documents stored as IMAGE type (Prisma enum only has IMAGE/VIDEO)
   return MediaType.IMAGE;
 }
 
@@ -27,16 +27,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Company ID is required" }, { status: 400 });
     }
 
-    // Verify company exists
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-    });
-
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Validate file type
     const validTypes = [
       "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
       "video/mp4", "video/webm", "video/quicktime",
@@ -47,32 +42,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Invalid file type: ${file.type}` }, { status: 400 });
     }
 
-    // Validate file size (50MB max)
     if (file.size > 50 * 1024 * 1024) {
       return NextResponse.json({ error: "File size exceeds 50MB limit" }, { status: 400 });
     }
 
-    // Upload to Uploadthing
     const uploadResponse = await utapi.uploadFiles(file);
-
     if (!uploadResponse.data) {
       console.error("Upload failed:", uploadResponse.error);
       return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
     }
 
-    // Use ufsUrl instead of deprecated url (Uploadthing v7+)
     const fileData = uploadResponse.data;
     const fileUrl = fileData.ufsUrl || fileData.url || fileData.appUrl;
     const fileName = fileData.name || file.name;
     const fileSize = fileData.size || file.size;
-
     const mediaType = getMediaType(file.type);
 
-    // Calculate expiry date (2 months from now)
+    // 14‑day expiry (instead of 2 months)
     const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 2);
+    expiresAt.setDate(expiresAt.getDate() + 14);
 
-    // Save to database with lifecycle fields
+    // AI auto‑tagging and alt‑text (non‑blocking)
+    let aiResult = { tags: [] as string[], altText: fileName, contentType: "educational" };
+    try {
+      aiResult = await analyseMedia(
+        fileName,
+        file.type,
+        company.name,
+        company.industry ?? undefined
+      );
+    } catch (err) {
+      console.warn("AI media analysis skipped:", err);
+    }
+
     const media = await prisma.media.create({
       data: {
         companyId,
@@ -81,21 +83,18 @@ export async function POST(request: NextRequest) {
         type: mediaType,
         mimeType: file.type,
         size: fileSize,
-        // Lifecycle fields
         expiresAt,
         isUsed: false,
         usedAt: null,
         usedInPostId: null,
-        // Auto-selection fields
         autoSelect: true,
         priority: 0,
-        // Usage tracking
         usageCount: 0,
         lastUsedAt: null,
-        // Arrays (defaults)
         pillarIds: [],
-        contentTypes: [],
-        tags: [],
+        contentTypes: aiResult.contentType ? [aiResult.contentType] : [],
+        tags: aiResult.tags,
+        altText: aiResult.altText,
       },
     });
 

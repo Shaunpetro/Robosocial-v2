@@ -82,6 +82,7 @@ model Company {
   intelligence      CompanyIntelligence?
   contentQueueItems ContentQueueItem[]
   documents         CompanyDocument[]
+  specialDatesConfig CompanySpecialDatesConfig?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -309,6 +310,24 @@ enum BulkScheduleStatus {
   COMPLETED
   CANCELLED
 }
+
+// ============================================
+// SPECIAL DATES CONFIG (NEW)
+// ============================================
+
+model CompanySpecialDatesConfig {
+  id          String   @id @default(cuid())
+  companyId   String   @unique
+  enabled     Boolean  @default(false)
+  holidaySets String[] @default([])
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// COMPANY INTELLIGENCE (unchanged)
+// ============================================
 
 model CompanyIntelligence {
   id        String  @id @default(cuid())

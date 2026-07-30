@@ -2,17 +2,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { 
-  X, 
-  Check, 
-  Image as ImageIcon, 
-  Film, 
-  FileText, 
-  Search, 
-  Loader2, 
-  Upload, 
+import {
+  X,
+  Check,
+  Image as ImageIcon,
+  Film,
+  FileText,
+  Search,
+  Loader2,
+  Upload,
   AlertCircle,
-  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +47,7 @@ export function MediaSelectorModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [localSelection, setLocalSelection] = useState<string[]>(selectedMediaIds);
   const [filterType, setFilterType] = useState<"ALL" | "IMAGE" | "VIDEO" | "DOCUMENT">("ALL");
-  
+
   // Upload states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -71,13 +70,12 @@ export function MediaSelectorModal({
 
   const fetchMedia = async () => {
     if (!companyId) return;
-    
+
     setLoading(true);
     try {
       const res = await fetch(`/api/media?companyId=${companyId}`);
       if (res.ok) {
         const data = await res.json();
-        // Handle both array and object responses
         const mediaArray = Array.isArray(data) ? data : data.media || data.data || [];
         setMedia(mediaArray);
       } else {
@@ -130,7 +128,7 @@ export function MediaSelectorModal({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(e.dataTransfer.files);
     }
@@ -154,13 +152,13 @@ export function MediaSelectorModal({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      
+
       // Validate file type
       const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
       const validVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
       const validDocTypes = ['application/pdf'];
       const allValidTypes = [...validImageTypes, ...validVideoTypes, ...validDocTypes];
-      
+
       if (!allValidTypes.includes(file.type)) {
         errors.push(`Invalid file type: ${file.name}`);
         continue;
@@ -197,12 +195,10 @@ export function MediaSelectorModal({
     }
 
     setIsUploading(false);
-    
+
     if (uploadedCount > 0) {
       setUploadSuccess(`Successfully uploaded ${uploadedCount} file(s)`);
-      // Refresh media list
       await fetchMedia();
-      // Switch to library tab to show uploaded files
       setActiveTab("library");
     }
 
@@ -210,12 +206,10 @@ export function MediaSelectorModal({
       setUploadError(errors.join("; "));
     }
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
 
-    // Clear success message after 3 seconds
     if (uploadedCount > 0) {
       setTimeout(() => setUploadSuccess(null), 3000);
     }
@@ -251,42 +245,40 @@ export function MediaSelectorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
-      {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden mx-4">
+
+      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-elevated)] rounded-2xl shadow-2xl flex flex-col overflow-hidden mx-4 border border-[var(--border-default)]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">
               Media Library
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
               {localSelection.length} of {maxSelection} selected
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors"
           >
-            <X className="h-5 w-5 text-gray-500" />
+            <X className="h-5 w-5 text-[var(--text-secondary)]" />
           </button>
         </div>
 
         {/* Tabs */}
         <div className="px-6 pt-4">
-          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+          <div className="flex gap-1 bg-[var(--bg-secondary)] rounded-lg p-1 w-fit">
             <button
               onClick={() => setActiveTab("library")}
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-md transition-colors",
                 activeTab === "library"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               )}
             >
               <ImageIcon className="h-4 w-4 inline mr-2" />
@@ -297,8 +289,8 @@ export function MediaSelectorModal({
               className={cn(
                 "px-4 py-2 text-sm font-medium rounded-md transition-colors",
                 activeTab === "upload"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               )}
             >
               <Upload className="h-4 w-4 inline mr-2" />
@@ -320,7 +312,7 @@ export function MediaSelectorModal({
           <div className="mx-6 mt-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span className="flex-1">{uploadError}</span>
-            <button 
+            <button
               onClick={() => setUploadError(null)}
               className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded"
             >
@@ -331,14 +323,13 @@ export function MediaSelectorModal({
 
         {/* Tab Content */}
         {activeTab === "upload" ? (
-          /* Upload Tab */
           <div className="flex-1 p-6">
-            <div 
+            <div
               className={cn(
                 "border-2 border-dashed rounded-xl p-12 transition-all h-full flex flex-col items-center justify-center",
-                dragActive 
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950" 
-                  : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
+                dragActive
+                  ? "border-brand-500 bg-brand-500/10"
+                  : "border-[var(--border-default)] hover:border-[var(--border-hover)]"
               )}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -354,57 +345,57 @@ export function MediaSelectorModal({
                 className="hidden"
                 id="media-upload-input"
               />
-              
+
               {isUploading ? (
                 <div className="flex flex-col items-center">
-                  <Loader2 className="h-12 w-12 animate-spin text-blue-500 mb-4" />
-                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
+                  <Loader2 className="h-12 w-12 animate-spin text-brand-500 mb-4" />
+                  <p className="text-lg font-medium text-[var(--text-primary)]">
                     Uploading...
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-[var(--text-tertiary)] mt-1">
                     {uploadProgress}% complete
                   </p>
-                  <div className="w-64 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mt-4 overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                  <div className="w-64 h-2 bg-[var(--bg-tertiary)] rounded-full mt-4 overflow-hidden">
+                    <div
+                      className="h-full bg-brand-500 transition-all duration-300 ease-out"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
                 </div>
               ) : (
-                <label 
-                  htmlFor="media-upload-input" 
+                <label
+                  htmlFor="media-upload-input"
                   className="flex flex-col items-center cursor-pointer"
                 >
                   <div className={cn(
                     "p-4 rounded-full mb-4 transition-colors",
-                    dragActive 
-                      ? "bg-blue-100 dark:bg-blue-900" 
-                      : "bg-gray-100 dark:bg-gray-800"
+                    dragActive
+                      ? "bg-brand-500/10"
+                      : "bg-[var(--bg-secondary)]"
                   )}>
                     <Upload className={cn(
                       "h-10 w-10 transition-colors",
-                      dragActive ? "text-blue-500" : "text-gray-400"
+                      dragActive ? "text-brand-500" : "text-[var(--text-tertiary)]"
                     )} />
                   </div>
-                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
+                  <p className="text-lg font-medium text-[var(--text-primary)]">
                     {dragActive ? "Drop files here" : "Click to upload"}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-[var(--text-tertiary)] mt-1">
                     or drag and drop files here
                   </p>
                   <div className="mt-6 flex flex-wrap justify-center gap-2">
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                    <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
                       JPG, PNG, GIF, WebP
                     </span>
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                    <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
                       MP4, WebM
                     </span>
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                    <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
                       PDF
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  <p className="text-xs text-[var(--text-tertiary)] mt-2">
                     Maximum file size: 50MB
                   </p>
                 </label>
@@ -412,20 +403,17 @@ export function MediaSelectorModal({
             </div>
           </div>
         ) : (
-          /* Library Tab */
           <>
             {/* Filters */}
-            <div className="px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 border-b border-[var(--border-subtle)]">
               <div className="relative flex-1 w-full sm:w-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
                 <input
                   type="text"
                   placeholder="Search media..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 bg-white text-sm 
-                             focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 
-                             dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
               <div className="flex gap-1 flex-wrap">
@@ -436,8 +424,8 @@ export function MediaSelectorModal({
                     className={cn(
                       "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
                       filterType === type
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                        ? "bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
                     )}
                   >
                     {type === "ALL" ? "All" : type.charAt(0) + type.slice(1).toLowerCase() + "s"}
@@ -450,21 +438,21 @@ export function MediaSelectorModal({
             <div className="flex-1 overflow-auto p-6">
               {loading ? (
                 <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
                 </div>
               ) : filteredMedia.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+                <div className="flex flex-col items-center justify-center h-64 text-[var(--text-tertiary)]">
                   <ImageIcon className="h-12 w-12 mb-3 opacity-50" />
                   <p className="font-medium">No media found</p>
                   <p className="text-sm mt-1">
-                    {media.length === 0 
-                      ? "Upload some media to get started" 
+                    {media.length === 0
+                      ? "Upload some media to get started"
                       : "Try adjusting your search or filter"}
                   </p>
                   {media.length === 0 && (
                     <button
                       onClick={() => setActiveTab("upload")}
-                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                      className="mt-4 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
                     >
                       <Upload className="h-4 w-4 inline mr-2" />
                       Upload Media
@@ -478,7 +466,7 @@ export function MediaSelectorModal({
                     const itemType = getMediaType(item);
                     const Icon = getMediaIcon(itemType);
                     const isAtLimit = localSelection.length >= maxSelection && !isSelected;
-                    
+
                     return (
                       <button
                         key={item.id}
@@ -487,10 +475,10 @@ export function MediaSelectorModal({
                         className={cn(
                           "relative group aspect-square rounded-xl overflow-hidden border-2 transition-all text-left",
                           isSelected
-                            ? "border-blue-500 ring-2 ring-blue-500/30"
+                            ? "border-brand-500 ring-2 ring-brand-500/30"
                             : isAtLimit
-                            ? "border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed"
-                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                            ? "border-[var(--border-default)] opacity-50 cursor-not-allowed"
+                            : "border-[var(--border-default)] hover:border-[var(--border-hover)]"
                         )}
                       >
                         {itemType === "IMAGE" ? (
@@ -501,9 +489,9 @@ export function MediaSelectorModal({
                             loading="lazy"
                           />
                         ) : itemType === "VIDEO" ? (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 relative">
-                            <video 
-                              src={item.url} 
+                          <div className="w-full h-full flex items-center justify-center bg-[var(--bg-secondary)] relative">
+                            <video
+                              src={item.url}
                               className="w-full h-full object-cover"
                               muted
                               playsInline
@@ -515,21 +503,21 @@ export function MediaSelectorModal({
                             </div>
                           </div>
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 p-4">
-                            <Icon className="h-12 w-12 text-gray-400 mb-2" />
-                            <span className="text-xs text-gray-500 text-center truncate w-full">
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-[var(--bg-secondary)] p-4">
+                            <Icon className="h-12 w-12 text-[var(--text-tertiary)] mb-2" />
+                            <span className="text-xs text-[var(--text-secondary)] text-center truncate w-full">
                               {item.filename}
                             </span>
                           </div>
                         )}
-                        
+
                         {/* Selection indicator */}
                         <div
                           className={cn(
                             "absolute top-2 right-2 h-6 w-6 rounded-full flex items-center justify-center transition-all",
                             isSelected
-                              ? "bg-blue-500 text-white"
-                              : "bg-white/80 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-600 opacity-0 group-hover:opacity-100"
+                              ? "bg-brand-500 text-white"
+                              : "bg-white/80 dark:bg-gray-800/80 border border-[var(--border-default)] opacity-0 group-hover:opacity-100"
                           )}
                         >
                           {isSelected && <Check className="h-4 w-4" />}
@@ -549,7 +537,7 @@ export function MediaSelectorModal({
 
                         {/* Hover overlay */}
                         {!isAtLimit && !isSelected && (
-                          <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/10 transition-colors" />
+                          <div className="absolute inset-0 bg-brand-500/0 group-hover:bg-brand-500/10 transition-colors" />
                         )}
                       </button>
                     );
@@ -561,18 +549,17 @@ export function MediaSelectorModal({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setLocalSelection([])}
               disabled={localSelection.length === 0}
-              className="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 
-                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Clear Selection
             </button>
             {localSelection.length > 0 && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-[var(--text-tertiary)]">
                 {localSelection.length} item{localSelection.length !== 1 ? "s" : ""} selected
               </span>
             )}
@@ -580,8 +567,7 @@ export function MediaSelectorModal({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg 
-                         dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -591,8 +577,8 @@ export function MediaSelectorModal({
               className={cn(
                 "px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors",
                 localSelection.length === 0
-                  ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
+                  ? "bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] cursor-not-allowed"
+                  : "bg-brand-500 hover:bg-brand-600"
               )}
             >
               Confirm Selection ({localSelection.length})
