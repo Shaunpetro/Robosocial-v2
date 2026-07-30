@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch all companies where special dates feature is enabled
     const configs = await prisma.companySpecialDatesConfig.findMany({
       where: { enabled: true },
       include: {
@@ -24,6 +23,7 @@ export async function GET(request: NextRequest) {
             intelligence: { select: { timezone: true, autoApprove: true } },
           },
         },
+        generatedMedia: true,
       },
     });
 
@@ -37,20 +37,34 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     for (const config of configs) {
-      const { company } = config;
+      const { company, generatedMedia } = config;
       if (!company || company.platforms.length === 0) continue;
 
-      const result = { companyId: company.id, companyName: company.name, generated: 0, errors: [] as string[] };
+      const result = {
+        companyId: company.id,
+        companyName: company.name,
+        generated: 0,
+        errors: [] as string[],
+      };
+
+      // --- NEW: enforce complete setup ---
+      if (!config.logoMediaId) {
+        result.errors.push("No company logo uploaded – skipping.");
+        results.push(result);
+        continue;
+      }
+      if (!config.holidaySets || config.holidaySets.length === 0) {
+        result.errors.push("No holiday sets selected – skipping.");
+        results.push(result);
+        continue;
+      }
 
       try {
-        // Get upcoming dates for the selected sets (next 14 days)
         const upcoming = getUpcomingSpecialDates(config.holidaySets, 14);
 
         for (const { entry, date, setId } of upcoming) {
-          // Build a unique identifier for deduplication
           const promptId = `special-date:${setId}:${entry.name}`;
 
-          // Check if a post for this company + special date already exists
           const existing = await prisma.generatedPost.findFirst({
             where: {
               companyId: company.id,
@@ -60,14 +74,15 @@ export async function GET(request: NextRequest) {
           });
 
           if (existing) {
-            console.log(`[SpecialDatesCron] Skipping duplicate: ${entry.name} for ${company.name}`);
+            console.log(
+              `[SpecialDatesCron] Skipping duplicate: ${entry.name} for ${company.name}`
+            );
             continue;
           }
 
-          // Pick a platform (rotate through connected platforms)
-          const platform = company.platforms[result.generated % company.platforms.length];
+          const platform =
+            company.platforms[result.generated % company.platforms.length];
 
-          // Generate the post
           const generated = await generateSpecialDatePost({
             companyId: company.id,
             companyName: company.name,
@@ -80,9 +95,8 @@ export async function GET(request: NextRequest) {
             tone: entry.tone || "professional",
           });
 
-          // Schedule for the special date at 08:00 in the company's timezone
           const scheduledAt = new Date(date);
-          scheduledAt.setHours(8, 0, 0, 0); // 8 AM local time
+          scheduledAt.setHours(8, 0, 0, 0);
 
           const post = await prisma.generatedPost.create({
             data: {
@@ -94,12 +108,27 @@ export async function GET(request: NextRequest) {
               topic: entry.name,
               tone: entry.tone || "professional",
               scheduledFor: scheduledAt,
-              status: company.intelligence?.autoApprove ? "SCHEDULED" : "DRAFT",
+              status: company.intelligence?.autoApprove
+                ? "SCHEDULED"
+                : "DRAFT",
               generatedBy: "special-dates-ai",
             },
           });
 
-          console.log(`[SpecialDatesCron] Created post for ${entry.name} (${company.name})`);
+          // Attach generated branded image if available
+          if (generatedMedia) {
+            await prisma.postMedia.create({
+              data: {
+                postId: post.id,
+                mediaId: generatedMedia.id,
+                order: 0,
+              },
+            });
+          }
+
+          console.log(
+            `[SpecialDatesCron] Created post for ${entry.name} (${company.name})`
+          );
           result.generated++;
         }
       } catch (companyError) {

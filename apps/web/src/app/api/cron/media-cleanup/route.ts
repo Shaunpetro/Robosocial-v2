@@ -16,42 +16,43 @@ export async function GET(request: NextRequest) {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    // Find media where createdAt is older than 14 days (regardless of expiresAt)
+    // Exclude permanent / special‑dates media
     const expiredMedia = await prisma.media.findMany({
       where: {
         createdAt: { lte: fourteenDaysAgo },
+        NOT: {
+          tags: { hasSome: ["special-dates", "permanent"] },
+        },
       },
       include: {
         company: {
           select: {
             id: true,
             name: true,
-            owner: {
-              select: { email: true },
-            },
+            owner: { select: { email: true } },
           },
         },
       },
     });
 
-    console.log(`[MediaCleanup] Found ${expiredMedia.length} expired media items`);
+    console.log(`[MediaCleanup] Found ${expiredMedia.length} expired items`);
 
     const deletedIds: string[] = [];
-    const companyMediaCounts = new Map<string, { email: string; name: string; deleted: number }>();
+    const companyMediaCounts = new Map<
+      string,
+      { email: string; name: string; deleted: number }
+    >();
 
     for (const media of expiredMedia) {
       try {
-        // Delete from blob storage
         await del(media.url);
       } catch (blobError) {
         console.error(`Blob deletion failed for ${media.url}:`, blobError);
       }
 
-      // Delete database record
       await prisma.media.delete({ where: { id: media.id } });
       deletedIds.push(media.id);
 
-      // Track per company for possible email
       const companyId = media.company.id;
       const existing = companyMediaCounts.get(companyId) || {
         email: media.company.owner?.email ?? "",
@@ -62,18 +63,20 @@ export async function GET(request: NextRequest) {
       companyMediaCounts.set(companyId, existing);
     }
 
-    // After cleanup, check if any company now has zero media and send reminder
-    const uniqueCompanyIds = Array.from(companyMediaCounts.keys());
-    for (const companyId of uniqueCompanyIds) {
+    for (const [companyId, info] of companyMediaCounts) {
       const remainingCount = await prisma.media.count({ where: { companyId } });
-      if (remainingCount === 0) {
-        const info = companyMediaCounts.get(companyId)!;
-        if (info.email) {
-          try {
-            await sendMediaCleanupReminderEmail(info.email, info.name, info.deleted);
-          } catch (e) {
-            console.error(`Failed to send cleanup reminder to ${info.email}:`, e);
-          }
+      if (remainingCount === 0 && info.email) {
+        try {
+          await sendMediaCleanupReminderEmail(
+            info.email,
+            info.name,
+            info.deleted
+          );
+        } catch (e) {
+          console.error(
+            `Failed to send cleanup reminder to ${info.email}:`,
+            e
+          );
         }
       }
     }
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       deleted: deletedIds.length,
-      companiesNotified: uniqueCompanyIds.length,
+      companiesNotified: companyMediaCounts.size,
     });
   } catch (error) {
     console.error("[MediaCleanup] Error:", error);

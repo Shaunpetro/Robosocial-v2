@@ -3,7 +3,17 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Plus, Loader2, RefreshCw, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import {
+  Plus,
+  Loader2,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  Linkedin,
+  User,
+  Building2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { PlatformEmpty } from '@/app/components/platforms/platform-empty';
 import { PlatformList } from '@/app/components/platforms/platform-list';
@@ -11,6 +21,7 @@ import { PlatformConnectModal } from '@/app/components/platforms/platform-connec
 import { FacebookPageSelector } from '@/app/components/platforms/facebook-page-selector';
 import type { PlatformConnection } from '@/lib/platforms';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface Company {
   id: string;
@@ -19,6 +30,107 @@ interface Company {
   industry?: string | null;
 }
 
+// ---------- LinkedIn Mode Dialog ----------
+function LinkedInModeDialog({
+  isOpen,
+  onClose,
+  companyId,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  companyId: string;
+}) {
+  const [mode, setMode] = useState<'profile' | 'page'>('profile');
+
+  const handleContinue = () => {
+    window.location.href = `/api/auth/linkedin?companyId=${companyId}&postMode=${mode}`;
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] p-6 shadow-xl mx-4">
+        <h2 className="text-xl font-semibold text-[var(--text-primary)] text-center">
+          Choose LinkedIn Account
+        </h2>
+        <p className="text-sm text-[var(--text-secondary)] text-center mt-1 mb-6">
+          How would you like to post?
+        </p>
+
+        <div className="space-y-3 mb-6">
+          <button
+            onClick={() => setMode('profile')}
+            className={cn(
+              'w-full flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all',
+              mode === 'profile'
+                ? 'border-brand-500 bg-brand-500/10'
+                : 'border-[var(--border-default)] bg-[var(--bg-secondary)] hover:border-[var(--border-hover)]'
+            )}
+          >
+            <div
+              className={cn(
+                'w-12 h-12 rounded-xl flex items-center justify-center',
+                mode === 'profile'
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+              )}
+            >
+              <User size={24} />
+            </div>
+            <div>
+              <p className="font-medium text-[var(--text-primary)]">Post as Profile</p>
+              <p className="text-sm text-[var(--text-tertiary)]">Use your personal LinkedIn identity</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setMode('page')}
+            className={cn(
+              'w-full flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all',
+              mode === 'page'
+                ? 'border-brand-500 bg-brand-500/10'
+                : 'border-[var(--border-default)] bg-[var(--bg-secondary)] hover:border-[var(--border-hover)]'
+            )}
+          >
+            <div
+              className={cn(
+                'w-12 h-12 rounded-xl flex items-center justify-center',
+                mode === 'page'
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+              )}
+            >
+              <Building2 size={24} />
+            </div>
+            <div>
+              <p className="font-medium text-[var(--text-primary)]">Post as Page</p>
+              <p className="text-sm text-[var(--text-tertiary)]">Choose a company page you manage</p>
+            </div>
+          </button>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 rounded-xl border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleContinue}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main Platforms Page ----------
 export default function CompanyPlatformsPage() {
   return (
     <Suspense fallback={<PlatformsLoading />}>
@@ -33,9 +145,7 @@ function PlatformsLoading() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Platform Connections</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Connect your social media accounts
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Connect your social media accounts</p>
         </div>
       </div>
       <div className="flex flex-col items-center justify-center py-24">
@@ -67,6 +177,9 @@ function PlatformsContent() {
     connectionId: string;
   }>({ open: false, connectionId: '' });
 
+  // LinkedIn mode dialog state
+  const [showLinkedInDialog, setShowLinkedInDialog] = useState(false);
+
   useEffect(() => {
     async function fetchCompany() {
       try {
@@ -82,7 +195,6 @@ function PlatformsContent() {
         setCompanyLoading(false);
       }
     }
-
     if (companyId) {
       fetchCompany();
     }
@@ -90,11 +202,9 @@ function PlatformsContent() {
 
   const fetchConnections = useCallback(async () => {
     if (!companyId) return;
-
     try {
       setLoading(true);
       const res = await fetch(`/api/platforms?companyId=${companyId}`);
-
       if (res.ok) {
         const data = await res.json();
         setConnections(data);
@@ -143,7 +253,6 @@ function PlatformsContent() {
         no_facebook_pages: 'No Facebook Pages found. Make sure you are an admin of at least one Page.',
         company_not_found: 'The selected company was not found.',
       };
-
       setNotification({
         type: 'error',
         message: errorMessages[error] || `Connection error: ${error}`,
@@ -171,12 +280,8 @@ function PlatformsContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'disconnected' }),
       });
-
       if (res.ok) {
-        setNotification({
-          type: 'success',
-          message: `Disconnected ${connection.accountName}`,
-        });
+        setNotification({ type: 'success', message: `Disconnected ${connection.accountName}` });
         fetchConnections();
       }
     } catch (error) {
@@ -186,25 +291,23 @@ function PlatformsContent() {
 
   async function handleReconnect(connection: PlatformConnection) {
     const platform = connection.platform;
-    const config = connection.config as Record<string, unknown> | null;
-
-    if ((platform === 'linkedin' || platform === 'facebook') && config) {
-      window.location.href = `/api/auth/${platform}?companyId=${companyId}`;
+    if (platform === 'linkedin') {
+      setShowLinkedInDialog(true);
       return;
     }
-
+    if (platform === 'facebook') {
+      window.location.href = `/api/auth/facebook?companyId=${companyId}`;
+      return;
+    }
+    // fallback
     try {
       const res = await fetch(`/api/platforms/${connection.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'connected' }),
       });
-
       if (res.ok) {
-        setNotification({
-          type: 'success',
-          message: `Reconnected ${connection.accountName}`,
-        });
+        setNotification({ type: 'success', message: `Reconnected ${connection.accountName}` });
         fetchConnections();
       }
     } catch (error) {
@@ -215,17 +318,10 @@ function PlatformsContent() {
   async function handleDelete() {
     if (!deleteConfirm) return;
     setDeleting(true);
-
     try {
-      const res = await fetch(`/api/platforms/${deleteConfirm.id}`, {
-        method: 'DELETE',
-      });
-
+      const res = await fetch(`/api/platforms/${deleteConfirm.id}`, { method: 'DELETE' });
       if (res.ok) {
-        setNotification({
-          type: 'success',
-          message: `Removed ${deleteConfirm.accountName} connection`,
-        });
+        setNotification({ type: 'success', message: `Removed ${deleteConfirm.accountName} connection` });
         setDeleteConfirm(null);
         fetchConnections();
       }
@@ -248,13 +344,8 @@ function PlatformsContent() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <AlertCircle size={48} className="text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-medium">Company Not Found</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            The company you are looking for does not exist.
-          </p>
-          <Link
-            href="/companies"
-            className="mt-4 text-sm text-primary hover:underline"
-          >
+          <p className="text-sm text-muted-foreground mt-1">The company you are looking for does not exist.</p>
+          <Link href="/companies" className="mt-4 text-sm text-primary hover:underline">
             Back to Companies
           </Link>
         </div>
@@ -277,11 +368,7 @@ function PlatformsContent() {
                 : 'bg-destructive/10 border-destructive/20 text-destructive')
             }
           >
-            {notification.type === 'success' ? (
-              <CheckCircle2 size={18} />
-            ) : (
-              <AlertCircle size={18} />
-            )}
+            {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
             <p className="text-sm font-medium">{notification.message}</p>
             <button
               onClick={() => setNotification(null)}
@@ -296,10 +383,7 @@ function PlatformsContent() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link
-              href={`/companies/${companyId}`}
-              className="hover:text-foreground transition-colors flex items-center gap-1"
-            >
+            <Link href={`/companies/${companyId}`} className="hover:text-foreground transition-colors flex items-center gap-1">
               <ArrowLeft size={14} />
               {company.name}
             </Link>
@@ -321,6 +405,13 @@ function PlatformsContent() {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
+            onClick={() => setShowLinkedInDialog(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A66C2] text-white text-sm font-medium hover:bg-[#004182] transition-colors"
+          >
+            <Linkedin size={16} />
+            Connect LinkedIn
+          </button>
+          <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
           >
@@ -336,10 +427,7 @@ function PlatformsContent() {
           <p className="text-sm text-muted-foreground mt-3">Loading connections...</p>
         </div>
       ) : connections.length === 0 ? (
-        <PlatformEmpty
-          onConnect={() => setModalOpen(true)}
-          hasCompanies={true}
-        />
+        <PlatformEmpty onConnect={() => setModalOpen(true)} hasCompanies={true} />
       ) : (
         <PlatformList
           connections={connections}
@@ -363,18 +451,20 @@ function PlatformsContent() {
         onSuccess={fetchConnections}
       />
 
+      <LinkedInModeDialog
+        isOpen={showLinkedInDialog}
+        onClose={() => setShowLinkedInDialog(false)}
+        companyId={companyId}
+      />
+
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            onClick={() => setDeleteConfirm(null)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
+          <div onClick={() => setDeleteConfirm(null)} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="relative w-full max-w-sm rounded-xl border border-border/60 bg-background p-6 shadow-xl mx-4">
             <h3 className="text-lg font-semibold">Remove Connection</h3>
             <p className="text-sm text-muted-foreground mt-2">
-              Are you sure you want to remove the <strong>{deleteConfirm.platform}</strong> connection
-              for <strong>{deleteConfirm.accountName}</strong>?
-              This will revoke access and remove all scheduled posts for this platform.
+              Are you sure you want to remove the <strong>{deleteConfirm.platform}</strong> connection for{' '}
+              <strong>{deleteConfirm.accountName}</strong>? This will revoke access and remove all scheduled posts for this platform.
             </p>
             <div className="flex items-center justify-end gap-3 mt-6">
               <button
