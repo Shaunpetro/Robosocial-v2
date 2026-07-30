@@ -189,8 +189,10 @@ model Media {
   usageCount Int       @default(0)
   lastUsedAt DateTime?
 
-  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  postMedia PostMedia[]
+  company                    Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  postMedia                  PostMedia[]
+  specialDatesConfigLogo     CompanySpecialDatesConfig?   @relation(name: "LogoMedia")
+  specialDatesConfigGenerated CompanySpecialDatesConfig?   @relation(name: "GeneratedMedia")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -312,23 +314,25 @@ enum BulkScheduleStatus {
 }
 
 // ============================================
-// SPECIAL DATES CONFIG (NEW)
+// SPECIAL DATES CONFIG
 // ============================================
 
 model CompanySpecialDatesConfig {
-  id          String   @id @default(cuid())
-  companyId   String   @unique
-  enabled     Boolean  @default(false)
-  holidaySets String[] @default([])
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  generatedMediaId String?  // NEW – ID of the pre‑generated branded image
-  generatedMedia   Media?   @relation(fields: [generatedMediaId], references: [id], onDelete: SetNull)
+  id               String   @id @default(cuid())
+  companyId        String   @unique
+  enabled          Boolean  @default(false)
+  holidaySets      String[] @default([])
+  logoMediaId      String?
+  logoMedia        Media?   @relation(name: "LogoMedia", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  generatedMediaId String?
+  generatedMedia   Media?   @relation(name: "GeneratedMedia", fields: [generatedMediaId], references: [id], onDelete: SetNull)
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 // ============================================
-// COMPANY INTELLIGENCE (unchanged)
+// COMPANY INTELLIGENCE
 // ============================================
 
 model CompanyIntelligence {
