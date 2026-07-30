@@ -1,9 +1,11 @@
+// apps/web/src/app/api/auth/linkedin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getLinkedInAuthUrl } from '@/lib/oauth/linkedin';
 
 export async function GET(request: NextRequest) {
   try {
     const companyId = request.nextUrl.searchParams.get('companyId');
+    const postMode = request.nextUrl.searchParams.get('postMode') as 'profile' | 'page' | null;
 
     if (!companyId) {
       return NextResponse.redirect(
@@ -17,7 +19,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const authUrl = getLinkedInAuthUrl(companyId);
+    const mode = postMode === 'page' ? 'page' : 'profile';
+    const authUrl = getLinkedInAuthUrl(companyId, mode);
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('LinkedIn OAuth init failed:', error);
