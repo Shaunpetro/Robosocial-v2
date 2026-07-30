@@ -9,20 +9,17 @@ const FB_GRAPH_URL = `https://graph.facebook.com/${FB_API_VERSION}`;
 // PERMISSIONS CONFIGURATION
 // ============================================
 
-// Basic permissions that work in Development Mode (no App Review needed)
 export const FACEBOOK_SCOPES_DEVELOPMENT = [
   'pages_show_list',
   'pages_read_engagement',
   'pages_manage_posts',
 ].join(',');
 
-// Minimal permissions that ALWAYS work in Development Mode
 export const FACEBOOK_SCOPES_MINIMAL = [
   'pages_show_list',
   'public_profile',
 ].join(',');
 
-// Full permissions (requires App Review for production)
 export const FACEBOOK_SCOPES_PRODUCTION = [
   'pages_show_list',
   'pages_read_engagement',
@@ -30,7 +27,6 @@ export const FACEBOOK_SCOPES_PRODUCTION = [
   'pages_read_user_content',
 ].join(',');
 
-// ⬇️ CHANGED: false to enable full publishing permissions
 const USE_MINIMAL_SCOPES = false;
 
 export const FACEBOOK_SCOPES = USE_MINIMAL_SCOPES
@@ -38,36 +34,19 @@ export const FACEBOOK_SCOPES = USE_MINIMAL_SCOPES
   : FACEBOOK_SCOPES_PRODUCTION;
 
 // ============================================
-// URL HELPERS - CRITICAL FOR OAUTH
+// URL HELPERS – DYNAMIC, NO HARDCODED FALLBACK
 // ============================================
 
-/**
- * Get the base app URL, normalized (no trailing slash)
- * Hardcoded fallback for production to avoid env var issues
- */
 function getAppUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-  // Hardcoded production URL as fallback
-  const productionUrl = 'https://atgihubrobosocial.vercel.app';
-
-  let baseUrl = envUrl || productionUrl;
-
-  // Remove trailing slash if present
-  if (baseUrl.endsWith('/')) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
-
-  return baseUrl;
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  if (envUrl.endsWith('/')) return envUrl.slice(0, -1);
+  return envUrl;
 }
 
-/**
- * Get the exact redirect URI - MUST be identical in auth URL and token exchange
- */
 export function getFacebookRedirectUri(): string {
-  const redirectUri = `${getAppUrl()}/api/auth/facebook/callback`;
-  console.log('[Facebook OAuth] Redirect URI:', redirectUri);
-  return redirectUri;
+  const appUrl = getAppUrl();
+  if (appUrl) return `${appUrl}/api/auth/facebook/callback`;
+  return `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/facebook/callback`;
 }
 
 // ============================================
@@ -90,14 +69,17 @@ export function decodeOAuthState(state: string): Record<string, string> {
 // OAUTH FUNCTIONS
 // ============================================
 
-export function getFacebookAuthUrl(companyId: string): string {
+/**
+ * @param companyId
+ * @param postMode – 'profile' | 'page' (ignored for Facebook; always page)
+ */
+export function getFacebookAuthUrl(companyId: string, postMode: 'profile' | 'page' = 'page'): string {
   const redirectUri = getFacebookRedirectUri();
 
   const state = encodeOAuthState({
     companyId,
     platform: 'facebook',
     ts: Date.now().toString(),
-    // Store the redirect URI in state so callback can verify
     redirectUri,
   });
 
@@ -110,13 +92,7 @@ export function getFacebookAuthUrl(companyId: string): string {
   });
 
   const authUrl = `${FB_AUTH_URL}?${params.toString()}`;
-
-  console.log('[Facebook OAuth] === AUTH URL DEBUG ===');
-  console.log('[Facebook OAuth] App URL:', getAppUrl());
-  console.log('[Facebook OAuth] Redirect URI:', redirectUri);
-  console.log('[Facebook OAuth] Scopes:', FACEBOOK_SCOPES);
-  console.log('[Facebook OAuth] Full Auth URL:', authUrl);
-
+  console.log('[Facebook OAuth] Auth URL:', authUrl);
   return authUrl;
 }
 
@@ -125,13 +101,7 @@ export async function exchangeFacebookCode(code: string, stateRedirectUri?: stri
   token_type: string;
   expires_in: number;
 }> {
-  // Use the redirect URI from state if provided, otherwise generate it
-  // This ensures we use the EXACT same URI that was used in the auth request
   const redirectUri = stateRedirectUri || getFacebookRedirectUri();
-
-  console.log('[Facebook OAuth] === TOKEN EXCHANGE DEBUG ===');
-  console.log('[Facebook OAuth] Using redirect URI:', redirectUri);
-  console.log('[Facebook OAuth] State redirect URI provided:', !!stateRedirectUri);
 
   const params = new URLSearchParams({
     client_id: process.env.FACEBOOK_APP_ID || '',
@@ -140,24 +110,14 @@ export async function exchangeFacebookCode(code: string, stateRedirectUri?: stri
     code,
   });
 
-  const tokenUrl = `${FB_TOKEN_URL}?${params.toString()}`;
-  console.log('[Facebook OAuth] Token URL (without secrets):',
-    tokenUrl.replace(process.env.FACEBOOK_APP_SECRET || '', '[REDACTED]'));
-
-  const res = await fetch(tokenUrl);
-
+  const res = await fetch(`${FB_TOKEN_URL}?${params.toString()}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    console.error('[Facebook OAuth] Token exchange error:', err);
-    console.error('[Facebook OAuth] Redirect URI used:', redirectUri);
     const message = (err as { error?: { message?: string } }).error?.message
       || `Facebook token exchange failed (${res.status})`;
     throw new Error(message);
   }
-
-  const data = await res.json();
-  console.log('[Facebook OAuth] Token exchange successful');
-  return data;
+  return res.json();
 }
 
 export async function getLongLivedToken(shortToken: string): Promise<{
@@ -173,15 +133,12 @@ export async function getLongLivedToken(shortToken: string): Promise<{
   });
 
   const res = await fetch(`${FB_TOKEN_URL}?${params.toString()}`);
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    console.error('[Facebook OAuth] Long-lived token error:', err);
     const message = (err as { error?: { message?: string } }).error?.message
       || `Failed to get long-lived token (${res.status})`;
     throw new Error(message);
   }
-
   return res.json();
 }
 
@@ -204,10 +161,8 @@ export async function getFacebookPages(userToken: string): Promise<FacebookPage[
   });
 
   const res = await fetch(`${FB_GRAPH_URL}/me/accounts?${params.toString()}`);
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    console.error('[Facebook OAuth] Get pages error:', err);
     const message = (err as { error?: { message?: string } }).error?.message
       || `Failed to fetch Facebook pages (${res.status})`;
     throw new Error(message);
@@ -239,13 +194,11 @@ export async function getFacebookUserProfile(userToken: string): Promise<Faceboo
   });
 
   const res = await fetch(`${FB_GRAPH_URL}/me?${params.toString()}`);
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
       (err as { error?: { message?: string } }).error?.message || 'Failed to fetch user profile'
     );
   }
-
   return res.json();
 }

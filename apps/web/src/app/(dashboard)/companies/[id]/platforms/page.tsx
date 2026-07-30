@@ -11,6 +11,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Linkedin,
+  Facebook,
   User,
   Building2,
 } from 'lucide-react';
@@ -130,6 +131,51 @@ function LinkedInModeDialog({
   );
 }
 
+// ---------- Facebook Mode Dialog ----------
+function FacebookModeDialog({
+  isOpen,
+  onClose,
+  companyId,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  companyId: string;
+}) {
+  const handleContinue = () => {
+    window.location.href = `/api/auth/facebook?companyId=${companyId}&postMode=page`;
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] p-6 shadow-xl mx-4">
+        <h2 className="text-xl font-semibold text-[var(--text-primary)] text-center">
+          Connect Facebook Page
+        </h2>
+        <p className="text-sm text-[var(--text-secondary)] text-center mt-1 mb-6">
+          You'll be able to select which page you want to post from after authorising.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 rounded-xl border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleContinue}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-[#1877F2] text-white font-medium hover:bg-[#1666D0] transition-colors"
+          >
+            Authorise Facebook
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Main Platforms Page ----------
 export default function CompanyPlatformsPage() {
   return (
@@ -179,6 +225,8 @@ function PlatformsContent() {
 
   // LinkedIn mode dialog state
   const [showLinkedInDialog, setShowLinkedInDialog] = useState(false);
+  // Facebook mode dialog state
+  const [showFacebookDialog, setShowFacebookDialog] = useState(false);
 
   useEffect(() => {
     async function fetchCompany() {
@@ -296,7 +344,7 @@ function PlatformsContent() {
       return;
     }
     if (platform === 'facebook') {
-      window.location.href = `/api/auth/facebook?companyId=${companyId}`;
+      setShowFacebookDialog(true);
       return;
     }
     // fallback
@@ -412,6 +460,13 @@ function PlatformsContent() {
             Connect LinkedIn
           </button>
           <button
+            onClick={() => setShowFacebookDialog(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1877F2] text-white text-sm font-medium hover:bg-[#1666D0] transition-colors"
+          >
+            <Facebook size={16} />
+            Connect Facebook
+          </button>
+          <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
           >
@@ -454,6 +509,12 @@ function PlatformsContent() {
       <LinkedInModeDialog
         isOpen={showLinkedInDialog}
         onClose={() => setShowLinkedInDialog(false)}
+        companyId={companyId}
+      />
+
+      <FacebookModeDialog
+        isOpen={showFacebookDialog}
+        onClose={() => setShowFacebookDialog(false)}
         companyId={companyId}
       />
 
