@@ -1,4 +1,4 @@
-// apps/web/src/app/api/companies/[id]/special-dates/generate-media/route.ts
+// apps/web/src/app/api/companies/[id]/special-dates/generate-media/route.tsx
 
 import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "@vercel/og";
