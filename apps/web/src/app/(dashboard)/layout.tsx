@@ -11,13 +11,11 @@ import { HelpModal } from "@/components/ui/HelpModal";
 import { CompanyProvider, useCompany } from "@/app/contexts/company-context";
 import { cn } from "@/lib/utils";
 
-// We can't use useCompany outside the provider, so we'll build the items inside the component
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // -- Now inside CompanyProvider, we can use the context --
   return (
     <CompanyProvider>
       <DashboardLayoutInner>{children}</DashboardLayoutInner>
@@ -30,16 +28,16 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const { selectedCompanyId } = useCompany();
 
-  // Build nav items dynamically so "Special Dates" can point to the selected company
   const navItems = useMemo(() => {
     const specialDatesHref = selectedCompanyId
       ? `/companies/${selectedCompanyId}/special-dates`
-      : "/special-dates"; // fallback if no company selected (could be disabled)
+      : "/special-dates";
 
     return [
       { label: "Companies", href: "/companies", icon: Building2 },
       { label: "Calendar", href: "/calendar", icon: CalendarDays },
       { label: "Special Dates", href: specialDatesHref, icon: Star },
+      // FIXED: media is a global route, not per-company
       { label: "Media", href: "/media", icon: ImageIcon },
     ];
   }, [selectedCompanyId]);
