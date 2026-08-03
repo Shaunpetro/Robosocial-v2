@@ -15,6 +15,7 @@ import {
   User,
   LogOut,
   Shield,
+  Loader2,
 } from "lucide-react";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { HelpModal } from "@/components/ui/HelpModal";
@@ -33,8 +34,22 @@ export default function DashboardLayout({
   );
 }
 
+function getUserInitials(session: any): string {
+  if (session?.user?.name) {
+    const parts = session.user.name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  }
+  if (session?.user?.email) {
+    return session.user.email.charAt(0).toUpperCase();
+  }
+  return "U";
+}
+
 function UserDropdown() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -48,17 +63,31 @@ function UserDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!session?.user) return null;
+  // Loading state – show a spinner in the avatar
+  if (status === "loading") {
+    return (
+      <div className="w-9 h-9 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
+        <Loader2 size={16} className="animate-spin text-[var(--text-secondary)]" />
+      </div>
+    );
+  }
 
-  const initials = session.user.name
-    ? session.user.name.charAt(0).toUpperCase()
-    : session.user.email?.charAt(0).toUpperCase() || "U";
+  // Not authenticated – show a fallback (though user shouldn't reach this without auth)
+  if (!session?.user) {
+    return (
+      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium">
+        U
+      </div>
+    );
+  }
+
+  const initials = getUserInitials(session);
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow"
+        className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow text-xs"
       >
         {initials}
       </button>
