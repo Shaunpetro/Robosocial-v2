@@ -63,7 +63,6 @@ function UserDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Loading state – show a spinner in the avatar
   if (status === "loading") {
     return (
       <div className="w-9 h-9 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
@@ -72,7 +71,6 @@ function UserDropdown() {
     );
   }
 
-  // Not authenticated – show a fallback (though user shouldn't reach this without auth)
   if (!session?.user) {
     return (
       <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium">
@@ -87,13 +85,14 @@ function UserDropdown() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow text-xs"
+        type="button"
+        className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow text-xs cursor-pointer relative z-50"
       >
         {initials}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl z-[60] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
             <p className="text-sm font-medium text-[var(--text-primary)]">
               {session.user.name || "User"}
@@ -152,7 +151,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     ];
   }, [selectedCompanyId]);
 
-  // Keyboard shortcut for help
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
