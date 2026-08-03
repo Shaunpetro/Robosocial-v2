@@ -1,11 +1,21 @@
 // apps/web/src/app/(dashboard)/layout.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { HelpCircle, Building2, CalendarDays, Star, ImageIcon } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import {
+  HelpCircle,
+  Building2,
+  CalendarDays,
+  Star,
+  ImageIcon,
+  User,
+  LogOut,
+  Shield,
+} from "lucide-react";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { HelpModal } from "@/components/ui/HelpModal";
 import { CompanyProvider, useCompany } from "@/app/contexts/company-context";
@@ -23,6 +33,78 @@ export default function DashboardLayout({
   );
 }
 
+function UserDropdown() {
+  const { data: session } = useSession();
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (!session?.user) return null;
+
+  const initials = session.user.name
+    ? session.user.name.charAt(0).toUpperCase()
+    : session.user.email?.charAt(0).toUpperCase() || "U";
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow"
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              {session.user.name || "User"}
+            </p>
+            <p className="text-xs text-[var(--text-tertiary)]">{session.user.email}</p>
+          </div>
+          <div className="py-1">
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+            >
+              <User size={16} />
+              Profile
+            </Link>
+            <Link
+              href="/profile?tab=license"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+            >
+              <Shield size={16} />
+              License
+            </Link>
+            <button
+              onClick={() => {
+                setOpen(false);
+                signOut({ callbackUrl: "/login" });
+              }}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-[var(--bg-secondary)] transition-colors w-full text-left"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -37,7 +119,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
       { label: "Companies", href: "/companies", icon: Building2 },
       { label: "Calendar", href: "/calendar", icon: CalendarDays },
       { label: "Special Dates", href: specialDatesHref, icon: Star },
-      // FIXED: media is a global route, not per-company
       { label: "Media", href: "/media", icon: ImageIcon },
     ];
   }, [selectedCompanyId]);
@@ -132,10 +213,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             {/* Theme toggle */}
             <ThemeToggle />
 
-            {/* User avatar */}
-            <button className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-shadow">
-              U
-            </button>
+            {/* User Dropdown */}
+            <UserDropdown />
           </div>
         </div>
       </header>
