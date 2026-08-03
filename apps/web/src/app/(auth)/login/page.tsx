@@ -1,11 +1,11 @@
 // apps/web/src/app/(auth)/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useTheme } from "@/app/providers"; // our ThemeContext
+import { useTheme } from "@/app/providers";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,7 +15,25 @@ export default function LoginPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
-  // Cycle theme: light → dark → system
+  // Clear all NextAuth cookies on mount – prevents stale session from
+  // interfering with a fresh login
+  useEffect(() => {
+    const cookies = document.cookie.split(";");
+    for (const cookie of cookies) {
+      const eqPos = cookie.indexOf("=");
+      const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+      if (
+        name.startsWith("next-auth.") ||
+        name.startsWith("__Secure-next-auth.") ||
+        name.startsWith("__Host-next-auth.")
+      ) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        // Also clear for the current path and root
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
+      }
+    }
+  }, []);
+
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
