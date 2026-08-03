@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "@/app/providers";
@@ -15,23 +15,26 @@ export default function LoginPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
-  // Clear all NextAuth cookies on mount – prevents stale session from
-  // interfering with a fresh login
+  // Completely wipe any existing session before allowing a new login
   useEffect(() => {
-    const cookies = document.cookie.split(";");
-    for (const cookie of cookies) {
-      const eqPos = cookie.indexOf("=");
-      const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
-      if (
-        name.startsWith("next-auth.") ||
-        name.startsWith("__Secure-next-auth.") ||
-        name.startsWith("__Host-next-auth.")
-      ) {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-        // Also clear for the current path and root
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
+    const clearSession = async () => {
+      await signOut({ redirect: false }); // invalidate server session
+      // Then clear all related cookies as a safety net
+      const cookies = document.cookie.split(";");
+      for (const cookie of cookies) {
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+        if (
+          name.startsWith("next-auth.") ||
+          name.startsWith("__Secure-next-auth.") ||
+          name.startsWith("__Host-next-auth.")
+        ) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
+        }
       }
-    }
+    };
+    clearSession();
   }, []);
 
   const cycleTheme = () => {
@@ -61,7 +64,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      {/* Theme toggle button */}
       <button
         onClick={cycleTheme}
         className="absolute top-4 right-4 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-700 dark:text-gray-200 hover:shadow-lg transition"
