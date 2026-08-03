@@ -16,6 +16,7 @@ import {
   LogOut,
   Shield,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { HelpModal } from "@/components/ui/HelpModal";
@@ -45,7 +46,7 @@ function getUserInitials(session: any): string {
   if (session?.user?.email) {
     return session.user.email.charAt(0).toUpperCase();
   }
-  return "U";
+  return "?";
 }
 
 function UserDropdown() {
@@ -63,6 +64,7 @@ function UserDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Loading state
   if (status === "loading") {
     return (
       <div className="w-9 h-9 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
@@ -71,15 +73,8 @@ function UserDropdown() {
     );
   }
 
-  if (!session?.user) {
-    return (
-      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-medium">
-        U
-      </div>
-    );
-  }
-
   const initials = getUserInitials(session);
+  const hasUserData = !!(session?.user?.email || session?.user?.name);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -93,40 +88,66 @@ function UserDropdown() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl z-[60] overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
-            <p className="text-sm font-medium text-[var(--text-primary)]">
-              {session.user.name || "User"}
-            </p>
-            <p className="text-xs text-[var(--text-tertiary)]">{session.user.email}</p>
-          </div>
-          <div className="py-1">
-            <Link
-              href="/profile"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-            >
-              <User size={16} />
-              Profile
-            </Link>
-            <Link
-              href="/profile?tab=license"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-            >
-              <Shield size={16} />
-              License
-            </Link>
-            <button
-              onClick={() => {
-                setOpen(false);
-                signOut({ callbackUrl: "/login" });
-              }}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-[var(--bg-secondary)] transition-colors w-full text-left"
-            >
-              <LogOut size={16} />
-              Logout
-            </button>
-          </div>
+          {hasUserData ? (
+            <>
+              <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  {session?.user?.name || "User"}
+                </p>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {session?.user?.email}
+                </p>
+              </div>
+              <div className="py-1">
+                <Link
+                  href="/profile"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                >
+                  <User size={16} />
+                  Profile
+                </Link>
+                <Link
+                  href="/profile?tab=license"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                >
+                  <Shield size={16} />
+                  License
+                </Link>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    signOut({ callbackUrl: "/login" });
+                  }}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-[var(--bg-secondary)] transition-colors w-full text-left"
+                >
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mb-3">
+                <AlertCircle size={16} />
+                Session data unavailable
+              </div>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  signOut({ callbackUrl: "/login" });
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors w-full justify-center"
+              >
+                <LogOut size={16} />
+                Sign Out &amp; Re‑login
+              </button>
+              <p className="text-xs text-[var(--text-tertiary)] mt-2 text-center">
+                This should restore your profile data.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
