@@ -48,6 +48,58 @@ async function callGroq(
   }
 }
 
+/**
+ * Robust JSON extraction and parsing with cleanup of common LLM artifacts.
+ */
+function safeJsonParse<T = any>(text: string): T | null {
+  let cleaned = text.trim();
+
+  // Remove markdown code fences
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+
+  // Extract substring from first { or [ to last } or ]
+  const startObject = cleaned.indexOf('{');
+  const startArray = cleaned.indexOf('[');
+  let start = -1;
+  let end = -1;
+  let isObject = false;
+
+  if (startObject !== -1 && (startArray === -1 || startObject < startArray)) {
+    start = startObject;
+    end = cleaned.lastIndexOf('}');
+    isObject = true;
+  } else if (startArray !== -1) {
+    start = startArray;
+    end = cleaned.lastIndexOf(']');
+    isObject = false;
+  }
+
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  cleaned = cleaned.substring(start, end + 1);
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (error) {
+    console.warn('[safeJsonParse] Initial parse failed, attempting cleanup...');
+
+    // Remove trailing commas
+    let fixed = cleaned.replace(/,\s*([}\]])/g, '$1');
+
+    // Remove comments if any (not typical, but safe)
+    fixed = fixed.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    try {
+      return JSON.parse(fixed) as T;
+    } catch (secondError) {
+      console.error('[safeJsonParse] Cleanup parse also failed:', secondError);
+      return null;
+    }
+  }
+}
+
 // ============================================
 // TYPES
 // ============================================
@@ -111,35 +163,26 @@ export async function analyzeCompany(options: AnalysisOptions): Promise<Analysis
       4000
     );
 
-    let analysis: CompanyAnalysis;
+    // Robust parse using safeJsonParse
+    const analysis = safeJsonParse<CompanyAnalysis>(responseText);
 
-    try {
-      let jsonStr = responseText.trim();
-      if (jsonStr.startsWith('```json')) {
-        jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-
-      analysis = JSON.parse(jsonStr);
-
-      if (!analysis.industries || !Array.isArray(analysis.industries)) {
-        throw new Error('Missing or invalid industries array');
-      }
-      if (!analysis.services || !Array.isArray(analysis.services)) {
-        throw new Error('Missing or invalid services array');
-      }
-    } catch (parseError) {
-      console.error('[Analyzer] Failed to parse Groq response:', parseError);
-      console.error('[Analyzer] Raw response:', responseText.substring(0, 500));
-
+    if (!analysis) {
+      console.error('[Analyzer] Failed to parse Groq response. Raw:', responseText.substring(0, 1000));
       return {
         success: false,
         analysis: null,
         extraction,
-        error: `Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`,
+        error: 'Failed to parse AI response as JSON',
         processingTime: Date.now() - startTime,
       };
+    }
+
+    // Validate required fields
+    if (!analysis.industries || !Array.isArray(analysis.industries)) {
+      throw new Error('Missing or invalid industries array');
+    }
+    if (!analysis.services || !Array.isArray(analysis.services)) {
+      throw new Error('Missing or invalid services array');
     }
 
     analysis.dataQuality = calculateDataQuality(
@@ -180,7 +223,7 @@ export async function analyzeCompany(options: AnalysisOptions): Promise<Analysis
 }
 
 // ============================================
-// HELPER FUNCTIONS (unchanged)
+// HELPER FUNCTIONS
 // ============================================
 
 function calculateConfidenceScore(
@@ -242,15 +285,9 @@ export async function generateContentThemes(
       2000
     );
 
-    let jsonStr = responseText.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
+    const themes = safeJsonParse<Array<any>>(responseText);
 
-    const themes = JSON.parse(jsonStr);
-    return Array.isArray(themes) ? themes : [];
+    return Array.isArray(themes) ? themes : (analysis.suggestedContentThemes || []);
   } catch (error) {
     console.error('[Analyzer] Failed to generate content themes:', error);
     return analysis.suggestedContentThemes || [];
