@@ -263,14 +263,12 @@ export function calculateAdjustedWeights(
   primaryGoals: string[],
   learnedBestPillars?: Record<string, number> | null
 ): Record<ContentType, number> {
-  // Start with base weights
   const weights: Record<ContentType, number> = {} as Record<ContentType, number>;
 
   for (const [type, config] of Object.entries(CONTENT_TYPE_CONFIG)) {
     weights[type as ContentType] = config.weight;
   }
 
-  // Apply goal-based adjustments
   for (const goal of primaryGoals) {
     const normalizedGoal = goal.toLowerCase();
     const adjustment = GOAL_ADJUSTMENTS[normalizedGoal];
@@ -282,16 +280,13 @@ export function calculateAdjustedWeights(
     }
   }
 
-  // Apply learned best content type (give it a 10% boost)
   if (learnedBestPillars?.contentType) {
-    // Fix: cast through unknown to safely convert to ContentType
     const learnedType = learnedBestPillars.contentType as unknown as ContentType;
     if (weights[learnedType] !== undefined) {
       weights[learnedType] += 0.1;
     }
   }
 
-  // Normalize weights to sum to 1
   const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
   for (const type of Object.keys(weights)) {
     weights[type as ContentType] = weights[type as ContentType] / totalWeight;
@@ -313,20 +308,16 @@ export function selectContentTypeForDay(
   const dayPsych = DAY_PSYCHOLOGY[dayOfWeek.toLowerCase()];
 
   if (!dayPsych) {
-    // Fallback to educational
     return 'educational';
   }
 
-  // Get preferred types for this day
   const preferredTypes = [...dayPsych.primaryTypes, ...dayPsych.secondaryTypes];
 
-  // Calculate how many of each type we should have had by now
   const targetCounts: Record<ContentType, number> = {} as Record<ContentType, number>;
   for (const [type, weight] of Object.entries(adjustedWeights)) {
     targetCounts[type as ContentType] = Math.round(weight * totalPosts);
   }
 
-  // Find types that are under their target and preferred for this day
   const underrepresented = preferredTypes.filter(type => {
     const current = contentTypeCounts[type] || 0;
     const target = targetCounts[type] || 0;
@@ -334,7 +325,6 @@ export function selectContentTypeForDay(
   });
 
   if (underrepresented.length > 0) {
-    // Weighted random from underrepresented
     const typeWeights = underrepresented.map(type => ({
       type,
       weight: adjustedWeights[type] || 0.1,
@@ -353,7 +343,6 @@ export function selectContentTypeForDay(
     return underrepresented[0];
   }
 
-  // Fallback: pick from primary types for this day
   return dayPsych.primaryTypes[Math.floor(Math.random() * dayPsych.primaryTypes.length)];
 }
 
@@ -366,13 +355,11 @@ export function generateTopicSuggestion(
   industryThemes: Record<string, string[]> | null,
   companyIndustry: string | null
 ): string {
-  // If we have pillar topics, use those
   if (pillarTopics.length > 0) {
     const randomTopic = pillarTopics[Math.floor(Math.random() * pillarTopics.length)];
     return `${randomTopic} (${contentType})`;
   }
 
-  // If we have industry themes, use those
   if (industryThemes) {
     const themeKeys = Object.keys(industryThemes);
     if (themeKeys.length > 0) {
@@ -385,7 +372,6 @@ export function generateTopicSuggestion(
     }
   }
 
-  // Fallback generic topics by content type
   const genericTopics: Record<ContentType, string[]> = {
     educational: ['Industry best practices', 'Common mistakes to avoid', 'Expert insights'],
     tips: ['Quick wins', 'Pro tips', 'How to improve'],
@@ -405,11 +391,7 @@ export function generateTopicSuggestion(
 
 /**
  * Main function: Generate a week's content schedule with psychology-based content types
- *
- * FIXED: Now properly handles:
- * - preferredTimes as ["morning", "afternoon"] array format
- * - Timezone conversion (stores UTC but respects company timezone)
- * - Proper time slot to actual time mapping
+ * Now supports variable daysAhead for weekly, biweekly, or monthly periods.
  */
 export function generateWeeklyContentMix(
   postsPerWeek: number,
@@ -420,7 +402,8 @@ export function generateWeeklyContentMix(
   industryThemes: Record<string, string[]> | null,
   companyIndustry: string | null,
   learnedBestPillars?: Record<string, number> | null,
-  timezone: string = 'Africa/Johannesburg'
+  timezone: string = 'Africa/Johannesburg',
+  daysAhead: number = 7
 ): ContentMixResult {
   const slots: ScheduledSlot[] = [];
   const mixBreakdown: Record<ContentType, number> = {} as Record<ContentType, number>;
@@ -432,27 +415,20 @@ export function generateWeeklyContentMix(
   };
   const contentTypeCounts: Record<ContentType, number> = {} as Record<ContentType, number>;
 
-  // Calculate adjusted weights based on goals
   const adjustedWeights = calculateAdjustedWeights(primaryGoals, learnedBestPillars);
 
-  // FIXED: Use scheduling-utils to properly normalize preferredTimes
   const normalizedTimes = normalizePreferredTimes(preferredTimes, preferredDays);
 
-  console.log('[ContentStrategy] Normalized times:', JSON.stringify(normalizedTimes));
-  console.log('[ContentStrategy] Timezone:', timezone);
-
-  // Get upcoming 7 days
   const today = new Date();
   const upcomingDays: Date[] = [];
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= daysAhead; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     date.setHours(0, 0, 0, 0);
     upcomingDays.push(date);
   }
 
-  // Filter to preferred days
   const dayNames = DAY_ORDER;
   const normalizedPreferredDays = preferredDays.map(d => d.toLowerCase());
 
@@ -461,7 +437,6 @@ export function generateWeeklyContentMix(
     return normalizedPreferredDays.length === 0 || normalizedPreferredDays.includes(dayName);
   });
 
-  // Fallback to weekdays if no valid days
   if (validDays.length === 0) {
     validDays = upcomingDays.filter(date => {
       const day = date.getDay();
@@ -469,7 +444,6 @@ export function generateWeeklyContentMix(
     });
   }
 
-  // Distribute posts across days
   const usedTypes: ContentType[] = [];
   let dayIndex = 0;
   const timeIndexByDay: Record<string, number> = {};
@@ -478,13 +452,11 @@ export function generateWeeklyContentMix(
     const date = validDays[dayIndex % validDays.length];
     const dayName = dayNames[date.getDay()];
 
-    // FIXED: Get times for this day from normalized times
     const timesForDay = normalizedTimes[dayName] || DEFAULT_POSTING_TIMES;
     const timeIndex = timeIndexByDay[dayName] || 0;
     const time = timesForDay[timeIndex % timesForDay.length];
     timeIndexByDay[dayName] = timeIndex + 1;
 
-    // Select content type based on day psychology and balance
     let contentType = selectContentTypeForDay(
       dayName,
       usedTypes,
@@ -493,7 +465,6 @@ export function generateWeeklyContentMix(
       postsPerWeek
     );
 
-    // 🔄 Avoid consecutive same-type when possible
     if (usedTypes.length > 0 && usedTypes[usedTypes.length - 1] === contentType) {
       const dayPsych = DAY_PSYCHOLOGY[dayName.toLowerCase()];
       const preferredList = [...(dayPsych?.primaryTypes || []), ...(dayPsych?.secondaryTypes || [])];
@@ -506,11 +477,9 @@ export function generateWeeklyContentMix(
     usedTypes.push(contentType);
     contentTypeCounts[contentType] = (contentTypeCounts[contentType] || 0) + 1;
 
-    // Get config for this content type
     const typeConfig = CONTENT_TYPE_CONFIG[contentType];
     const dayPsych = DAY_PSYCHOLOGY[dayName];
 
-    // Generate topic suggestion
     const topicSuggestion = generateTopicSuggestion(
       contentType,
       pillarTopics,
@@ -518,10 +487,7 @@ export function generateWeeklyContentMix(
       companyIndustry
     );
 
-    // FIXED: Use createScheduledDate for proper timezone handling
     const scheduledDate = createScheduledDate(date, time, timezone);
-
-    console.log(`[ContentStrategy] Slot ${postNum + 1}: ${dayName} ${time} ${timezone} → UTC: ${scheduledDate.toISOString()}`);
 
     slots.push({
       date: scheduledDate,
@@ -533,14 +499,12 @@ export function generateWeeklyContentMix(
       topicSuggestion,
     });
 
-    // Update breakdowns
     mixBreakdown[contentType] = (mixBreakdown[contentType] || 0) + 1;
     funnelBreakdown[typeConfig.funnelStage]++;
 
     dayIndex++;
   }
 
-  // 🔀 Shuffle slots to avoid chronological monotony
   for (let i = slots.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [slots[i], slots[j]] = [slots[j], slots[i]];

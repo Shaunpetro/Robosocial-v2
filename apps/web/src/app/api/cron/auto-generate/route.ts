@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { generateSocialContent } from '@/lib/ai/openai';
-import { PostStatus, QueueStatus, PlatformType } from '@prisma/client';
+import { PostStatus, QueueStatus, PlatformType, PostingPeriod } from '@prisma/client';
 import {
   generateWeeklyContentMix,
   getContentTypePromptEnhancement,
@@ -15,17 +15,12 @@ import { runWeeklySelfOptimization } from '@/lib/ai/self-optimizer';
 
 /**
  * Enhanced Auto-Generate Cron Job
- * Runs weekly (Sunday 8 PM SAST) to generate content for the upcoming week
+ * Runs according to each company's postingPeriod:
+ * - WEEKLY: every Sunday, postsPerWeek over 7 days
+ * - BIWEEKLY: every other Sunday, postsPerWeek * 2 over 14 days
+ * - MONTHLY: first Sunday of month, postsPerWeek * 4 over 28 days
  *
- * Features:
- * - Psychology-based content mix (40-30-20-10 rule)
- * - Day-of-week optimization (right content for right day)
- * - Funnel-stage awareness (awareness -> interest -> consideration -> conversion)
- * - Industry benchmark integration
- * - Goal-based content adjustment
- * - Self-learning from performance data
- * - Optional single-company targeting via ?companyId= parameter
- * - FIXED: Proper timezone handling and preferredTimes slot mapping
+ * Optional single-company targeting via ?companyId= parameter.
  */
 
 interface GenerationResult {
@@ -39,24 +34,65 @@ interface GenerationResult {
   errors: string[];
 }
 
+/**
+ * Returns true if today is the correct generation day for this period.
+ */
+function isGenerationDay(period: PostingPeriod, date: Date): boolean {
+  const day = date.getDay(); // 0 = Sunday
+
+  switch (period) {
+    case 'WEEKLY':
+      return day === 0;
+    case 'BIWEEKLY':
+      return day === 0 && Math.floor(date.getDate() / 7) % 2 === 0; // every other Sunday
+    case 'MONTHLY':
+      return day === 0 && date.getDate() <= 7; // first Sunday
+    default:
+      return false;
+  }
+}
+
+function getPeriodDays(period: PostingPeriod): number {
+  switch (period) {
+    case 'WEEKLY':
+      return 7;
+    case 'BIWEEKLY':
+      return 14;
+    case 'MONTHLY':
+      return 28;
+    default:
+      return 7;
+  }
+}
+
+function getPostCountForPeriod(postsPerWeek: number, period: PostingPeriod): number {
+  switch (period) {
+    case 'WEEKLY':
+      return postsPerWeek;
+    case 'BIWEEKLY':
+      return postsPerWeek * 2;
+    case 'MONTHLY':
+      return postsPerWeek * 4;
+    default:
+      return postsPerWeek;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   const results: GenerationResult[] = [];
 
-  // Check for optional companyId parameter (for single-company generation from UI)
   const { searchParams } = new URL(request.url);
   const targetCompanyId = searchParams.get('companyId');
 
   console.log('[AutoGenerate] ========================================');
-  console.log('[AutoGenerate] Starting enhanced weekly content generation...');
+  console.log('[AutoGenerate] Starting period-aware content generation...');
   console.log('[AutoGenerate] Time:', new Date().toISOString());
   if (targetCompanyId) {
     console.log('[AutoGenerate] Targeting specific company:', targetCompanyId);
   }
 
   try {
-    // Find all companies with completed onboarding
-    // If companyId provided, only process that specific company
     const companies = await prisma.company.findMany({
       where: {
         ...(targetCompanyId ? { id: targetCompanyId } : {}),
@@ -115,13 +151,24 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        console.log(`[AutoGenerate] Processing ${company.name}: ${intel.postsPerWeek} posts/week`);
+        const period = intel.postingPeriod || 'WEEKLY';
+        const today = new Date();
+
+        if (!isGenerationDay(period, today)) {
+          console.log(`[AutoGenerate] Skipping ${company.name} – not a generation day for ${period}`);
+          results.push(result);
+          continue;
+        }
+
+        const postsToGenerate = getPostCountForPeriod(intel.postsPerWeek, period);
+        const daysAhead = getPeriodDays(period);
+
+        console.log(`[AutoGenerate] Processing ${company.name}: ${postsToGenerate} posts over ${daysAhead} days (${period})`);
         console.log(`[AutoGenerate] Goals: ${intel.primaryGoals.join(', ') || 'none set'}`);
         console.log(`[AutoGenerate] Preferred days: ${intel.preferredDays.join(', ') || 'not set'}`);
         console.log(`[AutoGenerate] Preferred times: ${JSON.stringify(intel.preferredTimes)}`);
         console.log(`[AutoGenerate] Timezone: ${intel.timezone}`);
 
-        // Fetch industry benchmark for additional themes
         let industryThemes: Record<string, string[]> | null = null;
         let industryHashtags: string[] = [];
 
@@ -142,7 +189,6 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Collect all topics from content pillars
         const pillarTopics: string[] = [];
         const pillarMap: Record<string, { id: string; name: string; topics: string[]; contentTypes: string[] }> = {};
 
@@ -156,11 +202,8 @@ export async function GET(request: NextRequest) {
           };
         }
 
-        // FIXED: Generate psychology-based content mix for the week
-        // Now passing preferredTimes as string[] | Record<string, string[]> | null
-        // And including timezone for proper UTC conversion
         const contentMix = generateWeeklyContentMix(
-          intel.postsPerWeek,
+          postsToGenerate,
           intel.preferredDays,
           intel.preferredTimes as string[] | Record<string, string[]> | null,
           intel.primaryGoals,
@@ -168,30 +211,26 @@ export async function GET(request: NextRequest) {
           industryThemes,
           company.industry,
           intel.learnedBestPillars as Record<string, number> | null,
-          intel.timezone // FIXED: Pass timezone for proper scheduling
+          intel.timezone,
+          daysAhead
         );
 
         console.log(`[AutoGenerate] Generated ${contentMix.slots.length} content slots`);
         console.log(`[AutoGenerate] Content mix:`, contentMix.mixBreakdown);
         console.log(`[AutoGenerate] Funnel mix:`, contentMix.funnelBreakdown);
 
-        // Log each slot's scheduled time for debugging
         for (const slot of contentMix.slots) {
           console.log(`[AutoGenerate] Slot: ${slot.dayOfWeek} ${slot.time} → ${slot.date.toISOString()}`);
         }
 
-        // Store mix breakdown in result
         result.contentMix = contentMix.mixBreakdown as Record<string, number>;
         result.funnelMix = contentMix.funnelBreakdown as Record<string, number>;
 
-        // Generate content for each slot
         for (const slot of contentMix.slots) {
           try {
-            // Select platform (rotate through connected platforms)
             const platformIndex = result.postsGenerated % company.platforms.length;
             const platform = company.platforms[platformIndex];
 
-            // Map platform type
             const platformTypeMap: Record<PlatformType, 'linkedin' | 'facebook' | 'twitter' | 'instagram' | 'wordpress'> = {
               LINKEDIN: 'linkedin',
               FACEBOOK: 'facebook',
@@ -201,7 +240,6 @@ export async function GET(request: NextRequest) {
             };
             const platformType = platformTypeMap[platform.type];
 
-            // Determine tone based on day and company settings
             const tone = determineTone(
               slot.dayOfWeek,
               slot.contentType,
@@ -211,7 +249,6 @@ export async function GET(request: NextRequest) {
               intel.humorDays
             );
 
-            // Get content type prompt enhancement
             const contentTypeContext = getContentTypePromptEnhancement(
               slot.contentType,
               slot.dayOfWeek,
@@ -219,12 +256,8 @@ export async function GET(request: NextRequest) {
               intel.primaryGoals
             );
 
-            // Find matching pillar for this content
             const matchingPillar = findMatchingPillar(slot.contentType, pillarMap);
 
-            console.log(`[AutoGenerate] Generating: ${slot.contentType} for ${slot.dayOfWeek} ${slot.time} on ${platform.type}`);
-
-            // Generate content with enhanced context
             const generated = await generateSocialContent({
               companyId: company.id,
               companyName: company.name,
@@ -237,13 +270,11 @@ export async function GET(request: NextRequest) {
               includeHashtags: true,
               includeEmojis: platformType === 'instagram' || platformType === 'facebook',
               useAnalytics: true,
-              // Enhanced context passed to AI
               contentTypeContext,
             });
 
             result.postsGenerated++;
 
-            // Merge industry hashtags with generated ones
             const finalHashtags = mergeHashtags(
               generated.hashtags,
               industryHashtags,
@@ -252,7 +283,6 @@ export async function GET(request: NextRequest) {
             );
 
             if (intel.autoApprove) {
-              // Create GeneratedPost directly with SCHEDULED status
               await prisma.generatedPost.create({
                 data: {
                   companyId: company.id,
@@ -263,7 +293,7 @@ export async function GET(request: NextRequest) {
                   tone,
                   pillar: matchingPillar?.name || null,
                   contentType: slot.contentType,
-                  scheduledFor: slot.date, // Already in UTC with correct time
+                  scheduledFor: slot.date,
                   status: PostStatus.SCHEDULED,
                   generatedBy: 'groq-llama-3.3-auto-v2',
                   hook: extractHook(generated.content),
@@ -273,7 +303,6 @@ export async function GET(request: NextRequest) {
               result.postsScheduled++;
               console.log(`[AutoGenerate] Scheduled: ${slot.contentType} for ${slot.date.toISOString()}`);
             } else {
-              // Create ContentQueueItem for review
               await prisma.contentQueueItem.create({
                 data: {
                   companyId: company.id,
@@ -305,14 +334,12 @@ export async function GET(request: NextRequest) {
               console.log(`[AutoGenerate] Queued: ${slot.contentType} for review (${slot.date.toISOString()})`);
             }
 
-            // Update pillar post count if matched
             if (matchingPillar) {
               await prisma.contentPillar.update({
                 where: { id: matchingPillar.id },
                 data: { totalPosts: { increment: 1 } },
               });
             }
-
           } catch (slotError) {
             const errorMsg = slotError instanceof Error ? slotError.message : 'Unknown error';
             result.errors.push(`${slot.contentType} generation failed: ${errorMsg}`);
@@ -320,14 +347,12 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Weekly self-optimization after all slots are processed
         try {
           await runWeeklySelfOptimization(company.id);
           console.log(`[AutoGenerate] Self-optimization completed for ${company.name}`);
         } catch (e) {
           console.error(`[AutoGenerate] Self-optimization failed for ${company.name}:`, e);
         }
-
       } catch (companyError) {
         const errorMsg = companyError instanceof Error ? companyError.message : 'Unknown error';
         result.errors.push(`Company processing failed: ${errorMsg}`);
@@ -339,7 +364,6 @@ export async function GET(request: NextRequest) {
 
     const duration = Date.now() - startTime;
 
-    // Calculate totals
     const totals = results.reduce(
       (acc, r) => ({
         generated: acc.generated + r.postsGenerated,
@@ -350,7 +374,6 @@ export async function GET(request: NextRequest) {
       { generated: 0, queued: 0, scheduled: 0, errors: 0 }
     );
 
-    // Aggregate content mix across all companies
     const aggregateContentMix: Record<string, number> = {};
     const aggregateFunnelMix: Record<string, number> = {};
 
@@ -363,13 +386,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('[AutoGenerate] ========================================');
-    console.log(`[AutoGenerate] Completed in ${duration}ms`);
-    console.log(`[AutoGenerate] Generated: ${totals.generated}, Queued: ${totals.queued}, Scheduled: ${totals.scheduled}`);
-    console.log(`[AutoGenerate] Content Mix:`, aggregateContentMix);
-    console.log(`[AutoGenerate] Funnel Mix:`, aggregateFunnelMix);
-    console.log('[AutoGenerate] ========================================');
-
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
@@ -381,11 +397,9 @@ export async function GET(request: NextRequest) {
       },
       companies: results,
     });
-
   } catch (error) {
     const duration = Date.now() - startTime;
     console.error('[AutoGenerate] Fatal error:', error);
-
     return NextResponse.json(
       {
         success: false,
@@ -398,10 +412,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Support POST as well (for manual triggers from UI)
 export async function POST(request: NextRequest) {
   return GET(request);
 }
+
+// helper functions (determineTone, findMatchingPillar, mergeHashtags, extractHook, predictEngagement) remain unchanged
 
 // ============================================
 // HELPER FUNCTIONS

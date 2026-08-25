@@ -21,7 +21,7 @@ model User {
   role      UserRole   @default(USER)
   licenseId String?
   license   License?   @relation(fields: [licenseId], references: [id], onDelete: SetNull)
-  fromEmail String?    // per‑user branded sender
+  fromEmail String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -36,7 +36,7 @@ enum UserRole {
 }
 
 // ============================================
-// LICENSING (Phase 2 – Safer License Key System)
+// LICENSING
 // ============================================
 
 model License {
@@ -46,8 +46,8 @@ model License {
   maxSocialAccounts  Int           @default(5)
   status             LicenseStatus @default(ACTIVE)
   expiresAt          DateTime
-  fromEmail          String?       // default branded sender for this license
-  keyPreview         String?       // last 8 characters of the license key, for admin reference only
+  fromEmail          String?
+  keyPreview         String?
 
   users User[]
 
@@ -75,13 +75,13 @@ model Company {
   ownerId     String?
   owner       User?    @relation(fields: [ownerId], references: [id])
 
-  platforms         Platform[]
-  contentSettings   ContentSettings?
-  generatedPosts    GeneratedPost[]
-  media             Media[]
-  intelligence      CompanyIntelligence?
-  contentQueueItems ContentQueueItem[]
-  documents         CompanyDocument[]
+  platforms          Platform[]
+  contentSettings    ContentSettings?
+  generatedPosts     GeneratedPost[]
+  media              Media[]
+  intelligence       CompanyIntelligence?
+  contentQueueItems  ContentQueueItem[]
+  documents          CompanyDocument[]
   specialDatesConfig CompanySpecialDatesConfig?
 
   createdAt DateTime @default(now())
@@ -189,10 +189,10 @@ model Media {
   usageCount Int       @default(0)
   lastUsedAt DateTime?
 
-  company                    Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  postMedia                  PostMedia[]
-  specialDatesConfigLogo     CompanySpecialDatesConfig?   @relation(name: "LogoMedia")
-  specialDatesConfigGenerated CompanySpecialDatesConfig?   @relation(name: "GeneratedMedia")
+  company                       Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  postMedia                     PostMedia[]
+  specialDatesConfigLogo        CompanySpecialDatesConfig?    @relation(name: "LogoMedia")
+  specialDatesConfigGenerated   CompanySpecialDatesConfig?    @relation(name: "GeneratedMedia")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -361,7 +361,8 @@ model CompanyIntelligence {
   humorTimes      String[]
   dayToneSchedule Json?
 
-  postsPerWeek   Int      @default(4)
+  postsPerWeek   Int           @default(4)
+  postingPeriod  PostingPeriod @default(WEEKLY)
   preferredDays  String[]
   preferredTimes Json?
   timezone       String   @default("Africa/Johannesburg")
@@ -433,6 +434,12 @@ model CompanyIntelligence {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum PostingPeriod {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
 }
 
 model ContentPillar {
