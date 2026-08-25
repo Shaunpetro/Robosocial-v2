@@ -2,6 +2,7 @@
 // Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
 // Now with competitor-aware generation, anti-repetition measures, and media attachment
+// Updated with model fallback (GROQ_MODEL env var, fallback to llama-3.1-70b-versatile)
 
 import Groq from "groq-sdk";
 import {
@@ -16,6 +17,40 @@ import { attachMediaToPost } from "./media-selector";   // NEW
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
 });
+
+// Model configuration with fallback
+const PRIMARY_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const FALLBACK_MODEL = "llama-3.1-70b-versatile";
+
+/**
+ * Wrapper for Groq chat completion that automatically falls back
+ * to a known working model if the primary model is unavailable.
+ */
+async function callGroq(
+  messages: Array<{ role: "system" | "user"; content: string }>,
+  temperature: number,
+  maxTokens: number
+): Promise<string> {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages,
+      model: PRIMARY_MODEL,
+      temperature,
+      max_tokens: maxTokens,
+    });
+    return completion.choices[0]?.message?.content?.trim() || "";
+  } catch (error) {
+    // If primary model not found, try fallback
+    console.warn(`Groq primary model failed, falling back to ${FALLBACK_MODEL}:`, error);
+    const fallbackCompletion = await groq.chat.completions.create({
+      messages,
+      model: FALLBACK_MODEL,
+      temperature,
+      max_tokens: maxTokens,
+    });
+    return fallbackCompletion.choices[0]?.message?.content?.trim() || "";
+  }
+}
 
 // Platform-specific configurations (unchanged)
 const platformConfigs = {
@@ -127,7 +162,7 @@ export async function generateSocialContent(
     contentTypeContext,
     previousHooks,
     isBulkGeneration = false,
-    includeMedia = false,    // NEW – default false to keep existing behaviour
+    includeMedia = false,
   } = params;
 
   const config = platformConfigs[platform];
@@ -158,17 +193,14 @@ export async function generateSocialContent(
         minImpressions: 10,
       });
 
-      // Format insights, now optionally including competitor info
       insightsPrompt = formatInsightsForPrompt(insights, competitorInsights || undefined);
     } catch (error) {
       console.warn("Failed to fetch performance insights:", error);
     }
   } else if (competitorInsights) {
-    // If analytics are disabled but we have competitor data, still inject it
     insightsPrompt = competitorInsights;
   }
 
-  // Build the enhanced prompt
   const prompt = buildEnhancedPrompt({
     companyName,
     companyDescription,
@@ -186,45 +218,37 @@ export async function generateSocialContent(
     previousHooks,
   });
 
-  // Boost diversity for bulk generation
   const temperature = isBulkGeneration ? 0.9 : (tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75);
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
+    const content = await callGroq(
+      [
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
-      model: "llama-3.3-70b-versatile",
       temperature,
-      max_tokens: tone === "ultra-short" ? 150 : 1024,
-    });
+      tone === "ultra-short" ? 150 : 1024
+    );
 
-    let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
+    let cleaned = cleanGeneratedContent(content);
 
-    // Clean up any unwanted prefixes the AI might add
-    content = cleanGeneratedContent(content);
-
-    // Ultra-short enforcement (safety net)
     if (tone === "ultra-short") {
-      content = enforceUltraShort(content);
+      cleaned = enforceUltraShort(cleaned);
     }
 
-    // Extract hashtags from content
     const hashtagRegex = /#\w+/g;
-    const hashtags = content.match(hashtagRegex) || [];
+    const hashtags = cleaned.match(hashtagRegex) || [];
 
-    // ---- NEW: Media attachment ----
     let selectedMedia = null;
     if (includeMedia && companyId) {
       try {
         selectedMedia = await attachMediaToPost(
           companyId,
-          contentTypeContext, // could be used as contentType hint (optional)
+          contentTypeContext,
           topic,
-          undefined,          // tags (optional)
-          undefined,          // pillarId (optional)
-          false               // forceInclude
+          undefined,
+          undefined,
+          false
         );
       } catch (mediaError) {
         console.warn("Media selection failed, continuing without media:", mediaError);
@@ -232,13 +256,13 @@ export async function generateSocialContent(
     }
 
     return {
-      content,
+      content: cleaned,
       hashtags: hashtags.map((tag) => tag.replace("#", "")),
-      characterCount: content.length,
+      characterCount: cleaned.length,
       platform,
       analyticsUsed: insights?.hasData ?? false,
       insights: insights ?? undefined,
-      selectedMedia,                // NEW – may be null
+      selectedMedia,
     };
   } catch (error) {
     console.error("Groq API Error:", error);
@@ -284,7 +308,6 @@ function buildEnhancedPrompt(params: {
     previousHooks,
   } = params;
 
-  // Dynamic length cap for ultra-short tone (overrides platform default)
   const effectiveMaxLength = tone === "ultra-short" ? 280 : config.maxLength;
 
   let prompt = `Generate a ${platform.toUpperCase()} post for:
@@ -306,28 +329,24 @@ ${includeEmojis ? "- Include relevant emojis to enhance engagement" : "- Minimal
 ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not include hashtags"}
 `;
 
-  // Add content type context if provided (from auto-generate)
   if (contentTypeContext) {
     prompt += `
 ${contentTypeContext}
 `;
   }
 
-  // Competitor landscape (shown before analytics for context)
   if (competitorInsights) {
     prompt += `
 ${competitorInsights}
 `;
   }
 
-  // Add performance insights if available
   if (insightsPrompt) {
     prompt += `
 ${insightsPrompt}
 `;
   }
 
-  // Anti-repetition: list previously generated hooks
   if (previousHooks && previousHooks.length > 0) {
     prompt += `\n**AVOID REPETITION:** You have already written posts with these hooks:\n`;
     previousHooks.forEach((hook, idx) => {
@@ -336,7 +355,6 @@ ${insightsPrompt}
     prompt += `Make sure this post is completely different in topic, tone, and opening hook. Do not reuse any of those hooks.\n`;
   }
 
-  // 🎯 INJECT SA SOCIAL FLAVOUR DIRECTLY INTO THE USER PROMPT
   if (tone === "ultra-short" || tone === "local") {
     prompt += `
 **ULTRA-SHORT & LOCAL MODE (MAGESI FC STYLE):**
@@ -481,26 +499,24 @@ ${insights?.hasData ? "6. Apply insights from high-performing posts to maximize 
 Generate the improved post now:`;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
+    const content = await callGroq(
+      [
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 1024,
-    });
+      0.7,
+      1024
+    );
 
-    let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
-    content = cleanGeneratedContent(content);
+    let cleaned = cleanGeneratedContent(content);
 
     const hashtagRegex = /#\w+/g;
-    const hashtags = content.match(hashtagRegex) || [];
+    const hashtags = cleaned.match(hashtagRegex) || [];
 
     return {
-      content,
+      content: cleaned,
       hashtags: hashtags.map((tag) => tag.replace("#", "")),
-      characterCount: content.length,
+      characterCount: cleaned.length,
       platform,
       analyticsUsed: insights?.hasData ?? false,
       insights: insights ?? undefined,
@@ -570,7 +586,6 @@ Create a post that acknowledges this day in a way that is authentic to ${company
 ${contentTypeContext || ''}
 `;
 
-  // Reuse the existing generation pipeline with the special prompt as topic
   const result = await generateSocialContent({
     companyId,
     companyName,
