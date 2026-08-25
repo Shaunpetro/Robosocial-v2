@@ -20,8 +20,8 @@ const groq = new Groq({
 });
 
 // Model fallback wrapper
-const PRIMARY_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-const FALLBACK_MODEL = 'llama-3.1-70b-versatile';
+const PRIMARY_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+const FALLBACK_MODEL = 'qwen/qwen3.6-27b';
 
 async function callGroq(
   messages: Array<{ role: 'system' | 'user'; content: string }>,

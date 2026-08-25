@@ -113,7 +113,7 @@ Generate exactly ${numberOfVariations} variations. Return ONLY the JSON array, n
   try {
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       temperature: 0.8, // Higher for more creativity
       max_tokens: 4096,
     });

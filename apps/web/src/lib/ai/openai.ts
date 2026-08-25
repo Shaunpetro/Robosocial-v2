@@ -2,7 +2,7 @@
 // Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
 // Now with competitor-aware generation, anti-repetition measures, and media attachment
-// Updated with model fallback (GROQ_MODEL env var, fallback to llama-3.1-70b-versatile)
+// Updated with model fallback (GROQ_MODEL env var, fallback to qwen/qwen3.6-27b)
 
 import Groq from "groq-sdk";
 import {
@@ -19,8 +19,8 @@ const groq = new Groq({
 });
 
 // Model configuration with fallback
-const PRIMARY_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-const FALLBACK_MODEL = "llama-3.1-70b-versatile";
+const PRIMARY_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const FALLBACK_MODEL = "qwen/qwen3.6-27b";
 
 /**
  * Wrapper for Groq chat completion that automatically falls back
