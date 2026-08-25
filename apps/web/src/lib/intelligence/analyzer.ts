@@ -26,24 +26,35 @@ const FALLBACK_MODEL = 'qwen/qwen3.6-27b';
 async function callGroq(
   messages: Array<{ role: 'system' | 'user'; content: string }>,
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  useJsonMode: boolean = false
 ): Promise<string> {
+  const requestOptions: any = {
+    messages,
+    model: PRIMARY_MODEL,
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  if (useJsonMode) {
+    requestOptions.response_format = { type: 'json_object' };
+  }
+
   try {
-    const completion = await groq.chat.completions.create({
-      messages,
-      model: PRIMARY_MODEL,
-      temperature,
-      max_tokens: maxTokens,
-    });
+    const completion = await groq.chat.completions.create(requestOptions);
     return completion.choices[0]?.message?.content || '';
   } catch (error) {
     console.warn(`Groq primary model failed, falling back to ${FALLBACK_MODEL}:`, error);
-    const fallback = await groq.chat.completions.create({
+    const fallbackOptions: any = {
       messages,
       model: FALLBACK_MODEL,
       temperature,
       max_tokens: maxTokens,
-    });
+    };
+    if (useJsonMode) {
+      fallbackOptions.response_format = { type: 'json_object' };
+    }
+    const fallback = await groq.chat.completions.create(fallbackOptions);
     return fallback.choices[0]?.message?.content || '';
   }
 }
@@ -62,16 +73,13 @@ function safeJsonParse<T = any>(text: string): T | null {
   const startArray = cleaned.indexOf('[');
   let start = -1;
   let end = -1;
-  let isObject = false;
 
   if (startObject !== -1 && (startArray === -1 || startObject < startArray)) {
     start = startObject;
     end = cleaned.lastIndexOf('}');
-    isObject = true;
   } else if (startArray !== -1) {
     start = startArray;
     end = cleaned.lastIndexOf(']');
-    isObject = false;
   }
 
   if (start === -1 || end === -1 || end <= start) {
@@ -88,7 +96,7 @@ function safeJsonParse<T = any>(text: string): T | null {
     // Remove trailing commas
     let fixed = cleaned.replace(/,\s*([}\]])/g, '$1');
 
-    // Remove comments if any (not typical, but safe)
+    // Remove comments if any
     fixed = fixed.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
     try {
@@ -148,6 +156,7 @@ export async function analyzeCompany(options: AnalysisOptions): Promise<Analysis
 
     console.log(`[Analyzer] Sending to Groq for analysis...`);
 
+    // Use JSON mode for reliable structured output
     const responseText = await callGroq(
       [
         {
@@ -160,7 +169,8 @@ export async function analyzeCompany(options: AnalysisOptions): Promise<Analysis
         }
       ],
       0.3,
-      4000
+      4000,
+      true   // <-- enable JSON mode
     );
 
     // Robust parse using safeJsonParse
@@ -282,7 +292,8 @@ export async function generateContentThemes(
         }
       ],
       0.5,
-      2000
+      2000,
+      true   // <-- enable JSON mode
     );
 
     const themes = safeJsonParse<Array<any>>(responseText);
