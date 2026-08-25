@@ -10,6 +10,38 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
 });
 
+// Model fallback wrapper
+const PRIMARY_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const FALLBACK_MODEL = "llama-3.1-70b-versatile";
+
+async function callGroq(
+  messages: Array<{ role: "system" | "user"; content: string }>,
+  temperature: number,
+  maxTokens: number,
+  responseFormat?: { type: "json_object" }
+): Promise<string> {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages,
+      model: PRIMARY_MODEL,
+      temperature,
+      max_tokens: maxTokens,
+      ...(responseFormat ? { response_format: responseFormat } : {}),
+    });
+    return completion.choices[0]?.message?.content || "";
+  } catch (error) {
+    console.warn(`Groq primary model failed, falling back to ${FALLBACK_MODEL}:`, error);
+    const fallback = await groq.chat.completions.create({
+      messages,
+      model: FALLBACK_MODEL,
+      temperature,
+      max_tokens: maxTokens,
+      ...(responseFormat ? { response_format: responseFormat } : {}),
+    });
+    return fallback.choices[0]?.message?.content || "";
+  }
+}
+
 export interface AnalyticsData {
   summary: {
     totalPosts: number;
@@ -72,18 +104,14 @@ export interface GeneratedInsights {
   generatedAt: string;
 }
 
-/**
- * Generate AI-powered insights from analytics data
- */
 export async function generateAnalyticsInsights(
   data: AnalyticsData
 ): Promise<GeneratedInsights> {
   const prompt = buildInsightsPrompt(data);
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
+    const responseText = await callGroq(
+      [
         {
           role: "system",
           content: `You are an expert social media analytics consultant. Analyze the provided performance data and generate actionable insights. Be specific, data-driven, and provide clear recommendations. Format your response as JSON.`,
@@ -93,12 +121,11 @@ export async function generateAnalyticsInsights(
           content: prompt,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 2000,
-      response_format: { type: "json_object" },
-    });
+      0.7,
+      2000,
+      { type: "json_object" }
+    );
 
-    const responseText = completion.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(responseText);
 
     return {
@@ -112,21 +139,18 @@ export async function generateAnalyticsInsights(
     };
   } catch (error) {
     console.error("[AI Insights] Error generating insights:", error);
-    
-    // Return fallback insights based on raw data
     return generateFallbackInsights(data);
   }
 }
 
-/**
- * Build the prompt for AI analysis
- */
+// The rest (buildInsightsPrompt, generateFallbackInsights) remain unchanged.
+// To keep this a full replacement, include them below.
+
 function buildInsightsPrompt(data: AnalyticsData): string {
   const { summary, byPlatform, topPosts, timing, trends, companyName, dateRange } = data;
 
   let prompt = `Analyze the following social media performance data${companyName ? ` for ${companyName}` : ""}${dateRange ? ` (${dateRange})` : ""} and provide insights.\n\n`;
 
-  // Overall metrics
   prompt += `## OVERALL PERFORMANCE\n`;
   prompt += `- Total Posts: ${summary.totalPosts}\n`;
   prompt += `- Total Impressions: ${summary.totals.impressions.toLocaleString()}\n`;
@@ -134,7 +158,6 @@ function buildInsightsPrompt(data: AnalyticsData): string {
   prompt += `- Engagement Rate: ${summary.engagementRate.toFixed(2)}%\n`;
   prompt += `- Average per Post: ${summary.averages.engagementPerPost.toFixed(1)} engagements, ${summary.averages.impressionsPerPost.toFixed(0)} impressions\n\n`;
 
-  // Platform breakdown
   if (Object.keys(byPlatform).length > 0) {
     prompt += `## PLATFORM BREAKDOWN\n`;
     for (const [platform, metrics] of Object.entries(byPlatform)) {
@@ -146,7 +169,6 @@ function buildInsightsPrompt(data: AnalyticsData): string {
     }
   }
 
-  // Top performing posts
   if (topPosts && topPosts.length > 0) {
     prompt += `## TOP PERFORMING POSTS\n`;
     topPosts.slice(0, 3).forEach((post, idx) => {
@@ -161,7 +183,6 @@ function buildInsightsPrompt(data: AnalyticsData): string {
     });
   }
 
-  // Timing insights
   if (timing) {
     prompt += `## TIMING DATA\n`;
     if (timing.bestDay) {
@@ -174,7 +195,6 @@ function buildInsightsPrompt(data: AnalyticsData): string {
     prompt += `\n`;
   }
 
-  // Trends
   if (trends && trends.length > 1) {
     const firstPeriod = trends[0];
     const lastPeriod = trends[trends.length - 1];
@@ -197,9 +217,6 @@ function buildInsightsPrompt(data: AnalyticsData): string {
   return prompt;
 }
 
-/**
- * Generate fallback insights when AI fails
- */
 function generateFallbackInsights(data: AnalyticsData): GeneratedInsights {
   const { summary, byPlatform, timing } = data;
 
@@ -207,7 +224,6 @@ function generateFallbackInsights(data: AnalyticsData): GeneratedInsights {
   const recommendations: string[] = [];
   const platformInsights: Record<string, string> = {};
 
-  // Basic findings
   if (summary.totalPosts > 0) {
     keyFindings.push(`You've published ${summary.totalPosts} posts with an average engagement rate of ${summary.engagementRate.toFixed(2)}%.`);
   }
@@ -220,31 +236,27 @@ function generateFallbackInsights(data: AnalyticsData): GeneratedInsights {
     keyFindings.push("Your engagement rate is below industry average. Consider testing different content types.");
   }
 
-  // Platform insights
   for (const [platform, metrics] of Object.entries(byPlatform)) {
     if (metrics.posts > 0) {
       platformInsights[platform] = `${metrics.posts} posts with ${metrics.engagementRate.toFixed(2)}% engagement rate.`;
-      
+
       if (metrics.engagementRate > summary.engagementRate) {
         recommendations.push(`${platform} is outperforming your average. Consider increasing posting frequency there.`);
       }
     }
   }
 
-  // Timing advice
   let timingAdvice = "Post consistently to build audience expectations.";
   if (timing?.bestDay) {
     timingAdvice = `${timing.bestDay.day} shows the highest engagement. Prioritize posting on this day.`;
   }
 
-  // Content tips
   const contentTips = [
     "Posts with questions tend to drive more comments.",
     "Visual content typically receives higher engagement.",
     "Keep experimenting with different content formats.",
   ];
 
-  // General recommendations
   if (recommendations.length === 0) {
     recommendations.push("Maintain a consistent posting schedule.");
     recommendations.push("Engage with comments to boost visibility.");
