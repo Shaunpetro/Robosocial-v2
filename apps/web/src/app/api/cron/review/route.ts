@@ -334,7 +334,7 @@ export async function GET() {
           continue;
         }
 
-        // Apply engagement quality rule: filter out non-engaging posts
+        // Engagement quality rule
         const engagingPosts = posts.filter(p => !(p.likes < 5 && p.comments < 5));
         const nonEngagingCount = posts.length - engagingPosts.length;
         console.log(`[Review] ${company.name}: ${nonEngagingCount} non-engaging posts found`);
@@ -345,7 +345,6 @@ export async function GET() {
           );
         }
 
-        // Use engaging posts for analysis (fallback to all if none engaging)
         const analysisPosts = engagingPosts.length > 0 ? engagingPosts : posts;
 
         const totalEngagement = analysisPosts.reduce((sum, p) => sum + calculateEngagementRate(p), 0);
@@ -527,10 +526,6 @@ export async function GET() {
       success: true,
       timestamp: new Date().toISOString(),
       duration: `${duration}ms`,
-      dateRange: {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      },
       summary: {
         ...totals,
         topContentTypesOverall,
