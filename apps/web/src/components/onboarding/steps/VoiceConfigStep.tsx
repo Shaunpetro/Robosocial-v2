@@ -2,13 +2,15 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   MessageSquare,
   Sparkles,
   Volume2,
   CheckCircle2,
   Info,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 
 // ============================================
@@ -27,6 +29,7 @@ interface VoiceConfigStepProps {
     technicalLevel: string
   }) => void
   companyName: string
+  industry?: string | null
 }
 
 // ============================================
@@ -70,63 +73,100 @@ export default function VoiceConfigStep({
   initialVoice,
   onUpdate,
   companyName,
+  industry,
 }: VoiceConfigStepProps) {
-  const [formality, setFormality] = useState(initialVoice?.formality || 'professional')
-  const [personality, setPersonality] = useState<string[]>(initialVoice?.personality || [])
-  const [technicalLevel, setTechnicalLevel] = useState(initialVoice?.technicalLevel || 'medium')
+  // Ensure values are always strings
+  const safeFormality: string = FORMALITY_OPTIONS.some(o => o.value === initialVoice?.formality)
+    ? (initialVoice?.formality as string)
+    : 'professional'
+
+  const safeTechnicalLevel: string = ['low', 'medium', 'high'].includes(initialVoice?.technicalLevel || '')
+    ? (initialVoice?.technicalLevel as string)
+    : 'medium'
+
+  const [formality, setFormality] = useState<string>(safeFormality)
+  const [personality, setPersonality] = useState<string[]>(
+    Array.isArray(initialVoice?.personality) ? initialVoice.personality : []
+  )
+  const [technicalLevel, setTechnicalLevel] = useState<string>(safeTechnicalLevel)
+
+  // AI preview state
+  const [aiPreview, setAiPreview] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Generate AI preview when settings change (debounced)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      await generatePreview()
+    }, 800)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [formality, personality, technicalLevel])
+
+  const generatePreview = async () => {
+    setIsGenerating(true)
+    setPreviewError(null)
+
+    try {
+      const res = await fetch('/api/generate/voice-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName,
+          industry: industry || '',
+          formality,
+          personality,
+          technicalLevel,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setAiPreview(data.preview)
+      } else {
+        const err = await res.json()
+        setPreviewError(err.error || 'Failed to generate preview')
+      }
+    } catch (error) {
+      console.error('Preview generation failed:', error)
+      setPreviewError('Failed to generate preview')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   // Toggle personality trait
   const toggleTrait = (trait: string) => {
     let updated: string[]
-    
+
     if (personality.includes(trait)) {
       updated = personality.filter(t => t !== trait)
     } else if (personality.length < 3) {
       updated = [...personality, trait]
     } else {
-      // Replace oldest with new
       updated = [...personality.slice(1), trait]
     }
-    
+
     setPersonality(updated)
     onUpdate({ formality, personality: updated, technicalLevel })
   }
 
-  // Update formality
   const updateFormality = (value: string) => {
     setFormality(value)
     onUpdate({ formality: value, personality, technicalLevel })
   }
 
-  // Update technical level
   const updateTechnicalLevel = (value: string) => {
     setTechnicalLevel(value)
     onUpdate({ formality, personality, technicalLevel: value })
   }
 
-  // Get current formality index for slider
   const formalityIndex = FORMALITY_OPTIONS.findIndex(f => f.value === formality)
-
-  // Generate preview text
-  const generatePreview = () => {
-    const greetings: Record<string, string> = {
-      casual: "Hey there! 👋",
-      friendly: "Hello!",
-      professional: "Good day,",
-      corporate: "Dear valued partners,",
-      formal: "To whom it may concern,",
-    }
-
-    const bodies: Record<string, string> = {
-      casual: "We just wrapped up an awesome project and had to share! Check out what our team pulled off 🔥",
-      friendly: "We're excited to share our latest project completion. Our team worked hard and we're proud of the results!",
-      professional: "We are pleased to announce the successful completion of our latest project. Our team delivered excellent results.",
-      corporate: "We are delighted to announce the successful delivery of a significant project milestone. Our commitment to excellence continues.",
-      formal: "We hereby announce the completion of the aforementioned project in accordance with the agreed specifications and timeline.",
-    }
-
-    return `${greetings[formality]} ${bodies[formality]}`
-  }
 
   return (
     <div className="space-y-6">
@@ -135,7 +175,7 @@ export default function VoiceConfigStep({
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
           <MessageSquare size={32} className="text-white" />
         </div>
-        
+
         <h2 className="text-2xl font-bold text-[var(--text-primary)]">
           How should {companyName} sound?
         </h2>
@@ -164,19 +204,19 @@ export default function VoiceConfigStep({
         <label className="block text-sm font-medium text-[var(--text-primary)]">
           Formality Level
         </label>
-        
+
         <div className="px-2">
           <input
             type="range"
             min="0"
             max={FORMALITY_OPTIONS.length - 1}
-            value={formalityIndex}
+            value={formalityIndex >= 0 ? formalityIndex : 0}
             onChange={(e) => updateFormality(FORMALITY_OPTIONS[parseInt(e.target.value)].value)}
             className="w-full h-2 bg-[var(--bg-tertiary)] rounded-lg appearance-none cursor-pointer accent-brand-500"
           />
-          
+
           <div className="flex justify-between mt-2">
-            {FORMALITY_OPTIONS.map((option, index) => (
+            {FORMALITY_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -191,9 +231,9 @@ export default function VoiceConfigStep({
             ))}
           </div>
         </div>
-        
+
         <p className="text-sm text-center text-[var(--text-secondary)]">
-          {FORMALITY_OPTIONS.find(f => f.value === formality)?.description}
+          {FORMALITY_OPTIONS.find(f => f.value === formality)?.description || 'Professional'}
         </p>
       </div>
 
@@ -207,11 +247,10 @@ export default function VoiceConfigStep({
             Select up to 3
           </span>
         </div>
-        
+
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {PERSONALITY_TRAITS.map((trait) => {
             const isSelected = personality.includes(trait.value)
-            
             return (
               <button
                 key={trait.value}
@@ -232,18 +271,18 @@ export default function VoiceConfigStep({
             )
           })}
         </div>
-        
+
         {personality.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {personality.map(trait => {
               const traitData = PERSONALITY_TRAITS.find(t => t.value === trait)
               return (
-                <span 
+                <span
                   key={trait}
                   className="px-3 py-1 rounded-full text-sm bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center gap-1"
                 >
                   <CheckCircle2 size={14} />
-                  {traitData?.label}
+                  {traitData?.label || trait}
                 </span>
               )
             })}
@@ -256,11 +295,10 @@ export default function VoiceConfigStep({
         <label className="block text-sm font-medium text-[var(--text-primary)]">
           Technical Level
         </label>
-        
+
         <div className="grid grid-cols-3 gap-2">
           {TECHNICAL_LEVELS.map((level) => {
             const isSelected = technicalLevel === level.value
-            
             return (
               <button
                 key={level.value}
@@ -286,24 +324,42 @@ export default function VoiceConfigStep({
         </div>
       </div>
 
-      {/* Preview */}
+      {/* AI Preview */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Volume2 size={16} className="text-[var(--text-tertiary)]" />
           <label className="block text-sm font-medium text-[var(--text-secondary)]">
-            Preview
+            Live Preview
           </label>
+          {isGenerating && <Loader2 size={14} className="animate-spin text-brand-500" />}
         </div>
-        
+
         <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-          <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-            {generatePreview()}
-          </p>
+          {isGenerating ? (
+            <p className="text-sm text-[var(--text-tertiary)] italic">Generating preview…</p>
+          ) : aiPreview ? (
+            <p className="text-sm text-[var(--text-primary)] leading-relaxed">{aiPreview}</p>
+          ) : (
+            <p className="text-sm text-[var(--text-tertiary)]">Adjust settings to see a sample post.</p>
+          )}
         </div>
-        
+
+        {previewError && (
+          <p className="text-xs text-red-500">{previewError}</p>
+        )}
+
+        <button
+          onClick={generatePreview}
+          disabled={isGenerating}
+          className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 disabled:opacity-50"
+        >
+          <RefreshCw size={14} />
+          Regenerate Preview
+        </button>
+
         <p className="text-xs text-[var(--text-tertiary)] flex items-center gap-1">
           <Info size={12} />
-          This is an example of how your content might sound
+          This is an AI-generated example based on your voice settings.
         </p>
       </div>
     </div>
