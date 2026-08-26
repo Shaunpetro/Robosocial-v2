@@ -3,15 +3,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  Building2, 
+import {
+  Building2,
   ImageIcon,
   Globe,
   Sparkles,
   CheckCircle,
   Target,
   MessageSquare,
-  Calendar, 
+  Calendar,
   ClipboardCheck,
   ChevronLeft,
   ChevronRight,
@@ -63,14 +63,14 @@ export interface OnboardingData {
   // Step 1: Logo & Basics
   logoUrl: string
   description: string
-  
+
   // Step 2: Data Sources
   dataSources: DataSourcesData
-  
+
   // Step 3: Analysis Results (populated by API)
   analysis: CompanyAnalysis | null
   analysisError: string | null
-  
+
   // Step 4: Confirmation Status
   confirmationStatus: {
     industries: boolean
@@ -86,17 +86,17 @@ export interface OnboardingData {
     audience: any | null
     voice: any | null
   }
-  
+
   // Step 5: Business Goal
   primaryBusinessGoal: string | null
-  
+
   // Step 6: Voice Configuration
   voiceConfig: {
     formality: string
     personality: string[]
     technicalLevel: string
   }
-  
+
   // Step 7: Posting Preferences (existing)
   postsPerWeek: number
   preferredDays: string[]
@@ -105,7 +105,7 @@ export interface OnboardingData {
   humorEnabled: boolean
   humorDays: string[]
   defaultTone: string
-  
+
   // Legacy fields for compatibility
   selectedIndustry: string
   industryBenchmark: any | null
@@ -141,16 +141,18 @@ const STEPS = [
 // COMPONENT
 // ============================================
 
-export default function OnboardingWizard({ 
-  company, 
+export default function OnboardingWizard({
+  company,
   industries,
-  existingIntelligence 
+  existingIntelligence
 }: OnboardingWizardProps) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
+  const STORAGE_KEY = `robosocial_onboarding_${company.id || 'draft'}`
+
   // Analysis status for step 3
   const [analysisStatus, setAnalysisStatus] = useState<{
     stage: 'extracting' | 'analyzing' | 'complete' | 'error'
@@ -171,7 +173,7 @@ export default function OnboardingWizard({
     // Step 1: Logo & Basics
     logoUrl: company.logoUrl || '',
     description: company.description || '',
-    
+
     // Step 2: Data Sources
     dataSources: {
       websiteUrl: company.website || '',
@@ -181,11 +183,11 @@ export default function OnboardingWizard({
       manualDescription: '',
       selectedSources: company.website ? ['website'] : [],
     },
-    
+
     // Step 3: Analysis Results
     analysis: null,
     analysisError: null,
-    
+
     // Step 4: Confirmation Status
     confirmationStatus: {
       industries: false,
@@ -201,17 +203,17 @@ export default function OnboardingWizard({
       audience: null,
       voice: null,
     },
-    
+
     // Step 5: Business Goal
     primaryBusinessGoal: existingIntelligence?.primaryBusinessGoal || null,
-    
+
     // Step 6: Voice Configuration
     voiceConfig: {
       formality: existingIntelligence?.extractedVoice?.formality || 'professional',
       personality: existingIntelligence?.extractedVoice?.personality || [],
       technicalLevel: existingIntelligence?.extractedVoice?.technicalLevel || 'medium',
     },
-    
+
     // Step 7: Posting Preferences
     postsPerWeek: existingIntelligence?.postsPerWeek || 4,
     preferredDays: existingIntelligence?.preferredDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday'],
@@ -220,7 +222,7 @@ export default function OnboardingWizard({
     humorEnabled: existingIntelligence?.humorEnabled ?? true,
     humorDays: existingIntelligence?.humorDays || ['Friday'],
     defaultTone: existingIntelligence?.defaultTone || 'professional',
-    
+
     // Legacy fields
     selectedIndustry: company.industry || '',
     industryBenchmark: null,
@@ -231,6 +233,38 @@ export default function OnboardingWizard({
     contentPillars: [],
     primaryGoals: existingIntelligence?.primaryGoals || [],
   })
+
+  // ---------------------------------------------------------------
+  // PERSISTENCE: restore from localStorage on mount
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed?.data) setData(parsed.data)
+        if (parsed?.currentStep) setCurrentStep(parsed.currentStep)
+        if (parsed?.analysisStatus) setAnalysisStatus(parsed.analysisStatus)
+      }
+    } catch (e) {
+      console.warn('Failed to restore onboarding progress', e)
+    }
+  }, [STORAGE_KEY])
+
+  // ---------------------------------------------------------------
+  // PERSISTENCE: save on every change
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        currentStep,
+        data,
+        analysisStatus,
+      }))
+    } catch (e) {
+      console.warn('Failed to save onboarding progress', e)
+    }
+  }, [currentStep, data, analysisStatus, STORAGE_KEY])
 
   // Update data helper
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
@@ -250,22 +284,21 @@ export default function OnboardingWizard({
     })
 
     try {
-      // Prepare form data for PDF upload if needed
       let pdfBlobUrl: string | null = null
-      
+
       if (data.dataSources.pdfFile && data.dataSources.selectedSources.includes('pdf')) {
         setAnalysisStatus(prev => ({ ...prev, currentSource: 'pdf', progress: 10 }))
-        
+
         const formData = new FormData()
         formData.append('file', data.dataSources.pdfFile)
         formData.append('companyId', company.id)
         formData.append('type', 'company_profile')
-        
+
         const uploadRes = await fetch('/api/intelligence/upload-document', {
           method: 'POST',
           body: formData,
         })
-        
+
         if (uploadRes.ok) {
           const uploadData = await uploadRes.json()
           pdfBlobUrl = uploadData.url
@@ -282,14 +315,13 @@ export default function OnboardingWizard({
         }
       }
 
-      // Update progress for each source
       const sources = data.dataSources.selectedSources.filter(s => s !== 'pdf')
       let progress = 20
       const progressIncrement = 40 / Math.max(sources.length, 1)
 
       for (const source of sources) {
         setAnalysisStatus(prev => ({ ...prev, currentSource: source, progress }))
-        await new Promise(resolve => setTimeout(resolve, 500)) // Simulated delay for UX
+        await new Promise(resolve => setTimeout(resolve, 500))
         setAnalysisStatus(prev => ({
           ...prev,
           sourcesComplete: [...prev.sourcesComplete, source],
@@ -297,7 +329,6 @@ export default function OnboardingWizard({
         progress += progressIncrement
       }
 
-      // Call main analysis endpoint
       setAnalysisStatus(prev => ({ ...prev, stage: 'analyzing', progress: 60 }))
 
       const analysisPayload = {
@@ -328,7 +359,6 @@ export default function OnboardingWizard({
 
       const analysisResult = await analysisRes.json()
 
-      // Update data with analysis results
       updateData({
         analysis: analysisResult.analysis,
         analysisError: null,
@@ -341,7 +371,6 @@ export default function OnboardingWizard({
 
       setAnalysisStatus(prev => ({ ...prev, stage: 'complete', progress: 100 }))
 
-      // Auto-advance to next step after short delay
       setTimeout(() => {
         setCurrentStep(4)
       }, 1500)
@@ -377,7 +406,6 @@ export default function OnboardingWizard({
 
   const prevStep = () => {
     if (currentStep > 1) {
-      // Skip back over the auto-advance step
       if (currentStep === 4) {
         setCurrentStep(2)
       } else {
@@ -387,7 +415,6 @@ export default function OnboardingWizard({
     }
   }
 
-  // Handle confirmation from ConfirmAnalysisStep
   const handleConfirmSection = (section: string, confirmed: boolean, edits?: any) => {
     updateData({
       confirmationStatus: {
@@ -408,9 +435,8 @@ export default function OnboardingWizard({
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return true // Logo & description are optional
-      case 2:
-        // Must have at least one valid source
+        return true
+      case 2: {
         const ds = data.dataSources
         return (
           (ds.selectedSources.includes('website') && ds.websiteUrl) ||
@@ -418,17 +444,14 @@ export default function OnboardingWizard({
           (ds.selectedSources.includes('pdf') && (ds.pdfFile || ds.pdfUrl)) ||
           (ds.selectedSources.includes('manual') && ds.manualDescription?.trim())
         )
+      }
       case 3:
-        // Analysis step - auto advances
         return analysisStatus.stage === 'complete'
       case 4:
-        // Must confirm at least industries
         return data.confirmationStatus.industries
       case 5:
-        // Must select a goal
         return data.primaryBusinessGoal !== null
       case 6:
-        // Voice config - at least formality should be set
         return data.voiceConfig.formality !== ''
       case 7:
         return data.preferredDays.length > 0 && data.postsPerWeek > 0
@@ -448,7 +471,6 @@ export default function OnboardingWizard({
     setError(null)
 
     try {
-      // 1. Update company with logo and description
       await fetch(`/api/companies/${company.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -459,28 +481,19 @@ export default function OnboardingWizard({
         })
       })
 
-      // 2. Confirm intelligence with all data
       const confirmPayload = {
         companyId: company.id,
-        
-        // Confirmed data from AI analysis
         extractedIndustries: data.confirmedData.industries || data.analysis?.industries,
         extractedServices: data.confirmedData.services || data.analysis?.services,
         extractedUSPs: data.confirmedData.usps || data.analysis?.uniqueSellingPoints,
         extractedAudience: data.confirmedData.audience || data.analysis?.targetAudience,
         extractedVoice: data.voiceConfig,
-        
-        // Confirmation flags
         industriesConfirmed: data.confirmationStatus.industries,
         servicesConfirmed: data.confirmationStatus.services,
         uspsConfirmed: data.confirmationStatus.usps,
         audienceConfirmed: data.confirmationStatus.audience,
         voiceConfirmed: data.confirmationStatus.voice,
-        
-        // Business goal
         primaryBusinessGoal: data.primaryBusinessGoal,
-        
-        // Posting preferences
         defaultTone: data.defaultTone,
         humorEnabled: data.humorEnabled,
         humorDays: data.humorDays,
@@ -489,8 +502,6 @@ export default function OnboardingWizard({
         preferredDays: data.preferredDays,
         preferredTimes: data.preferredTimes,
         timezone: data.timezone,
-        
-        // Mark as complete
         onboardingCompleted: true,
       }
 
@@ -505,9 +516,8 @@ export default function OnboardingWizard({
         throw new Error(err.error || 'Failed to save intelligence')
       }
 
-      // 3. Auto-generate content pillars from confirmed services
       const services = data.confirmedData.services || data.analysis?.services || []
-      for (const service of services.slice(0, 5)) { // Max 5 pillars
+      for (const service of services.slice(0, 5)) {
         if (service.isCore) {
           await fetch('/api/intelligence/pillars', {
             method: 'POST',
@@ -526,10 +536,12 @@ export default function OnboardingWizard({
         }
       }
 
-      // Success - redirect to company page
+      // Clear saved progress after success
+      localStorage.removeItem(STORAGE_KEY)
+
       router.push(`/companies/${company.id}`)
       router.refresh()
-      
+
     } catch (err) {
       console.error('Onboarding error:', err)
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -546,7 +558,7 @@ export default function OnboardingWizard({
     switch (currentStep) {
       case 1:
         return (
-          <LogoBasicsStep 
+          <LogoBasicsStep
             data={{ logoUrl: data.logoUrl, description: data.description }}
             updateData={updateData}
             companyId={company.id}
@@ -554,32 +566,26 @@ export default function OnboardingWizard({
             companyWebsite={company.website}
           />
         )
-      
       case 2:
         return (
-          <DataSourcesStep 
+          <DataSourcesStep
             data={data.dataSources}
             updateData={(updates) => updateData({ dataSources: { ...data.dataSources, ...updates } })}
             companyName={company.name}
           />
         )
-      
       case 3:
         return (
-          <AnalysisLoadingStep 
+          <AnalysisLoadingStep
             companyName={company.name}
             selectedSources={data.dataSources.selectedSources}
             onComplete={(success, error) => {
-              if (success) {
-                setCurrentStep(4)
-              } else if (error) {
-                updateData({ analysisError: error })
-              }
+              if (success) setCurrentStep(4)
+              else if (error) updateData({ analysisError: error })
             }}
             analysisStatus={analysisStatus}
           />
         )
-      
       case 4:
         if (!data.analysis) {
           return (
@@ -595,25 +601,23 @@ export default function OnboardingWizard({
           )
         }
         return (
-          <ConfirmAnalysisStep 
+          <ConfirmAnalysisStep
             analysis={data.analysis}
             onConfirm={handleConfirmSection}
             confirmationStatus={data.confirmationStatus}
           />
         )
-      
       case 5:
         return (
-          <GoalSelectionStep 
+          <GoalSelectionStep
             selectedGoal={data.primaryBusinessGoal}
             onSelectGoal={(goal) => updateData({ primaryBusinessGoal: goal })}
             companyName={company.name}
           />
         )
-      
       case 6:
         return (
-          <VoiceConfigStep 
+          <VoiceConfigStep
             initialVoice={data.analysis?.brandVoice ? {
               formality: data.analysis.brandVoice.formality,
               personality: data.analysis.brandVoice.personality,
@@ -623,31 +627,24 @@ export default function OnboardingWizard({
             companyName={company.name}
           />
         )
-      
       case 7:
         return (
-          <PostingPreferencesStep 
-            data={data} 
+          <PostingPreferencesStep
+            data={data}
             updateData={updateData}
           />
         )
-      
       case 8:
         return (
-          <ReviewStep 
+          <ReviewStep
             data={data}
             companyName={company.name}
           />
         )
-      
       default:
         return null
     }
   }
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   const isAutoAdvanceStep = STEPS[currentStep - 1]?.isAutoAdvance
 
@@ -660,16 +657,16 @@ export default function OnboardingWizard({
             const Icon = step.icon
             const isActive = currentStep === step.id
             const isCompleted = currentStep > step.id
-            
+
             return (
               <div key={step.id} className="flex items-center flex-shrink-0">
                 <div className="flex flex-col items-center">
                   <div
                     className={`
                       w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all
-                      ${isActive 
-                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
-                        : isCompleted 
+                      ${isActive
+                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30'
+                        : isCompleted
                           ? 'bg-green-500 text-white'
                           : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'
                       }
@@ -688,9 +685,9 @@ export default function OnboardingWizard({
                     {step.name}
                   </span>
                 </div>
-                
+
                 {index < STEPS.length - 1 && (
-                  <div 
+                  <div
                     className={`
                       w-4 sm:w-8 md:w-12 h-1 mx-1 sm:mx-2 rounded-full transition-all flex-shrink-0
                       ${currentStep > step.id ? 'bg-green-500' : 'bg-[var(--bg-tertiary)]'}
@@ -727,8 +724,8 @@ export default function OnboardingWizard({
             disabled={currentStep === 1}
             className={`
               flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all
-              ${currentStep === 1 
-                ? 'text-[var(--text-tertiary)] cursor-not-allowed' 
+              ${currentStep === 1
+                ? 'text-[var(--text-tertiary)] cursor-not-allowed'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
               }
             `}
@@ -774,7 +771,7 @@ export default function OnboardingWizard({
         </div>
       )}
 
-      {/* Skip Analysis Option (shown only on error) */}
+      {/* Skip Analysis Option */}
       {currentStep === 3 && analysisStatus.stage === 'error' && (
         <div className="flex justify-center gap-4">
           <button
@@ -792,7 +789,7 @@ export default function OnboardingWizard({
             Try Again
           </button>
           <button
-            onClick={() => setCurrentStep(7)} // Skip to posting preferences
+            onClick={() => setCurrentStep(7)}
             className="px-6 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
           >
             Skip & Continue Manually
