@@ -1,4 +1,6 @@
-﻿'use client'
+﻿// apps/web/src/components/onboarding/steps/BrandPersonalityStep.tsx
+
+'use client'
 
 import { useState } from 'react'
 import { Check, Sparkles, Users, Target } from 'lucide-react'
@@ -11,18 +13,18 @@ interface BrandPersonalityStepProps {
 }
 
 const PERSONALITY_TRAITS = [
-  { id: 'professional', label: 'Professional', emoji: 'ðŸ‘”', description: 'Formal and business-focused' },
-  { id: 'friendly', label: 'Friendly', emoji: 'ðŸ˜Š', description: 'Warm and approachable' },
-  { id: 'innovative', label: 'Innovative', emoji: 'ðŸ’¡', description: 'Cutting-edge and forward-thinking' },
-  { id: 'trustworthy', label: 'Trustworthy', emoji: 'ðŸ¤', description: 'Reliable and dependable' },
-  { id: 'playful', label: 'Playful', emoji: 'ðŸŽ‰', description: 'Fun and lighthearted' },
-  { id: 'authoritative', label: 'Authoritative', emoji: 'ðŸ“š', description: 'Expert and knowledgeable' },
-  { id: 'caring', label: 'Caring', emoji: 'â¤ï¸', description: 'Compassionate and supportive' },
-  { id: 'bold', label: 'Bold', emoji: 'ðŸ”¥', description: 'Confident and daring' },
-  { id: 'creative', label: 'Creative', emoji: 'ðŸŽ¨', description: 'Artistic and imaginative' },
-  { id: 'authentic', label: 'Authentic', emoji: 'âœ¨', description: 'Genuine and transparent' },
-  { id: 'energetic', label: 'Energetic', emoji: 'âš¡', description: 'Dynamic and lively' },
-  { id: 'sophisticated', label: 'Sophisticated', emoji: 'ðŸ¥‚', description: 'Elegant and refined' }
+  { id: 'professional', label: 'Professional', emoji: '👔', description: 'Formal and business-focused' },
+  { id: 'friendly', label: 'Friendly', emoji: '😊', description: 'Warm and approachable' },
+  { id: 'innovative', label: 'Innovative', emoji: '💡', description: 'Cutting-edge and forward-thinking' },
+  { id: 'trustworthy', label: 'Trustworthy', emoji: '🤝', description: 'Reliable and dependable' },
+  { id: 'playful', label: 'Playful', emoji: '🎉', description: 'Fun and lighthearted' },
+  { id: 'authoritative', label: 'Authoritative', emoji: '📚', description: 'Expert and knowledgeable' },
+  { id: 'caring', label: 'Caring', emoji: '❤️', description: 'Compassionate and supportive' },
+  { id: 'bold', label: 'Bold', emoji: '🔥', description: 'Confident and daring' },
+  { id: 'creative', label: 'Creative', emoji: '🎨', description: 'Artistic and imaginative' },
+  { id: 'authentic', label: 'Authentic', emoji: '✨', description: 'Genuine and transparent' },
+  { id: 'energetic', label: 'Energetic', emoji: '⚡', description: 'Dynamic and lively' },
+  { id: 'sophisticated', label: 'Sophisticated', emoji: '🥂', description: 'Elegant and refined' }
 ]
 
 const BRAND_VOICES = [
@@ -43,10 +45,10 @@ const PRIMARY_GOALS = [
   { id: 'sales_conversion', label: 'Sales & Conversion', icon: Target, description: 'Drive purchases' }
 ]
 
-export default function BrandPersonalityStep({ 
-  data, 
+export default function BrandPersonalityStep({
+  data,
   updateData,
-  companyName 
+  companyName
 }: BrandPersonalityStepProps) {
   const [uspInput, setUspInput] = useState('')
 
@@ -76,8 +78,8 @@ export default function BrandPersonalityStep({
   }
 
   const removeUSP = (index: number) => {
-    updateData({ 
-      uniqueSellingPoints: data.uniqueSellingPoints.filter((_, i) => i !== index) 
+    updateData({
+      uniqueSellingPoints: data.uniqueSellingPoints.filter((_, i) => i !== index)
     })
   }
 
@@ -101,7 +103,7 @@ export default function BrandPersonalityStep({
           {PERSONALITY_TRAITS.map((trait) => {
             const isSelected = data.brandPersonality.includes(trait.id)
             const isDisabled = !isSelected && data.brandPersonality.length >= 4
-            
+
             return (
               <button
                 key={trait.id}
@@ -109,8 +111,8 @@ export default function BrandPersonalityStep({
                 disabled={isDisabled}
                 className={`
                   relative p-3 rounded-xl border-2 text-left transition-all
-                  ${isSelected 
-                    ? 'border-blue-500 bg-blue-50' 
+                  ${isSelected
+                    ? 'border-blue-500 bg-blue-50'
                     : isDisabled
                       ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
                       : 'border-gray-100 hover:border-gray-200'
@@ -140,15 +142,15 @@ export default function BrandPersonalityStep({
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {BRAND_VOICES.map((voice) => {
             const isSelected = data.brandVoice === voice.id
-            
+
             return (
               <button
                 key={voice.id}
                 onClick={() => updateData({ brandVoice: voice.id })}
                 className={`
                   p-4 rounded-xl border-2 text-left transition-all
-                  ${isSelected 
-                    ? 'border-blue-500 bg-blue-50' 
+                  ${isSelected
+                    ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-100 hover:border-gray-200'
                   }
                 `}
@@ -173,7 +175,7 @@ export default function BrandPersonalityStep({
             const Icon = goal.icon
             const isSelected = data.primaryGoals.includes(goal.id)
             const isDisabled = !isSelected && data.primaryGoals.length >= 3
-            
+
             return (
               <button
                 key={goal.id}
@@ -181,8 +183,8 @@ export default function BrandPersonalityStep({
                 disabled={isDisabled}
                 className={`
                   relative p-4 rounded-xl border-2 text-left transition-all
-                  ${isSelected 
-                    ? 'border-purple-500 bg-purple-50' 
+                  ${isSelected
+                    ? 'border-purple-500 bg-purple-50'
                     : isDisabled
                       ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
                       : 'border-gray-100 hover:border-gray-200'
@@ -253,7 +255,7 @@ export default function BrandPersonalityStep({
                   onClick={() => removeUSP(index)}
                   className="text-blue-400 hover:text-blue-600"
                 >
-                  Ã—
+                  ×
                 </button>
               </span>
             ))}

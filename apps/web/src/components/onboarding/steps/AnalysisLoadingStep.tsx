@@ -62,7 +62,6 @@ export default function AnalysisLoadingStep({
 }: AnalysisLoadingStepProps) {
   const [dots, setDots] = useState('')
 
-  // Animate loading dots
   useEffect(() => {
     const interval = setInterval(() => {
       setDots(prev => (prev.length >= 3 ? '' : prev + '.'))
@@ -70,17 +69,15 @@ export default function AnalysisLoadingStep({
     return () => clearInterval(interval)
   }, [])
 
-  // Get stage index for progress
   const stageIndex = ANALYSIS_STAGES.findIndex(s => s.key === analysisStatus.stage)
-  const overallProgress = analysisStatus.stage === 'complete' 
-    ? 100 
+  const overallProgress = analysisStatus.stage === 'complete'
+    ? 100
     : analysisStatus.stage === 'error'
     ? analysisStatus.progress
     : Math.min(95, analysisStatus.progress)
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="text-center">
         <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-purple-500 flex items-center justify-center">
           {analysisStatus.stage === 'error' ? (
@@ -91,16 +88,15 @@ export default function AnalysisLoadingStep({
             <Sparkles size={40} className="text-white animate-pulse" />
           )}
         </div>
-        
+
         <h2 className="text-2xl font-bold text-[var(--text-primary)]">
-          {analysisStatus.stage === 'error' 
+          {analysisStatus.stage === 'error'
             ? 'Analysis Failed'
             : analysisStatus.stage === 'complete'
             ? 'Analysis Complete!'
-            : `Analyzing ${companyName}${dots}`
-          }
+            : `Analyzing ${companyName}${dots}`}
         </h2>
-        
+
         <p className="text-[var(--text-secondary)] mt-2">
           {analysisStatus.stage === 'error'
             ? 'We encountered an issue while analyzing your company'
@@ -108,22 +104,20 @@ export default function AnalysisLoadingStep({
             ? "We've learned about your business. Review the findings next."
             : analysisStatus.stage === 'extracting'
             ? 'Reading content from your data sources...'
-            : 'Our AI is understanding your business...'
-          }
+            : 'Our AI is understanding your business...'}
         </p>
       </div>
 
-      {/* Main Progress */}
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-[var(--text-secondary)]">Progress</span>
           <span className="font-medium text-[var(--text-primary)]">{overallProgress}%</span>
         </div>
         <div className="h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
-          <div 
+          <div
             className={`h-full transition-all duration-500 ${
-              analysisStatus.stage === 'error' 
-                ? 'bg-red-500' 
+              analysisStatus.stage === 'error'
+                ? 'bg-red-500'
                 : analysisStatus.stage === 'complete'
                 ? 'bg-green-500'
                 : 'bg-gradient-to-r from-brand-500 to-purple-500'
@@ -133,71 +127,67 @@ export default function AnalysisLoadingStep({
         </div>
       </div>
 
-      {/* Source Progress */}
       <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">
-          Data Sources
-        </h3>
-        
+        <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Data Sources</h3>
+
         <div className="space-y-3">
           {selectedSources.map(source => {
             const config = SOURCE_CONFIG[source as keyof typeof SOURCE_CONFIG]
             if (!config) return null
-            
+
             const Icon = config.icon
             const isComplete = analysisStatus.sourcesComplete.includes(source)
             const isFailed = analysisStatus.sourcesFailed.includes(source)
             const isActive = analysisStatus.currentSource === source
-            
+
             return (
-              <div 
+              <div
                 key={source}
                 className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                  isActive 
-                    ? 'bg-brand-500/10 border border-brand-500/20' 
+                  isActive
+                    ? 'bg-brand-500/10 border border-brand-500/20'
                     : 'bg-[var(--bg-primary)]'
                 }`}
               >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  isComplete 
-                    ? 'bg-green-500/10' 
-                    : isFailed 
+                  isComplete
+                    ? 'bg-green-500/10'
+                    : isFailed
                     ? 'bg-red-500/10'
                     : isActive
                     ? 'bg-brand-500/10'
                     : 'bg-[var(--bg-tertiary)]'
                 }`}>
                   <Icon size={20} className={
-                    isComplete 
-                      ? 'text-green-500' 
-                      : isFailed 
+                    isComplete
+                      ? 'text-green-500'
+                      : isFailed
                       ? 'text-red-500'
                       : isActive
                       ? config.color
                       : 'text-[var(--text-tertiary)]'
                   } />
                 </div>
-                
+
                 <div className="flex-1">
                   <p className={`font-medium ${
-                    isComplete || isActive 
-                      ? 'text-[var(--text-primary)]' 
+                    isComplete || isActive
+                      ? 'text-[var(--text-primary)]'
                       : 'text-[var(--text-secondary)]'
                   }`}>
                     {config.label}
                   </p>
                   <p className="text-xs text-[var(--text-tertiary)]">
-                    {isComplete 
+                    {isComplete
                       ? 'Content extracted'
                       : isFailed
                       ? 'Failed to extract'
                       : isActive
                       ? 'Extracting...'
-                      : 'Waiting...'
-                    }
+                      : 'Waiting...'}
                   </p>
                 </div>
-                
+
                 <div>
                   {isComplete ? (
                     <CheckCircle2 size={20} className="text-green-500" />
@@ -215,27 +205,22 @@ export default function AnalysisLoadingStep({
         </div>
       </div>
 
-      {/* Analysis Stages */}
       <div className="flex items-center justify-center gap-4">
         {ANALYSIS_STAGES.map((stage, index) => {
           const Icon = stage.icon
           const isComplete = stageIndex > index || analysisStatus.stage === 'complete'
           const isActive = stage.key === analysisStatus.stage
           const isError = analysisStatus.stage === 'error' && stage.key === 'analyzing'
-          
+
           return (
             <div key={stage.key} className="flex items-center gap-2">
               {index > 0 && (
-                <div className={`w-8 h-0.5 ${
-                  isComplete ? 'bg-green-500' : 'bg-[var(--border-default)]'
-                }`} />
+                <div className={`w-8 h-0.5 ${isComplete ? 'bg-green-500' : 'bg-[var(--border-default)]'}`} />
               )}
-              
-              <div className={`flex flex-col items-center gap-1 ${
-                isActive ? 'scale-110' : ''
-              } transition-transform`}>
+
+              <div className={`flex flex-col items-center gap-1 ${isActive ? 'scale-110' : ''} transition-transform`}>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  isComplete 
+                  isComplete
                     ? 'bg-green-500 text-white'
                     : isError
                     ? 'bg-red-500 text-white'
@@ -250,8 +235,8 @@ export default function AnalysisLoadingStep({
                   )}
                 </div>
                 <span className={`text-xs ${
-                  isComplete || isActive 
-                    ? 'text-[var(--text-primary)] font-medium' 
+                  isComplete || isActive
+                    ? 'text-[var(--text-primary)] font-medium'
                     : 'text-[var(--text-tertiary)]'
                 }`}>
                   {stage.label}
@@ -262,23 +247,19 @@ export default function AnalysisLoadingStep({
         })}
       </div>
 
-      {/* Error Message */}
       {analysisStatus.stage === 'error' && analysisStatus.error && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-          <p className="text-sm text-red-600 dark:text-red-400">
-            {analysisStatus.error}
-          </p>
+          <p className="text-sm text-red-600 dark:text-red-400">{analysisStatus.error}</p>
           <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-2">
             You can try again or continue with manual setup
           </p>
         </div>
       )}
 
-      {/* Fun Facts While Waiting */}
       {analysisStatus.stage !== 'complete' && analysisStatus.stage !== 'error' && (
         <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
           <p className="text-sm text-purple-600 dark:text-purple-400 text-center">
-            ðŸ’¡ <span className="font-medium">Did you know?</span> Companies that post consistently 
+            💡 <span className="font-medium">Did you know?</span> Companies that post consistently
             see 2x more engagement than those that post sporadically.
           </p>
         </div>
