@@ -20,13 +20,14 @@ const DAYS_OF_WEEK = [
   { id: 'Sunday', short: 'Sun' }
 ]
 
+// Slot IDs and descriptions; actual times are in scheduling-utils
 const TIME_SLOTS = [
-  { id: 'early_morning', label: 'Early Morning', time: '07:00', description: '7:00 AM' },
-  { id: 'morning', label: 'Morning', time: '09:00', description: '9:00 AM' },
-  { id: 'midday', label: 'Midday', time: '12:00', description: '12:00 PM' },
-  { id: 'afternoon', label: 'Afternoon', time: '15:00', description: '3:00 PM' },
-  { id: 'evening', label: 'Evening', time: '18:00', description: '6:00 PM' },
-  { id: 'night', label: 'Night', time: '20:00', description: '8:00 PM' }
+  { id: 'early_morning', label: 'Early Morning', description: '6:30 - 8:30 AM' },
+  { id: 'morning', label: 'Morning', description: '9:00 - 11:00 AM' },
+  { id: 'lunch', label: 'Lunch', description: '12:00 - 1:00 PM' },
+  { id: 'afternoon', label: 'Afternoon', description: '2:00 - 4:00 PM' },
+  { id: 'evening', label: 'Evening', description: '5:00 - 7:00 PM' },
+  { id: 'night', label: 'Night', description: '8:00 - 10:00 PM' }
 ]
 
 const TONES = [
@@ -52,23 +53,19 @@ const TIMEZONES = [
 export default function PostingPreferencesStep({ data, updateData }: PostingPreferencesStepProps) {
   const [autoApplied, setAutoApplied] = useState(false)
 
-  // Helper: apply recommended settings from benchmark
   const applyRecommendations = () => {
     const benchmark = data.industryBenchmark
     if (!benchmark) return
 
     const updates: Partial<OnboardingData> = {}
 
-    // Posts per week: use middle of recommended range
     if (benchmark.optimalPostsMin || benchmark.optimalPostsMax) {
       const min = benchmark.optimalPostsMin || 3
       const max = benchmark.optimalPostsMax || min
       updates.postsPerWeek = Math.round((min + max) / 2)
     }
 
-    // Preferred days
     if (benchmark.bestDays && Array.isArray(benchmark.bestDays) && benchmark.bestDays.length > 0) {
-      // Normalize to full day names
       const days = benchmark.bestDays.map((d: string) => {
         const lower = d.toLowerCase()
         const match = DAYS_OF_WEEK.find(day => day.id.toLowerCase() === lower || day.short.toLowerCase() === lower)
@@ -77,7 +74,7 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
       updates.preferredDays = days
     }
 
-    // Preferred times: convert best times to TIME_SLOTS time strings
+    // Convert benchmark times to slot IDs
     if (benchmark.bestTimes) {
       let times: string[] = []
       const bt = benchmark.bestTimes
@@ -87,31 +84,30 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         times = Object.values(bt).flat() as string[]
       }
 
-      // Normalize to match TIME_SLOTS
-      const normalized = times
-        .map((t: string) => {
-          const match = TIME_SLOTS.find(slot => slot.time === t || slot.id === t || slot.description === t)
-          return match ? match.time : null
-        })
-        .filter(Boolean) as string[]
+      const slotIds = new Set<string>()
+      const timeToSlot: Record<string, string> = {
+        '06:30': 'early_morning', '07:30': 'early_morning', '08:30': 'early_morning',
+        '09:00': 'morning', '10:00': 'morning', '11:00': 'morning',
+        '12:00': 'lunch', '12:30': 'lunch', '13:00': 'lunch',
+        '14:00': 'afternoon', '15:00': 'afternoon', '16:00': 'afternoon',
+        '17:00': 'evening', '18:00': 'evening', '19:00': 'evening',
+        '20:00': 'night', '21:00': 'night', '22:00': 'night'
+      }
+      times.forEach(t => {
+        if (timeToSlot[t]) slotIds.add(timeToSlot[t])
+        else if (TIME_SLOTS.some(s => s.id === t)) slotIds.add(t)
+      })
 
-      if (normalized.length > 0) {
-        const timesMap: Record<string, string[]> = {}
-        const days = updates.preferredDays || data.preferredDays
-        days.forEach(day => {
-          timesMap[day] = normalized
-        })
-        updates.preferredTimes = timesMap
+      if (slotIds.size > 0) {
+        updates.preferredTimes = Array.from(slotIds)
       }
     }
 
-    // Tone
     if (benchmark.recommendedTone) {
       const tone = TONES.find(t => t.id === benchmark.recommendedTone?.toLowerCase())
       if (tone) updates.defaultTone = tone.id
     }
 
-    // Humor
     if (typeof benchmark.humorAppropriate === 'boolean') {
       updates.humorEnabled = benchmark.humorAppropriate
     }
@@ -120,7 +116,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
     setAutoApplied(true)
   }
 
-  // Auto-apply on first load if benchmark exists and user hasn't customized
   useEffect(() => {
     if (!autoApplied && data.industryBenchmark) {
       applyRecommendations()
@@ -145,24 +140,17 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
     }
   }
 
-  const toggleTimeSlot = (time: string) => {
-    const newTimes = { ...data.preferredTimes }
-    const isSelected = data.preferredDays.some(day => (newTimes[day] || []).includes(time))
-
-    data.preferredDays.forEach(day => {
-      const dayTimes = newTimes[day] || []
-      if (isSelected) {
-        newTimes[day] = dayTimes.filter(t => t !== time)
-      } else if (!dayTimes.includes(time)) {
-        newTimes[day] = [...dayTimes, time].sort()
-      }
-    })
-
-    updateData({ preferredTimes: newTimes })
+  const toggleTimeSlot = (slotId: string) => {
+    const current = data.preferredTimes || []
+    if (current.includes(slotId)) {
+      updateData({ preferredTimes: current.filter(t => t !== slotId) })
+    } else {
+      updateData({ preferredTimes: [...current, slotId] })
+    }
   }
 
-  const isTimeSelected = (time: string) => {
-    return data.preferredDays.some(day => (data.preferredTimes[day] || []).includes(time))
+  const isTimeSelected = (slotId: string) => {
+    return (data.preferredTimes || []).includes(slotId)
   }
 
   const recommendedDays = data.industryBenchmark?.bestDays || []
@@ -176,7 +164,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-[var(--text-primary)]">
           Posting Schedule
@@ -186,7 +173,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </p>
       </div>
 
-      {/* Recommended Settings Banner */}
       {data.industryBenchmark && (
         <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
           <div className="flex items-start gap-3">
@@ -210,7 +196,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </div>
       )}
 
-      {/* Posts Per Week */}
       <div className="p-5 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-subtle)]">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -251,7 +236,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         )}
       </div>
 
-      {/* Preferred Days */}
       <div>
         <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
           Which days should posts be scheduled?
@@ -260,18 +244,15 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
           {DAYS_OF_WEEK.map((day) => {
             const isSelected = data.preferredDays.includes(day.id)
             const isRecommended = recommendedDays.some((d: string) => d.toLowerCase() === day.id.toLowerCase() || d.toLowerCase() === day.short.toLowerCase())
-
             return (
               <button
                 key={day.id}
                 onClick={() => toggleDay(day.id)}
-                className={`
-                  relative p-3 rounded-xl border-2 text-center transition-all
-                  ${isSelected
+                className={`relative p-3 rounded-xl border-2 text-center transition-all ${
+                  isSelected
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
-                  }
-                `}
+                }`}
               >
                 {isSelected && (
                   <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
@@ -297,31 +278,27 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         )}
       </div>
 
-      {/* Preferred Times */}
       <div>
         <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
           <Clock className="w-4 h-4 inline mr-2" />
-          Best times to post (applied to selected days)
+          Best times to post
         </label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {TIME_SLOTS.map((slot) => {
-            const isSelected = isTimeSelected(slot.time)
-            const isRecommended = recommendedTimes.includes(slot.time) || recommendedTimes.includes(slot.id) || recommendedTimes.includes(slot.description)
-
+            const isSelected = isTimeSelected(slot.id)
+            const isRecommended = recommendedTimes.includes(slot.id) || recommendedTimes.includes(slot.description)
             return (
               <button
                 key={slot.id}
-                onClick={() => toggleTimeSlot(slot.time)}
+                onClick={() => toggleTimeSlot(slot.id)}
                 disabled={data.preferredDays.length === 0}
-                className={`
-                  relative p-3 rounded-xl border-2 text-center transition-all
-                  ${data.preferredDays.length === 0
+                className={`relative p-3 rounded-xl border-2 text-center transition-all ${
+                  data.preferredDays.length === 0
                     ? 'opacity-50 cursor-not-allowed border-[var(--border-subtle)] bg-[var(--bg-tertiary)]'
                     : isSelected
                       ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                       : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
-                  }
-                `}
+                }`}
               >
                 {isRecommended && !isSelected && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
@@ -343,7 +320,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         )}
       </div>
 
-      {/* Timezone */}
       <div>
         <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
           Your Timezone
@@ -364,7 +340,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </p>
       </div>
 
-      {/* Default Tone */}
       <div>
         <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
           <Volume2 className="w-4 h-4 inline mr-2" />
@@ -374,18 +349,15 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
           {TONES.map((tone) => {
             const isSelected = data.defaultTone === tone.id
             const isRecommended = data.industryBenchmark?.recommendedTone?.toLowerCase() === tone.id
-
             return (
               <button
                 key={tone.id}
                 onClick={() => updateData({ defaultTone: tone.id })}
-                className={`
-                  relative p-4 rounded-xl border-2 text-left transition-all
-                  ${isSelected
+                className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                  isSelected
                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                     : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
-                  }
-                `}
+                }`}
               >
                 {isRecommended && !isSelected && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
@@ -403,7 +375,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </div>
       </div>
 
-      {/* Humor Settings */}
       <div className="p-5 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-subtle)]">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -415,7 +386,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
               <p className="text-sm text-[var(--text-tertiary)]">Allow playful, lighter posts on certain days?</p>
             </div>
           </div>
-
           <button
             onClick={() => updateData({ humorEnabled: !data.humorEnabled })}
             className={`relative w-14 h-8 rounded-full transition-colors ${data.humorEnabled ? 'bg-amber-500' : 'bg-[var(--bg-tertiary)]'}`}
@@ -423,7 +393,6 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
             <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${data.humorEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
           </button>
         </div>
-
         {data.humorEnabled && (
           <div>
             <p className="text-sm text-[var(--text-secondary)] mb-3">Select days for lighter, more engaging content:</p>
@@ -446,13 +415,12 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         )}
       </div>
 
-      {/* Auto-Generation Summary */}
       <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
         <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">🤖 Auto-Generation Preview</h4>
         <div className="space-y-2 text-sm text-green-800 dark:text-green-200">
           <p><strong>Weekly output:</strong> {data.postsPerWeek} AI-generated posts</p>
           <p><strong>Schedule:</strong> {data.preferredDays.length > 0 ? data.preferredDays.map(d => d.slice(0, 3)).join(', ') : 'No days selected'}</p>
-          <p><strong>Posting times:</strong> {[...new Set(Object.values(data.preferredTimes).flat())].sort().join(', ') || 'Not set'}</p>
+          <p><strong>Posting times:</strong> {(data.preferredTimes || []).map(slotId => TIME_SLOTS.find(s => s.id === slotId)?.label || slotId).join(', ') || 'Not set'}</p>
           <p><strong>Tone:</strong> {data.defaultTone.charAt(0).toUpperCase() + data.defaultTone.slice(1)}
             {data.humorEnabled && data.humorDays.length > 0 && <span className="text-amber-600 dark:text-amber-400"> + Humor on {data.humorDays.map(d => d.slice(0, 3)).join(', ')}</span>}
           </p>

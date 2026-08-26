@@ -19,7 +19,6 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
-// Step Components
 import LogoBasicsStep from './steps/LogoBasicsStep'
 import DataSourcesStep, { type DataSourcesData } from './steps/DataSourcesStep'
 import AnalysisLoadingStep from './steps/AnalysisLoadingStep'
@@ -29,12 +28,7 @@ import VoiceConfigStep from './steps/VoiceConfigStep'
 import PostingPreferencesStep from './steps/PostingPreferencesStep'
 import ReviewStep from './steps/ReviewStep'
 
-// Types
 import type { CompanyAnalysis } from '@/lib/intelligence/extractors'
-
-// ============================================
-// INTERFACES
-// ============================================
 
 interface Industry {
   id: string
@@ -60,18 +54,11 @@ interface OnboardingWizardProps {
 }
 
 export interface OnboardingData {
-  // Step 1: Logo & Basics
   logoUrl: string
   description: string
-
-  // Step 2: Data Sources
   dataSources: DataSourcesData
-
-  // Step 3: Analysis Results (populated by API)
   analysis: CompanyAnalysis | null
   analysisError: string | null
-
-  // Step 4: Confirmation Status
   confirmationStatus: {
     industries: boolean
     services: boolean
@@ -86,27 +73,20 @@ export interface OnboardingData {
     audience: any | null
     voice: any | null
   }
-
-  // Step 5: Business Goal
   primaryBusinessGoal: string | null
-
-  // Step 6: Voice Configuration
   voiceConfig: {
     formality: string
     personality: string[]
     technicalLevel: string
   }
-
-  // Step 7: Posting Preferences (existing)
   postsPerWeek: number
   preferredDays: string[]
-  preferredTimes: Record<string, string[]>
+  preferredTimes: string[]   // now a flat array of slot IDs
   timezone: string
   humorEnabled: boolean
   humorDays: string[]
   defaultTone: string
 
-  // Legacy fields for compatibility
   selectedIndustry: string
   industryBenchmark: any | null
   brandPersonality: string[]
@@ -122,10 +102,6 @@ export interface OnboardingData {
   primaryGoals: string[]
 }
 
-// ============================================
-// STEP CONFIGURATION
-// ============================================
-
 const STEPS = [
   { id: 1, name: 'Basics', icon: ImageIcon },
   { id: 2, name: 'Sources', icon: Globe },
@@ -137,9 +113,32 @@ const STEPS = [
   { id: 8, name: 'Review', icon: ClipboardCheck },
 ]
 
-// ============================================
-// COMPONENT
-// ============================================
+// Helper to convert legacy preferredTimes (object or array) to slot IDs
+function toSlotIds(preferredTimes: unknown): string[] {
+  if (!preferredTimes) return ['morning', 'afternoon']
+  const slotIds = new Set<string>()
+  const timeToSlot: Record<string, string> = {
+    '06:30': 'early_morning', '07:30': 'early_morning', '08:30': 'early_morning',
+    '09:00': 'morning', '10:00': 'morning', '11:00': 'morning',
+    '12:00': 'lunch', '12:30': 'lunch', '13:00': 'lunch',
+    '14:00': 'afternoon', '15:00': 'afternoon', '16:00': 'afternoon',
+    '17:00': 'evening', '18:00': 'evening', '19:00': 'evening',
+    '20:00': 'night', '21:00': 'night', '22:00': 'night'
+  }
+  const add = (value: string) => {
+    if (['early_morning','morning','lunch','afternoon','evening','night'].includes(value)) slotIds.add(value)
+    else if (timeToSlot[value]) slotIds.add(timeToSlot[value])
+  }
+  if (Array.isArray(preferredTimes)) {
+    preferredTimes.forEach(t => { if (typeof t === 'string') add(t) })
+  } else if (typeof preferredTimes === 'object') {
+    Object.values(preferredTimes as Record<string, unknown>).forEach(val => {
+      if (Array.isArray(val)) val.forEach(t => { if (typeof t === 'string') add(t) })
+      else if (typeof val === 'string') add(val)
+    })
+  }
+  return slotIds.size > 0 ? Array.from(slotIds) : ['morning', 'afternoon']
+}
 
 export default function OnboardingWizard({
   company,
@@ -153,7 +152,6 @@ export default function OnboardingWizard({
 
   const STORAGE_KEY = `robosocial_onboarding_${company.id || 'draft'}`
 
-  // Analysis status for step 3
   const [analysisStatus, setAnalysisStatus] = useState<{
     stage: 'extracting' | 'analyzing' | 'complete' | 'error'
     progress: number
@@ -168,13 +166,9 @@ export default function OnboardingWizard({
     sourcesFailed: [],
   })
 
-  // Initialize data state
   const [data, setData] = useState<OnboardingData>({
-    // Step 1: Logo & Basics
     logoUrl: company.logoUrl || '',
     description: company.description || '',
-
-    // Step 2: Data Sources
     dataSources: {
       websiteUrl: company.website || '',
       linkedinUrl: '',
@@ -183,12 +177,8 @@ export default function OnboardingWizard({
       manualDescription: '',
       selectedSources: company.website ? ['website'] : [],
     },
-
-    // Step 3: Analysis Results
     analysis: null,
     analysisError: null,
-
-    // Step 4: Confirmation Status
     confirmationStatus: {
       industries: false,
       services: false,
@@ -203,27 +193,19 @@ export default function OnboardingWizard({
       audience: null,
       voice: null,
     },
-
-    // Step 5: Business Goal
     primaryBusinessGoal: existingIntelligence?.primaryBusinessGoal || null,
-
-    // Step 6: Voice Configuration
     voiceConfig: {
       formality: existingIntelligence?.extractedVoice?.formality || 'professional',
       personality: existingIntelligence?.extractedVoice?.personality || [],
       technicalLevel: existingIntelligence?.extractedVoice?.technicalLevel || 'medium',
     },
-
-    // Step 7: Posting Preferences
     postsPerWeek: existingIntelligence?.postsPerWeek || 4,
     preferredDays: existingIntelligence?.preferredDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday'],
-    preferredTimes: existingIntelligence?.preferredTimes || {},
+    preferredTimes: toSlotIds(existingIntelligence?.preferredTimes),
     timezone: existingIntelligence?.timezone || 'Africa/Johannesburg',
     humorEnabled: existingIntelligence?.humorEnabled ?? true,
     humorDays: existingIntelligence?.humorDays || ['Friday'],
     defaultTone: existingIntelligence?.defaultTone || 'professional',
-
-    // Legacy fields
     selectedIndustry: company.industry || '',
     industryBenchmark: null,
     brandPersonality: existingIntelligence?.brandPersonality || [],
@@ -234,9 +216,7 @@ export default function OnboardingWizard({
     primaryGoals: existingIntelligence?.primaryGoals || [],
   })
 
-  // ---------------------------------------------------------------
-  // PERSISTENCE: restore from localStorage on mount
-  // ---------------------------------------------------------------
+  // Restore from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -251,29 +231,18 @@ export default function OnboardingWizard({
     }
   }, [STORAGE_KEY])
 
-  // ---------------------------------------------------------------
-  // PERSISTENCE: save on every change
-  // ---------------------------------------------------------------
+  // Save to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep,
-        data,
-        analysisStatus,
-      }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentStep, data, analysisStatus }))
     } catch (e) {
       console.warn('Failed to save onboarding progress', e)
     }
   }, [currentStep, data, analysisStatus, STORAGE_KEY])
 
-  // Update data helper
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }))
   }, [])
-
-  // ============================================
-  // ANALYSIS API CALL (Step 2 â†’ Step 3)
-  // ============================================
 
   const runAnalysis = useCallback(async () => {
     setAnalysisStatus({
@@ -302,16 +271,9 @@ export default function OnboardingWizard({
         if (uploadRes.ok) {
           const uploadData = await uploadRes.json()
           pdfBlobUrl = uploadData.url
-          setAnalysisStatus(prev => ({
-            ...prev,
-            sourcesComplete: [...prev.sourcesComplete, 'pdf'],
-            progress: 20,
-          }))
+          setAnalysisStatus(prev => ({ ...prev, sourcesComplete: [...prev.sourcesComplete, 'pdf'], progress: 20 }))
         } else {
-          setAnalysisStatus(prev => ({
-            ...prev,
-            sourcesFailed: [...prev.sourcesFailed, 'pdf'],
-          }))
+          setAnalysisStatus(prev => ({ ...prev, sourcesFailed: [...prev.sourcesFailed, 'pdf'] }))
         }
       }
 
@@ -322,10 +284,7 @@ export default function OnboardingWizard({
       for (const source of sources) {
         setAnalysisStatus(prev => ({ ...prev, currentSource: source, progress }))
         await new Promise(resolve => setTimeout(resolve, 500))
-        setAnalysisStatus(prev => ({
-          ...prev,
-          sourcesComplete: [...prev.sourcesComplete, source],
-        }))
+        setAnalysisStatus(prev => ({ ...prev, sourcesComplete: [...prev.sourcesComplete, source] }))
         progress += progressIncrement
       }
 
@@ -370,32 +329,19 @@ export default function OnboardingWizard({
       })
 
       setAnalysisStatus(prev => ({ ...prev, stage: 'complete', progress: 100 }))
-
-      setTimeout(() => {
-        setCurrentStep(4)
-      }, 1500)
-
+      setTimeout(() => setCurrentStep(4), 1500)
     } catch (err) {
       console.error('Analysis error:', err)
-      setAnalysisStatus(prev => ({
-        ...prev,
-        stage: 'error',
-        error: err instanceof Error ? err.message : 'Analysis failed',
-      }))
+      setAnalysisStatus(prev => ({ ...prev, stage: 'error', error: err instanceof Error ? err.message : 'Analysis failed' }))
       updateData({ analysisError: err instanceof Error ? err.message : 'Analysis failed' })
     }
   }, [company.id, company.name, data.dataSources, updateData])
 
-  // Trigger analysis when entering step 3
   useEffect(() => {
     if (currentStep === 3 && analysisStatus.stage === 'extracting' && analysisStatus.progress === 0) {
       runAnalysis()
     }
   }, [currentStep, analysisStatus.stage, analysisStatus.progress, runAnalysis])
-
-  // ============================================
-  // NAVIGATION
-  // ============================================
 
   const nextStep = () => {
     if (currentStep < STEPS.length) {
@@ -406,31 +352,21 @@ export default function OnboardingWizard({
 
   const prevStep = () => {
     if (currentStep > 1) {
-      if (currentStep === 4) {
-        setCurrentStep(2)
-      } else {
-        setCurrentStep(prev => prev - 1)
-      }
+      if (currentStep === 4) setCurrentStep(2)
+      else setCurrentStep(prev => prev - 1)
       setError(null)
     }
   }
 
   const handleConfirmSection = (section: string, confirmed: boolean, edits?: any) => {
     updateData({
-      confirmationStatus: {
-        ...data.confirmationStatus,
-        [section]: confirmed,
-      },
+      confirmationStatus: { ...data.confirmationStatus, [section]: confirmed },
       confirmedData: {
         ...data.confirmedData,
         [section]: edits || (data.analysis ? (data.analysis as any)[section] : null),
       },
     })
   }
-
-  // ============================================
-  // VALIDATION
-  // ============================================
 
   const canProceed = () => {
     switch (currentStep) {
@@ -461,10 +397,6 @@ export default function OnboardingWizard({
         return false
     }
   }
-
-  // ============================================
-  // SUBMIT
-  // ============================================
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
@@ -536,12 +468,9 @@ export default function OnboardingWizard({
         }
       }
 
-      // Clear saved progress after success
       localStorage.removeItem(STORAGE_KEY)
-
       router.push(`/companies/${company.id}`)
       router.refresh()
-
     } catch (err) {
       console.error('Onboarding error:', err)
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -550,97 +479,25 @@ export default function OnboardingWizard({
     }
   }
 
-  // ============================================
-  // RENDER STEPS
-  // ============================================
-
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return (
-          <LogoBasicsStep
-            data={{ logoUrl: data.logoUrl, description: data.description }}
-            updateData={updateData}
-            companyId={company.id}
-            companyName={company.name}
-            companyWebsite={company.website}
-          />
-        )
+        return <LogoBasicsStep data={{ logoUrl: data.logoUrl, description: data.description }} updateData={updateData} companyId={company.id} companyName={company.name} companyWebsite={company.website} />
       case 2:
-        return (
-          <DataSourcesStep
-            data={data.dataSources}
-            updateData={(updates) => updateData({ dataSources: { ...data.dataSources, ...updates } })}
-            companyName={company.name}
-          />
-        )
+        return <DataSourcesStep data={data.dataSources} updateData={(updates) => updateData({ dataSources: { ...data.dataSources, ...updates } })} companyName={company.name} />
       case 3:
-        return (
-          <AnalysisLoadingStep
-            companyName={company.name}
-            selectedSources={data.dataSources.selectedSources}
-            onComplete={(success, error) => {
-              if (success) setCurrentStep(4)
-              else if (error) updateData({ analysisError: error })
-            }}
-            analysisStatus={analysisStatus}
-          />
-        )
+        return <AnalysisLoadingStep companyName={company.name} selectedSources={data.dataSources.selectedSources} onComplete={(success, error) => { if (success) setCurrentStep(4); else if (error) updateData({ analysisError: error }) }} analysisStatus={analysisStatus} />
       case 4:
-        if (!data.analysis) {
-          return (
-            <div className="text-center py-12">
-              <AlertCircle size={48} className="mx-auto mb-4 text-amber-500" />
-              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-                Analysis Not Available
-              </h3>
-              <p className="text-[var(--text-secondary)] mt-2">
-                Go back and run the analysis first, or continue with manual setup.
-              </p>
-            </div>
-          )
-        }
-        return (
-          <ConfirmAnalysisStep
-            analysis={data.analysis}
-            onConfirm={handleConfirmSection}
-            confirmationStatus={data.confirmationStatus}
-          />
-        )
+        if (!data.analysis) return <div className="text-center py-12"><AlertCircle size={48} className="mx-auto mb-4 text-amber-500" /><h3 className="text-lg font-semibold text-[var(--text-primary)]">Analysis Not Available</h3><p className="text-[var(--text-secondary)] mt-2">Go back and run the analysis first, or continue with manual setup.</p></div>
+        return <ConfirmAnalysisStep analysis={data.analysis} onConfirm={handleConfirmSection} confirmationStatus={data.confirmationStatus} />
       case 5:
-        return (
-          <GoalSelectionStep
-            selectedGoal={data.primaryBusinessGoal}
-            onSelectGoal={(goal) => updateData({ primaryBusinessGoal: goal })}
-            companyName={company.name}
-          />
-        )
+        return <GoalSelectionStep selectedGoal={data.primaryBusinessGoal} onSelectGoal={(goal) => updateData({ primaryBusinessGoal: goal })} companyName={company.name} />
       case 6:
-        return (
-          <VoiceConfigStep
-            initialVoice={data.analysis?.brandVoice ? {
-              formality: data.analysis.brandVoice.formality,
-              personality: data.analysis.brandVoice.personality,
-              technicalLevel: data.analysis.brandVoice.technicalLevel,
-            } : undefined}
-            onUpdate={(voice) => updateData({ voiceConfig: voice })}
-            companyName={company.name}
-          />
-        )
+        return <VoiceConfigStep initialVoice={data.analysis?.brandVoice ? { formality: data.analysis.brandVoice.formality, personality: data.analysis.brandVoice.personality, technicalLevel: data.analysis.brandVoice.technicalLevel } : undefined} onUpdate={(voice) => updateData({ voiceConfig: voice })} companyName={company.name} />
       case 7:
-        return (
-          <PostingPreferencesStep
-            data={data}
-            updateData={updateData}
-          />
-        )
+        return <PostingPreferencesStep data={data} updateData={updateData} />
       case 8:
-        return (
-          <ReviewStep
-            data={data}
-            companyName={company.name}
-          />
-        )
+        return <ReviewStep data={data} companyName={company.name} />
       default:
         return null
     }
@@ -657,143 +514,50 @@ export default function OnboardingWizard({
             const Icon = step.icon
             const isActive = currentStep === step.id
             const isCompleted = currentStep > step.id
-
             return (
               <div key={step.id} className="flex items-center flex-shrink-0">
                 <div className="flex flex-col items-center">
-                  <div
-                    className={`
-                      w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all
-                      ${isActive
-                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30'
-                        : isCompleted
-                          ? 'bg-green-500 text-white'
-                          : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'
-                      }
-                    `}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
-                    ) : (
-                      <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-                    )}
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${isActive ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' : isCompleted ? 'bg-green-500 text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'}`}>
+                    {isCompleted ? <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" /> : <Icon className="w-5 h-5 sm:w-6 sm:h-6" />}
                   </div>
-                  <span className={`
-                    mt-2 text-xs font-medium whitespace-nowrap hidden sm:block
-                    ${isActive ? 'text-brand-600 dark:text-brand-400' : isCompleted ? 'text-green-600 dark:text-green-400' : 'text-[var(--text-tertiary)]'}
-                  `}>
-                    {step.name}
-                  </span>
+                  <span className={`mt-2 text-xs font-medium whitespace-nowrap hidden sm:block ${isActive ? 'text-brand-600 dark:text-brand-400' : isCompleted ? 'text-green-600 dark:text-green-400' : 'text-[var(--text-tertiary)]'}`}>{step.name}</span>
                 </div>
-
-                {index < STEPS.length - 1 && (
-                  <div
-                    className={`
-                      w-4 sm:w-8 md:w-12 h-1 mx-1 sm:mx-2 rounded-full transition-all flex-shrink-0
-                      ${currentStep > step.id ? 'bg-green-500' : 'bg-[var(--bg-tertiary)]'}
-                    `}
-                  />
-                )}
+                {index < STEPS.length - 1 && <div className={`w-4 sm:w-8 md:w-12 h-1 mx-1 sm:mx-2 rounded-full transition-all flex-shrink-0 ${currentStep > step.id ? 'bg-green-500' : 'bg-[var(--bg-tertiary)]'}`} />}
               </div>
             )
           })}
         </div>
       </div>
 
-      {/* Step Content */}
       <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 sm:p-8 shadow-sm border border-[var(--border-default)] min-h-[400px]">
         {renderStep()}
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-600 dark:text-red-400 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Error</p>
-            <p className="text-sm mt-1">{error}</p>
-          </div>
-        </div>
-      )}
+      {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-600 dark:text-red-400 flex items-start gap-3"><AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" /><div><p className="font-medium">Error</p><p className="text-sm mt-1">{error}</p></div></div>}
 
-      {/* Navigation */}
       {!isAutoAdvanceStep && (
         <div className="flex items-center justify-between">
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            className={`
-              flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all
-              ${currentStep === 1
-                ? 'text-[var(--text-tertiary)] cursor-not-allowed'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
-              }
-            `}
-          >
+          <button onClick={prevStep} disabled={currentStep === 1} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${currentStep === 1 ? 'text-[var(--text-tertiary)] cursor-not-allowed' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'}`}>
             <ChevronLeft className="w-5 h-5" />
             Back
           </button>
-
           {currentStep < STEPS.length ? (
-            <button
-              onClick={nextStep}
-              disabled={!canProceed()}
-              className={`
-                flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all
-                ${canProceed()
-                  ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-500/25'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] cursor-not-allowed'
-                }
-              `}
-            >
+            <button onClick={nextStep} disabled={!canProceed()} className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all ${canProceed() ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-500/25' : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] cursor-not-allowed'}`}>
               Continue
               <ChevronRight className="w-5 h-5" />
             </button>
           ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl font-medium hover:from-brand-700 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Setting up...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Complete Setup
-                </>
-              )}
+            <button onClick={handleSubmit} disabled={isSubmitting} className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl font-medium hover:from-brand-700 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/25 disabled:opacity-50">
+              {isSubmitting ? <><Loader2 className="w-5 h-5 animate-spin" /> Setting up...</> : <><Sparkles className="w-5 h-5" /> Complete Setup</>}
             </button>
           )}
         </div>
       )}
 
-      {/* Skip Analysis Option */}
       {currentStep === 3 && analysisStatus.stage === 'error' && (
         <div className="flex justify-center gap-4">
-          <button
-            onClick={() => {
-              setAnalysisStatus({
-                stage: 'extracting',
-                progress: 0,
-                sourcesComplete: [],
-                sourcesFailed: [],
-              })
-              runAnalysis()
-            }}
-            className="px-6 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
-          >
-            Try Again
-          </button>
-          <button
-            onClick={() => setCurrentStep(7)}
-            className="px-6 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-          >
-            Skip & Continue Manually
-          </button>
+          <button onClick={() => { setAnalysisStatus({ stage: 'extracting', progress: 0, sourcesComplete: [], sourcesFailed: [] }); runAnalysis() }} className="px-6 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors">Try Again</button>
+          <button onClick={() => setCurrentStep(7)} className="px-6 py-2 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors">Skip & Continue Manually</button>
         </div>
       )}
     </div>

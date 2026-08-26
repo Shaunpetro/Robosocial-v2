@@ -18,7 +18,11 @@ import {
   Sparkles,
   Brain,
   Factory,
-  Loader2
+  Loader2,
+  Linkedin,
+  Facebook,
+  Instagram,
+  Twitter,
 } from 'lucide-react'
 import CurrentAnalysisCard from '@/components/intelligence/CurrentAnalysisCard'
 import {
@@ -128,10 +132,10 @@ export function CompanyInfoTab({
             <div className="relative group">
               {logoUrl && !logoError ? (
                 <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-[var(--border-default)] bg-[var(--bg-secondary)]">
-                  <Image 
-                    src={logoUrl} 
-                    alt={name} 
-                    fill 
+                  <Image
+                    src={logoUrl}
+                    alt={name}
+                    fill
                     className="object-cover"
                     onError={() => setLogoError(true)}
                     unoptimized={logoUrl.includes('blob.vercel-storage.com')}
@@ -196,7 +200,6 @@ export function CompanyInfoTab({
             </div>
           </div>
 
-          {/* Industry - Multi-select */}
           <IndustrySelector
             selectedIndustries={selectedIndustries}
             onChange={setSelectedIndustries}
@@ -204,7 +207,6 @@ export function CompanyInfoTab({
             maxIndustries={5}
           />
 
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">Description</label>
             <textarea
@@ -218,7 +220,6 @@ export function CompanyInfoTab({
         </div>
       </SectionCard>
 
-      {/* AI Intelligence Card */}
       <CurrentAnalysisCard
         companyId={company.id}
         companyName={company.name}
@@ -480,7 +481,6 @@ export function ScheduleTab({
         </select>
       </SectionCard>
 
-      {/* AI Learned Insights */}
       {company.intelligence?.learnedBestDays && company.intelligence.learnedBestDays.length > 0 && (
         <SectionCard
           title="AI Learned Insights"
@@ -521,6 +521,20 @@ export function AutomationTab({
   setAutoApprove,
 }: AutomationTabProps) {
   const router = useRouter()
+  const platformIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'linkedin':
+        return <Linkedin size={16} className="text-blue-600" />
+      case 'facebook':
+        return <Facebook size={16} className="text-blue-500" />
+      case 'instagram':
+        return <Instagram size={16} className="text-pink-600" />
+      case 'twitter':
+        return <Twitter size={16} className="text-sky-500" />
+      default:
+        return <Globe size={16} className="text-gray-500" />
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -538,8 +552,8 @@ export function AutomationTab({
           />
 
           <div className={`p-4 rounded-xl border-2 transition-all ${
-            autoApprove 
-              ? 'bg-amber-500/5 border-amber-500/20' 
+            autoApprove
+              ? 'bg-amber-500/5 border-amber-500/20'
               : 'bg-green-500/5 border-green-500/20'
           }`}>
             <div className="flex items-start gap-3">
@@ -599,10 +613,7 @@ export function AutomationTab({
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
-                    {platform.type.toLowerCase() === 'linkedin' && <span className="text-blue-600 font-bold text-sm">in</span>}
-                    {platform.type.toLowerCase() === 'facebook' && <span className="text-blue-500 font-bold text-sm">f</span>}
-                    {platform.type.toLowerCase() === 'instagram' && <span className="text-pink-600 font-bold text-sm">ig</span>}
-                    {platform.type.toLowerCase() === 'twitter' && <span className="text-sky-500 font-bold text-sm">X</span>}
+                    {platformIcon(platform.type)}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">{platform.platformName}</p>
@@ -702,7 +713,6 @@ export function PillarModal({ pillar, setPillar, onSave, onClose }: PillarModalP
           </button>
         </div>
         <div className="p-6 space-y-5">
-          {/* Pillar Name */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
               Pillar Name <span className="text-red-500">*</span>
@@ -716,7 +726,6 @@ export function PillarModal({ pillar, setPillar, onSave, onClose }: PillarModalP
             />
           </div>
 
-          {/* Topics */}
           <TagInput
             tags={pillar.topics}
             onChange={(topics) => setPillar({ ...pillar, topics })}
@@ -725,7 +734,6 @@ export function PillarModal({ pillar, setPillar, onSave, onClose }: PillarModalP
             maxTags={10}
           />
 
-          {/* Content Types */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">Content Types</label>
             <div className="grid grid-cols-2 gap-2">
@@ -754,7 +762,6 @@ export function PillarModal({ pillar, setPillar, onSave, onClose }: PillarModalP
             </div>
           </div>
 
-          {/* Frequency Weight */}
           <SliderInput
             value={pillar.frequencyWeight}
             onChange={(frequencyWeight) => setPillar({ ...pillar, frequencyWeight })}
