@@ -254,13 +254,14 @@ export default function ConfirmAnalysisStep({
                       className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
                     />
                     <input
-                      value={industry.cidbGrade || ''}
+                      value={industry.cidbGrade ?? ''}
                       onChange={(e) => {
                         const updated = [...editedIndustries]
-                        updated[index].cidbGrade = e.target.value
+                        updated[index].cidbGrade = Number(e.target.value)
                         setEditedIndustries(updated)
                       }}
                       placeholder="Grade"
+                      type="number"
                       className="w-20 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
                     />
                   </div>
@@ -448,7 +449,7 @@ export default function ConfirmAnalysisStep({
                     value={usp.category}
                     onChange={(e) => {
                       const updated = [...editedUSPs]
-                      updated[index].category = e.target.value
+                      updated[index].category = e.target.value as ExtractedUSP['category']
                       setEditedUSPs(updated)
                     }}
                     className="w-full px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
@@ -459,6 +460,9 @@ export default function ConfirmAnalysisStep({
                     <option value="service">Service</option>
                     <option value="technology">Technology</option>
                     <option value="other">Other</option>
+                    <option value="certification">Certification</option>
+                    <option value="capability">Capability</option>
+                    <option value="location">Location</option>
                   </select>
                   <button
                     onClick={() => setEditedUSPs(prev => prev.filter((_, i) => i !== index))}
@@ -519,7 +523,7 @@ export default function ConfirmAnalysisStep({
             <div className="space-y-3 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
               <input
                 value={editedAudience.businessType}
-                onChange={(e) => setEditedAudience(prev => ({ ...prev, businessType: e.target.value }))}
+                onChange={(e) => setEditedAudience(prev => ({ ...prev, businessType: e.target.value as typeof prev.businessType }))}
                 placeholder="Business Type"
                 className="w-full px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
               />
@@ -625,13 +629,14 @@ export default function ConfirmAnalysisStep({
             <div className="space-y-3 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
               <select
                 value={editedVoice.formality}
-                onChange={(e) => setEditedVoice(prev => ({ ...prev, formality: e.target.value }))}
+                onChange={(e) => setEditedVoice(prev => ({ ...prev, formality: e.target.value as typeof prev.formality }))}
                 className="w-full px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
               >
-                <option value="formal">Formal</option>
-                <option value="casual">Casual</option>
+                <option value="professional">Professional</option>
                 <option value="friendly">Friendly</option>
-                <option value="authoritative">Authoritative</option>
+                <option value="casual">Casual</option>
+                <option value="corporate">Corporate</option>
+                <option value="formal">Formal</option>
               </select>
               <div>
                 <label className="text-xs text-[var(--text-tertiary)]">Personality Traits (comma separated)</label>
@@ -643,12 +648,12 @@ export default function ConfirmAnalysisStep({
               </div>
               <select
                 value={editedVoice.technicalLevel}
-                onChange={(e) => setEditedVoice(prev => ({ ...prev, technicalLevel: e.target.value }))}
+                onChange={(e) => setEditedVoice(prev => ({ ...prev, technicalLevel: e.target.value as typeof prev.technicalLevel }))}
                 className="w-full px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-sm"
               >
-                <option value="basic">Basic</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
               </select>
               {editedVoice.traits?.industryTermsUsed && (
                 <div>
