@@ -37,11 +37,11 @@ interface VoiceConfigStepProps {
 // ============================================
 
 const FORMALITY_OPTIONS = [
-  { value: 'casual', label: 'Casual', emoji: 'ðŸ˜Š', description: 'Friendly and relaxed' },
-  { value: 'friendly', label: 'Friendly', emoji: 'ðŸ‘‹', description: 'Warm and approachable' },
-  { value: 'professional', label: 'Professional', emoji: 'ðŸ’¼', description: 'Business-like but personable' },
-  { value: 'corporate', label: 'Corporate', emoji: 'ðŸ¢', description: 'Formal and authoritative' },
-  { value: 'formal', label: 'Formal', emoji: 'ðŸ“‹', description: 'Traditional and serious' },
+  { value: 'casual', label: 'Casual', emoji: '😊', description: 'Friendly and relaxed' },
+  { value: 'friendly', label: 'Friendly', emoji: '👋', description: 'Warm and approachable' },
+  { value: 'professional', label: 'Professional', emoji: '💼', description: 'Business-like but personable' },
+  { value: 'corporate', label: 'Corporate', emoji: '🏢', description: 'Formal and authoritative' },
+  { value: 'formal', label: 'Formal', emoji: '📋', description: 'Traditional and serious' },
 ]
 
 const PERSONALITY_TRAITS = [
@@ -65,23 +65,18 @@ const TECHNICAL_LEVELS = [
   { value: 'high', label: 'Technical', description: 'Industry terminology, expert audience' },
 ]
 
-// ============================================
-// COMPONENT
-// ============================================
-
 export default function VoiceConfigStep({
   initialVoice,
   onUpdate,
   companyName,
   industry,
 }: VoiceConfigStepProps) {
-  // Ensure values are always strings
-  const safeFormality: string = FORMALITY_OPTIONS.some(o => o.value === initialVoice?.formality)
-    ? (initialVoice?.formality as string)
+  const safeFormality = FORMALITY_OPTIONS.some(o => o.value === initialVoice?.formality)
+    ? initialVoice?.formality as string
     : 'professional'
 
-  const safeTechnicalLevel: string = ['low', 'medium', 'high'].includes(initialVoice?.technicalLevel || '')
-    ? (initialVoice?.technicalLevel as string)
+  const safeTechnicalLevel = ['low', 'medium', 'high'].includes(initialVoice?.technicalLevel || '')
+    ? initialVoice?.technicalLevel as string
     : 'medium'
 
   const [formality, setFormality] = useState<string>(safeFormality)
@@ -90,23 +85,10 @@ export default function VoiceConfigStep({
   )
   const [technicalLevel, setTechnicalLevel] = useState<string>(safeTechnicalLevel)
 
-  // AI preview state
   const [aiPreview, setAiPreview] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Generate AI preview when settings change (debounced)
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(async () => {
-      await generatePreview()
-    }, 800)
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [formality, personality, technicalLevel])
 
   const generatePreview = async () => {
     setIsGenerating(true)
@@ -140,7 +122,17 @@ export default function VoiceConfigStep({
     }
   }
 
-  // Toggle personality trait
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      generatePreview()
+    }, 800)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [formality, personality, technicalLevel])
+
   const toggleTrait = (trait: string) => {
     let updated: string[]
 
@@ -170,7 +162,6 @@ export default function VoiceConfigStep({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="text-center">
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
           <MessageSquare size={32} className="text-white" />
@@ -184,7 +175,6 @@ export default function VoiceConfigStep({
         </p>
       </div>
 
-      {/* AI Detected Notice */}
       {initialVoice && (
         <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
           <Sparkles size={18} className="text-purple-500 mt-0.5" />
@@ -199,7 +189,6 @@ export default function VoiceConfigStep({
         </div>
       )}
 
-      {/* Formality Slider */}
       <div className="space-y-3">
         <label className="block text-sm font-medium text-[var(--text-primary)]">
           Formality Level
@@ -237,7 +226,6 @@ export default function VoiceConfigStep({
         </p>
       </div>
 
-      {/* Personality Traits */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <label className="block text-sm font-medium text-[var(--text-primary)]">
@@ -290,7 +278,6 @@ export default function VoiceConfigStep({
         )}
       </div>
 
-      {/* Technical Level */}
       <div className="space-y-3">
         <label className="block text-sm font-medium text-[var(--text-primary)]">
           Technical Level
@@ -324,7 +311,6 @@ export default function VoiceConfigStep({
         </div>
       </div>
 
-      {/* AI Preview */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Volume2 size={16} className="text-[var(--text-tertiary)]" />
@@ -336,7 +322,7 @@ export default function VoiceConfigStep({
 
         <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           {isGenerating ? (
-            <p className="text-sm text-[var(--text-tertiary)] italic">Generating previewâ€¦</p>
+            <p className="text-sm text-[var(--text-tertiary)] italic">Generating preview…</p>
           ) : aiPreview ? (
             <p className="text-sm text-[var(--text-primary)] leading-relaxed">{aiPreview}</p>
           ) : (
