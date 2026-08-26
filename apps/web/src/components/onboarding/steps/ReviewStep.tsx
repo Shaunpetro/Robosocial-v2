@@ -2,14 +2,14 @@
 
 'use client'
 
-import { 
-  Building2, 
+import {
+  Building2,
   Briefcase,
   Trophy,
   Users,
   MessageSquare,
   Target,
-  Calendar, 
+  Calendar,
   Clock,
   Check,
   Sparkles,
@@ -48,16 +48,23 @@ const GOAL_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
 // ============================================
 
 export default function ReviewStep({ data, companyName }: ReviewStepProps) {
-  // Get data from AI analysis or confirmed edits
-  const industries = data.confirmedData.industries || data.analysis?.industries || []
-  const services = data.confirmedData.services || data.analysis?.services || []
-  const usps = data.confirmedData.usps || data.analysis?.uniqueSellingPoints || []
-  const audience = data.confirmedData.audience || data.analysis?.targetAudience
+  // Safe fallbacks for all data sources
+  const confirmedData = data.confirmedData || {}
+  const analysis = data.analysis || null
+
+  const industries = confirmedData.industries || analysis?.industries || []
+  const services = confirmedData.services || analysis?.services || []
+  const usps = confirmedData.usps || analysis?.uniqueSellingPoints || []
+  const audience = confirmedData.audience || analysis?.targetAudience || null
+
+  // Voice config fallback
+  const voiceConfig = data.voiceConfig || { formality: 'professional', personality: [], technicalLevel: 'medium' }
+
   const coreServices = services.filter((s: any) => s.isCore)
-  
+
   // Goal display
   const goalConfig = data.primaryBusinessGoal ? GOAL_CONFIG[data.primaryBusinessGoal] : null
-  
+
   // Calculate posts per service (for content pillars)
   const postsPerService = Math.ceil(data.postsPerWeek / Math.max(coreServices.length, 1))
 
@@ -68,7 +75,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
           <Check size={32} className="text-white" />
         </div>
-        
+
         <h2 className="text-2xl font-bold text-[var(--text-primary)]">
           Review Your Setup
         </h2>
@@ -93,7 +100,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
       </div>
 
       {/* AI Analysis Summary */}
-      {data.analysis && (
+      {analysis && (
         <div className="p-4 rounded-xl bg-brand-500/5 border border-brand-500/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -103,7 +110,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               </span>
             </div>
             <span className="text-lg font-bold text-brand-600 dark:text-brand-400">
-              {Math.round(data.analysis.confidenceScore * 100)}%
+              {Math.round(analysis.confidenceScore * 100)}%
             </span>
           </div>
         </div>
@@ -122,7 +129,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             </p>
           </div>
         </div>
-        
+
         {coreServices.length > 0 ? (
           <div className="space-y-2">
             {coreServices.slice(0, 5).map((service: any, i: number) => (
@@ -162,7 +169,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
 
       {/* Configuration Cards Grid */}
       <div className="grid md:grid-cols-2 gap-4">
-        
+
         {/* Industries */}
         <div className="p-5 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-subtle)]">
           <div className="flex items-center gap-3 mb-3">
@@ -173,11 +180,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">Industries</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {industries.length} detected
-                {data.confirmationStatus.industries && ' • Confirmed ✓'}
+                {data.confirmationStatus?.industries && ' • Confirmed ✓'}
               </p>
             </div>
           </div>
-          
+
           {industries.length > 0 ? (
             <div className="space-y-2">
               {industries.slice(0, 3).map((industry: any, i: number) => (
@@ -211,7 +218,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             </div>
             <h4 className="font-semibold text-[var(--text-primary)]">Primary Goal</h4>
           </div>
-          
+
           {goalConfig ? (
             <div className="flex items-center gap-2">
               <Check size={16} className="text-green-500" />
@@ -230,17 +237,17 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             </div>
             <h4 className="font-semibold text-[var(--text-primary)]">Brand Voice</h4>
           </div>
-          
+
           <div className="space-y-2">
             <p className="text-sm text-[var(--text-primary)]">
               <span className="text-[var(--text-tertiary)]">Formality:</span>{' '}
-              <span className="capitalize font-medium">{data.voiceConfig.formality}</span>
+              <span className="capitalize font-medium">{voiceConfig.formality}</span>
             </p>
-            
-            {data.voiceConfig.personality.length > 0 && (
+
+            {voiceConfig.personality.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {data.voiceConfig.personality.map((trait, i) => (
-                  <span 
+                {voiceConfig.personality.map((trait, i) => (
+                  <span
                     key={i}
                     className="px-2 py-0.5 rounded text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 capitalize"
                   >
@@ -249,10 +256,10 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
                 ))}
               </div>
             )}
-            
+
             <p className="text-sm text-[var(--text-primary)]">
               <span className="text-[var(--text-tertiary)]">Technical:</span>{' '}
-              <span className="capitalize font-medium">{data.voiceConfig.technicalLevel}</span>
+              <span className="capitalize font-medium">{voiceConfig.technicalLevel}</span>
             </p>
           </div>
         </div>
@@ -265,11 +272,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             </div>
             <h4 className="font-semibold text-[var(--text-primary)]">Tone & Style</h4>
           </div>
-          
+
           <p className="text-[var(--text-primary)]">
             <span className="font-medium capitalize">{data.defaultTone}</span> tone
           </p>
-          
+
           {data.humorEnabled ? (
             <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
               😄 Humor on: {data.humorDays.join(', ') || 'selected days'}
@@ -291,18 +298,18 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">Services</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {services.length} services • {coreServices.length} core
-                {data.confirmationStatus.services && ' • Confirmed ✓'}
+                {data.confirmationStatus?.services && ' • Confirmed ✓'}
               </p>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             {services.slice(0, 8).map((service: any, i: number) => (
-              <span 
+              <span
                 key={i}
                 className={`px-3 py-1 rounded-full text-sm ${
-                  service.isCore 
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 font-medium' 
+                  service.isCore
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 font-medium'
                     : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
                 }`}
               >
@@ -329,11 +336,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">What Makes You Special</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {usps.length} unique selling points
-                {data.confirmationStatus.usps && ' • Confirmed ✓'}
+                {data.confirmationStatus?.usps && ' • Confirmed ✓'}
               </p>
             </div>
           </div>
-          
+
           <div className="space-y-2">
             {usps.slice(0, 5).map((usp: any, i: number) => (
               <div key={i} className="flex items-start gap-2">
@@ -361,11 +368,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">Target Audience</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {audience.businessType}
-                {data.confirmationStatus.audience && ' • Confirmed ✓'}
+                {data.confirmationStatus?.audience && ' • Confirmed ✓'}
               </p>
             </div>
           </div>
-          
+
           <div className="space-y-3">
             {audience.primarySectors?.length > 0 && (
               <div>
@@ -379,7 +386,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
                 </div>
               </div>
             )}
-            
+
             {audience.decisionMakers?.length > 0 && (
               <div>
                 <p className="text-xs text-[var(--text-tertiary)] mb-1">Decision Makers</p>
@@ -388,7 +395,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
                 </p>
               </div>
             )}
-            
+
             {audience.geographicFocus?.length > 0 && (
               <div className="flex items-center gap-2">
                 <MapPin size={14} className="text-[var(--text-tertiary)]" />
@@ -409,23 +416,23 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
           </div>
           <h4 className="font-semibold text-[var(--text-primary)]">Posting Schedule</h4>
         </div>
-        
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="text-center p-3 bg-[var(--bg-primary)] rounded-lg">
             <div className="text-2xl font-bold text-[var(--text-primary)]">{data.postsPerWeek}</div>
             <div className="text-xs text-[var(--text-tertiary)]">posts/week</div>
           </div>
-          
+
           <div className="text-center p-3 bg-[var(--bg-primary)] rounded-lg">
             <div className="text-2xl font-bold text-[var(--text-primary)]">{data.preferredDays.length}</div>
             <div className="text-xs text-[var(--text-tertiary)]">active days</div>
           </div>
-          
+
           <div className="text-center p-3 bg-[var(--bg-primary)] rounded-lg">
             <div className="text-2xl font-bold text-[var(--text-primary)]">{coreServices.length || '—'}</div>
             <div className="text-xs text-[var(--text-tertiary)]">content themes</div>
           </div>
-          
+
           <div className="text-center p-3 bg-[var(--bg-primary)] rounded-lg">
             <div className="text-lg font-bold text-[var(--text-primary)] capitalize">{data.defaultTone}</div>
             <div className="text-xs text-[var(--text-tertiary)]">tone</div>
@@ -447,7 +454,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
       {/* What Happens Next */}
       <div className="p-5 bg-blue-500/5 rounded-xl border border-blue-500/20">
         <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-4">What happens after you complete setup?</h4>
-        
+
         <div className="space-y-3">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
@@ -458,11 +465,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <p className="text-sm text-[var(--text-secondary)]">Your settings are saved and used for all content generation</p>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-center">
             <ArrowRight size={16} className="text-blue-300" />
           </div>
-          
+
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
               2
@@ -474,11 +481,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-center">
             <ArrowRight size={16} className="text-blue-300" />
           </div>
-          
+
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
               3
@@ -488,11 +495,11 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <p className="text-sm text-[var(--text-secondary)]">Quick review → Approve or tweak → Auto-schedule</p>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-center">
             <ArrowRight size={16} className="text-blue-300" />
           </div>
-          
+
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
               ✓
@@ -514,7 +521,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
           <div>
             <h4 className="font-bold text-purple-700 dark:text-purple-300">Time Saved: ~4-5 hours/week</h4>
             <p className="text-purple-600 dark:text-purple-400 text-sm">
-              Creating {data.postsPerWeek} quality posts manually takes 30-40 min each. 
+              Creating {data.postsPerWeek} quality posts manually takes 30-40 min each.
               With AI: <strong>5 minutes to review & approve.</strong>
             </p>
           </div>
