@@ -2,7 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Clock, Calendar, Smile, Volume2, Sparkles, Info } from 'lucide-react'
+import { Check, Clock, Calendar, Smile, Volume2, Sparkles, Info, Wand2 } from 'lucide-react'
 import { OnboardingData } from '../OnboardingWizard'
 
 interface PostingPreferencesStepProps {
@@ -30,12 +30,12 @@ const TIME_SLOTS = [
 ]
 
 const TONES = [
-  { id: 'professional', label: 'Professional', emoji: 'ðŸ‘”', description: 'Formal and business-appropriate' },
-  { id: 'friendly', label: 'Friendly', emoji: 'ðŸ˜Š', description: 'Warm and approachable' },
-  { id: 'casual', label: 'Casual', emoji: 'âœŒï¸', description: 'Relaxed and conversational' },
-  { id: 'inspirational', label: 'Inspirational', emoji: 'âœ¨', description: 'Motivating and uplifting' },
-  { id: 'educational', label: 'Educational', emoji: 'ðŸ“š', description: 'Informative and teaching-focused' },
-  { id: 'witty', label: 'Witty', emoji: 'ðŸ˜„', description: 'Clever with light humor' }
+  { id: 'professional', label: 'Professional', emoji: '👔', description: 'Formal and business-appropriate' },
+  { id: 'friendly', label: 'Friendly', emoji: '😊', description: 'Warm and approachable' },
+  { id: 'casual', label: 'Casual', emoji: '✌️', description: 'Relaxed and conversational' },
+  { id: 'inspirational', label: 'Inspirational', emoji: '✨', description: 'Motivating and uplifting' },
+  { id: 'educational', label: 'Educational', emoji: '📚', description: 'Informative and teaching-focused' },
+  { id: 'witty', label: 'Witty', emoji: '😄', description: 'Clever with light humor' }
 ]
 
 const TIMEZONES = [
@@ -50,57 +50,82 @@ const TIMEZONES = [
 ]
 
 export default function PostingPreferencesStep({ data, updateData }: PostingPreferencesStepProps) {
-  const [initialized, setInitialized] = useState(false)
+  const [autoApplied, setAutoApplied] = useState(false)
 
-  // Auto-populate from industry benchmark on first load
-  useEffect(() => {
-    if (!initialized && data.industryBenchmark) {
-      const benchmark = data.industryBenchmark
-      const updates: Partial<OnboardingData> = {}
+  // Helper: apply recommended settings from benchmark
+  const applyRecommendations = () => {
+    const benchmark = data.industryBenchmark
+    if (!benchmark) return
 
-      // Set recommended posts per week if not already set
-      if (data.postsPerWeek === 4 && benchmark.optimalPostsMin) {
-        updates.postsPerWeek = Math.round((benchmark.optimalPostsMin + (benchmark.optimalPostsMax || benchmark.optimalPostsMin)) / 2)
-      }
+    const updates: Partial<OnboardingData> = {}
 
-      // Set recommended days if available and user hasn't customized
-      if (data.preferredDays.length <= 4 && benchmark.bestDays && Array.isArray(benchmark.bestDays) && benchmark.bestDays.length > 0) {
-        updates.preferredDays = benchmark.bestDays
-      }
-
-      // Set recommended times if available
-      if (Object.keys(data.preferredTimes).length === 0 && benchmark.bestTimes) {
-        const bestTimes = Array.isArray(benchmark.bestTimes) 
-          ? benchmark.bestTimes 
-          : (typeof benchmark.bestTimes === 'object' ? Object.values(benchmark.bestTimes).flat() : [])
-        
-        if (bestTimes.length > 0) {
-          const times: Record<string, string[]> = {}
-          const days = updates.preferredDays || data.preferredDays
-          days.forEach(day => {
-            times[day] = bestTimes as string[]
-          })
-          updates.preferredTimes = times
-        }
-      }
-
-      // Set tone based on industry recommendation
-      if (benchmark.recommendedTone && data.defaultTone === 'professional') {
-        updates.defaultTone = benchmark.recommendedTone
-      }
-
-      // Set humor based on industry
-      if (typeof benchmark.humorAppropriate === 'boolean') {
-        updates.humorEnabled = benchmark.humorAppropriate
-      }
-
-      if (Object.keys(updates).length > 0) {
-        updateData(updates)
-      }
-      
-      setInitialized(true)
+    // Posts per week: use middle of recommended range
+    if (benchmark.optimalPostsMin || benchmark.optimalPostsMax) {
+      const min = benchmark.optimalPostsMin || 3
+      const max = benchmark.optimalPostsMax || min
+      updates.postsPerWeek = Math.round((min + max) / 2)
     }
-  }, [data.industryBenchmark, initialized])
+
+    // Preferred days
+    if (benchmark.bestDays && Array.isArray(benchmark.bestDays) && benchmark.bestDays.length > 0) {
+      // Normalize to full day names
+      const days = benchmark.bestDays.map((d: string) => {
+        const lower = d.toLowerCase()
+        const match = DAYS_OF_WEEK.find(day => day.id.toLowerCase() === lower || day.short.toLowerCase() === lower)
+        return match ? match.id : d
+      }).filter(Boolean)
+      updates.preferredDays = days
+    }
+
+    // Preferred times: convert best times to TIME_SLOTS time strings
+    if (benchmark.bestTimes) {
+      let times: string[] = []
+      const bt = benchmark.bestTimes
+      if (Array.isArray(bt)) {
+        times = bt
+      } else if (typeof bt === 'object') {
+        times = Object.values(bt).flat() as string[]
+      }
+
+      // Normalize to match TIME_SLOTS
+      const normalized = times
+        .map((t: string) => {
+          const match = TIME_SLOTS.find(slot => slot.time === t || slot.id === t || slot.description === t)
+          return match ? match.time : null
+        })
+        .filter(Boolean) as string[]
+
+      if (normalized.length > 0) {
+        const timesMap: Record<string, string[]> = {}
+        const days = updates.preferredDays || data.preferredDays
+        days.forEach(day => {
+          timesMap[day] = normalized
+        })
+        updates.preferredTimes = timesMap
+      }
+    }
+
+    // Tone
+    if (benchmark.recommendedTone) {
+      const tone = TONES.find(t => t.id === benchmark.recommendedTone?.toLowerCase())
+      if (tone) updates.defaultTone = tone.id
+    }
+
+    // Humor
+    if (typeof benchmark.humorAppropriate === 'boolean') {
+      updates.humorEnabled = benchmark.humorAppropriate
+    }
+
+    updateData(updates)
+    setAutoApplied(true)
+  }
+
+  // Auto-apply on first load if benchmark exists and user hasn't customized
+  useEffect(() => {
+    if (!autoApplied && data.industryBenchmark) {
+      applyRecommendations()
+    }
+  }, [data.industryBenchmark])
 
   const toggleDay = (day: string) => {
     const current = data.preferredDays
@@ -122,51 +147,32 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
 
   const toggleTimeSlot = (time: string) => {
     const newTimes = { ...data.preferredTimes }
-    
-    // Check if this time is currently selected for any day
-    const isCurrentlySelected = data.preferredDays.some(day => 
-      (newTimes[day] || []).includes(time)
-    )
+    const isSelected = data.preferredDays.some(day => (newTimes[day] || []).includes(time))
 
-    // Toggle for all preferred days
     data.preferredDays.forEach(day => {
       const dayTimes = newTimes[day] || []
-      if (isCurrentlySelected) {
+      if (isSelected) {
         newTimes[day] = dayTimes.filter(t => t !== time)
-      } else {
-        if (!dayTimes.includes(time)) {
-          newTimes[day] = [...dayTimes, time].sort()
-        }
+      } else if (!dayTimes.includes(time)) {
+        newTimes[day] = [...dayTimes, time].sort()
       }
     })
-    
+
     updateData({ preferredTimes: newTimes })
   }
 
   const isTimeSelected = (time: string) => {
-    return data.preferredDays.some(day => 
-      (data.preferredTimes[day] || []).includes(time)
-    )
+    return data.preferredDays.some(day => (data.preferredTimes[day] || []).includes(time))
   }
 
-  const getRecommendedDays = (): string[] => {
-    if (data.industryBenchmark?.bestDays && Array.isArray(data.industryBenchmark.bestDays)) {
-      return data.industryBenchmark.bestDays
-    }
+  const recommendedDays = data.industryBenchmark?.bestDays || []
+  const recommendedTimes = (() => {
+    const bt = data.industryBenchmark?.bestTimes
+    if (!bt) return []
+    if (Array.isArray(bt)) return bt
+    if (typeof bt === 'object') return Object.values(bt).flat() as string[]
     return []
-  }
-
-  const getRecommendedTimes = (): string[] => {
-    if (data.industryBenchmark?.bestTimes) {
-      const bestTimes = data.industryBenchmark.bestTimes
-      if (Array.isArray(bestTimes)) return bestTimes
-      if (typeof bestTimes === 'object') return Object.values(bestTimes).flat() as string[]
-    }
-    return []
-  }
-
-  const recommendedDays = getRecommendedDays()
-  const recommendedTimes = getRecommendedTimes()
+  })()
 
   return (
     <div className="space-y-8">
@@ -176,22 +182,29 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
           Posting Schedule
         </h2>
         <p className="mt-2 text-[var(--text-secondary)]">
-          Set when and how often AI should generate and schedule your content
+          We've used your industry data to suggest the best times and frequency. Customize as you like.
         </p>
       </div>
 
-      {/* Industry Recommendation Banner */}
+      {/* Recommended Settings Banner */}
       {data.industryBenchmark && (
         <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
           <div className="flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="font-medium text-blue-900 dark:text-blue-100">
                 Smart defaults applied for {data.selectedIndustry}
               </p>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                We&apos;ve pre-filled recommended settings based on your industry. Feel free to customize!
+                We've pre-filled settings based on your industry. Click &quot;Use Recommended Settings&quot; to apply all suggestions.
               </p>
+              <button
+                onClick={applyRecommendations}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                <Wand2 size={16} />
+                Use Recommended Settings
+              </button>
             </div>
           </div>
         </div>
@@ -205,16 +218,14 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
           </div>
           <div className="flex-1">
             <h3 className="font-semibold text-[var(--text-primary)]">Posts Per Week</h3>
-            <p className="text-sm text-[var(--text-tertiary)]">
-              AI will auto-generate this many posts for your review
-            </p>
+            <p className="text-sm text-[var(--text-tertiary)]">AI will auto-generate this many posts for your review</p>
           </div>
           <div className="text-right">
             <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">{data.postsPerWeek}</span>
             <span className="text-sm text-[var(--text-tertiary)] block">posts</span>
           </div>
         </div>
-        
+
         <input
           type="range"
           min="1"
@@ -223,13 +234,13 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
           onChange={(e) => updateData({ postsPerWeek: parseInt(e.target.value) })}
           className="w-full h-2 bg-[var(--bg-tertiary)] rounded-lg appearance-none cursor-pointer accent-blue-500"
         />
-        
+
         <div className="flex justify-between text-xs text-[var(--text-tertiary)] mt-2">
           <span>1 post</span>
           <span>7 posts</span>
           <span>14 posts</span>
         </div>
-        
+
         {data.industryBenchmark?.optimalPostsMin && (
           <div className="flex items-center gap-2 mt-3 text-sm text-green-600 dark:text-green-400">
             <Info className="w-4 h-4" />
@@ -248,16 +259,16 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         <div className="grid grid-cols-7 gap-2">
           {DAYS_OF_WEEK.map((day) => {
             const isSelected = data.preferredDays.includes(day.id)
-            const isRecommended = recommendedDays.includes(day.id)
-            
+            const isRecommended = recommendedDays.some((d: string) => d.toLowerCase() === day.id.toLowerCase() || d.toLowerCase() === day.short.toLowerCase())
+
             return (
               <button
                 key={day.id}
                 onClick={() => toggleDay(day.id)}
                 className={`
                   relative p-3 rounded-xl border-2 text-center transition-all
-                  ${isSelected 
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                  ${isSelected
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
                   }
                 `}
@@ -295,8 +306,8 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {TIME_SLOTS.map((slot) => {
             const isSelected = isTimeSelected(slot.time)
-            const isRecommended = recommendedTimes.includes(slot.time)
-            
+            const isRecommended = recommendedTimes.includes(slot.time) || recommendedTimes.includes(slot.id) || recommendedTimes.includes(slot.description)
+
             return (
               <button
                 key={slot.id}
@@ -304,10 +315,10 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
                 disabled={data.preferredDays.length === 0}
                 className={`
                   relative p-3 rounded-xl border-2 text-center transition-all
-                  ${data.preferredDays.length === 0 
+                  ${data.preferredDays.length === 0
                     ? 'opacity-50 cursor-not-allowed border-[var(--border-subtle)] bg-[var(--bg-tertiary)]'
-                    : isSelected 
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                    : isSelected
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                       : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
                   }
                 `}
@@ -327,7 +338,7 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </div>
         {data.preferredDays.length === 0 && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-            âš ï¸ Select posting days first
+            ⚠️ Select posting days first
           </p>
         )}
       </div>
@@ -362,19 +373,25 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {TONES.map((tone) => {
             const isSelected = data.defaultTone === tone.id
-            
+            const isRecommended = data.industryBenchmark?.recommendedTone?.toLowerCase() === tone.id
+
             return (
               <button
                 key={tone.id}
                 onClick={() => updateData({ defaultTone: tone.id })}
                 className={`
-                  p-4 rounded-xl border-2 text-left transition-all
-                  ${isSelected 
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                  relative p-4 rounded-xl border-2 text-left transition-all
+                  ${isSelected
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                     : 'border-[var(--border-subtle)] hover:border-[var(--border-default)] bg-[var(--bg-primary)]'
                   }
                 `}
               >
+                {isRecommended && !isSelected && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
+                    <Sparkles className="w-2.5 h-2.5 text-white" />
+                  </div>
+                )}
                 <span className="text-xl">{tone.emoji}</span>
                 <span className={`block font-medium mt-1 ${isSelected ? 'text-green-700 dark:text-green-300' : 'text-[var(--text-primary)]'}`}>
                   {tone.label}
@@ -398,87 +415,49 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
               <p className="text-sm text-[var(--text-tertiary)]">Allow playful, lighter posts on certain days?</p>
             </div>
           </div>
-          
+
           <button
             onClick={() => updateData({ humorEnabled: !data.humorEnabled })}
-            className={`
-              relative w-14 h-8 rounded-full transition-colors
-              ${data.humorEnabled ? 'bg-amber-500' : 'bg-[var(--bg-tertiary)]'}
-            `}
+            className={`relative w-14 h-8 rounded-full transition-colors ${data.humorEnabled ? 'bg-amber-500' : 'bg-[var(--bg-tertiary)]'}`}
           >
-            <div className={`
-              absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform
-              ${data.humorEnabled ? 'translate-x-7' : 'translate-x-1'}
-            `} />
+            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${data.humorEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
           </button>
         </div>
 
         {data.humorEnabled && (
           <div>
-            <p className="text-sm text-[var(--text-secondary)] mb-3">
-              Select days for lighter, more engaging content:
-            </p>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">Select days for lighter, more engaging content:</p>
             <div className="flex flex-wrap gap-2">
               {DAYS_OF_WEEK.map((day) => {
                 const isSelected = data.humorDays.includes(day.id)
-                
                 return (
                   <button
                     key={day.id}
                     onClick={() => toggleHumorDay(day.id)}
-                    className={`
-                      px-3 py-2 rounded-lg text-sm font-medium transition-all
-                      ${isSelected 
-                        ? 'bg-amber-500 text-white' 
-                        : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'
-                      }
-                    `}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${isSelected ? 'bg-amber-500 text-white' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'}`}
                   >
                     {day.short}
                   </button>
                 )
               })}
             </div>
-            <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              ðŸ’¡ Tip: Friday posts with humor typically see 20% higher engagement!
-            </p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-2">💡 Tip: Friday posts with humor typically see 20% higher engagement!</p>
           </div>
         )}
       </div>
 
       {/* Auto-Generation Summary */}
       <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
-        <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-          ðŸ¤– Auto-Generation Preview
-        </h4>
+        <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">🤖 Auto-Generation Preview</h4>
         <div className="space-y-2 text-sm text-green-800 dark:text-green-200">
-          <p>
-            <strong>Weekly output:</strong> {data.postsPerWeek} AI-generated posts
-          </p>
-          <p>
-            <strong>Schedule:</strong> {data.preferredDays.length > 0 
-              ? data.preferredDays.map(d => d.slice(0, 3)).join(', ') 
-              : 'No days selected'}
-          </p>
-          <p>
-            <strong>Posting times:</strong> {
-              Object.values(data.preferredTimes).flat().filter((v, i, a) => a.indexOf(v) === i).length > 0
-                ? [...new Set(Object.values(data.preferredTimes).flat())].sort().join(', ')
-                : 'Not set'
-            }
-          </p>
-          <p>
-            <strong>Tone:</strong> {data.defaultTone.charAt(0).toUpperCase() + data.defaultTone.slice(1)}
-            {data.humorEnabled && data.humorDays.length > 0 && (
-              <span className="text-amber-600 dark:text-amber-400">
-                {' '}+ Humor on {data.humorDays.map(d => d.slice(0, 3)).join(', ')}
-              </span>
-            )}
+          <p><strong>Weekly output:</strong> {data.postsPerWeek} AI-generated posts</p>
+          <p><strong>Schedule:</strong> {data.preferredDays.length > 0 ? data.preferredDays.map(d => d.slice(0, 3)).join(', ') : 'No days selected'}</p>
+          <p><strong>Posting times:</strong> {[...new Set(Object.values(data.preferredTimes).flat())].sort().join(', ') || 'Not set'}</p>
+          <p><strong>Tone:</strong> {data.defaultTone.charAt(0).toUpperCase() + data.defaultTone.slice(1)}
+            {data.humorEnabled && data.humorDays.length > 0 && <span className="text-amber-600 dark:text-amber-400"> + Humor on {data.humorDays.map(d => d.slice(0, 3)).join(', ')}</span>}
           </p>
         </div>
-        <p className="text-xs text-green-600 dark:text-green-400 mt-3">
-          Click &quot;Generate This Week&quot; after setup to create your first batch!
-        </p>
+        <p className="text-xs text-green-600 dark:text-green-400 mt-3">Click "Generate This Week" after setup to create your first batch!</p>
       </div>
     </div>
   )
