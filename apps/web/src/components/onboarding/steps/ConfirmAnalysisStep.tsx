@@ -48,7 +48,6 @@ export default function ConfirmAnalysisStep({
   const [expandedSection, setExpandedSection] = useState<string | null>('industries')
   const [editingSection, setEditingSection] = useState<string | null>(null)
 
-  // Editable state – full objects
   const [editedIndustries, setEditedIndustries] = useState<ExtractedIndustry[]>(analysis.industries)
   const [editedServices, setEditedServices] = useState<ExtractedService[]>(analysis.services)
   const [editedUSPs, setEditedUSPs] = useState<ExtractedUSP[]>(analysis.uniqueSellingPoints)
@@ -87,11 +86,19 @@ export default function ConfirmAnalysisStep({
 
   // Add new empty item
   const addIndustry = () => {
-    setEditedIndustries(prev => [...prev, { name: '', category: '', confidence: 0 }])
+    setEditedIndustries(prev => [
+      ...prev,
+      { name: '', category: '', confidence: 0, code: '' } as ExtractedIndustry,
+    ])
   }
+
   const addService = () => {
-    setEditedServices(prev => [...prev, { name: '', description: '', isCore: false }])
+    setEditedServices(prev => [
+      ...prev,
+      { name: '', description: '', isCore: false } as ExtractedService,
+    ])
   }
+
   const addUSP = () => {
     setEditedUSPs(prev => [...prev, { point: '', category: 'quality' }])
   }
