@@ -60,6 +60,7 @@ interface CalendarWeekViewProps {
   selectedPostIds?: string[];
   onToggleSelection?: (postId: string) => void;
   onQuickStatusChange?: (postId: string, status: string) => void;
+  onQuickDelete?: (postId: string) => void;
 }
 
 const PLATFORM_CONFIG: Record<string, { icon: React.ElementType; color: string }> = {
@@ -118,6 +119,7 @@ export function CalendarWeekView({
   selectedPostIds = [],
   onToggleSelection,
   onQuickStatusChange,
+  onQuickDelete,
 }: CalendarWeekViewProps) {
   const [dragOverSlot, setDragOverSlot] = useState<{ dayIndex: number; hour: number } | null>(null);
   const [hoveredPostId, setHoveredPostId] = useState<string | null>(null);
@@ -138,7 +140,6 @@ export function CalendarWeekView({
   const getPostsForHour = (dayPosts: Post[], hour: number): Post[] =>
     dayPosts.filter((post) => getPostHour(post) === hour);
 
-  // Drag handlers
   const handleDragOver = (e: DragEvent<HTMLDivElement>, dayIndex: number, hour: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -171,7 +172,6 @@ export function CalendarWeekView({
     onToggleSelection?.(postId);
   };
 
-  // Quick actions
   const handleQuickPublish = (e: MouseEvent, postId: string) => {
     e.stopPropagation();
     onQuickStatusChange?.(postId, "PUBLISHED");
@@ -182,13 +182,9 @@ export function CalendarWeekView({
   };
   const handleQuickDelete = (e: MouseEvent, post: Post) => {
     e.stopPropagation();
-    if (confirm("Delete this post?")) {
-      // Since there's no dedicated delete prop, we fallback to opening the post modal (which has delete)
-      onPostClick(post);
-    }
+    onQuickDelete?.(post.id);
   };
 
-  // Popover helpers
   const showPopover = (postId: string) => {
     if (popoverTimeout) clearTimeout(popoverTimeout);
     setHoveredPostId(postId);
@@ -197,7 +193,6 @@ export function CalendarWeekView({
     setPopoverTimeout(setTimeout(() => setHoveredPostId(null), 150));
   };
 
-  // Helper to render a single post chip (used in both desktop and mobile)
   const PostChip = ({ post, dayIndex, hour, compact = false }: {
     post: Post;
     dayIndex: number;

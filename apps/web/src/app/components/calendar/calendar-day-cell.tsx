@@ -62,6 +62,7 @@ interface CalendarDayCellProps {
   selectedPostIds?: string[];
   onToggleSelection?: (postId: string) => void;
   onQuickStatusChange?: (postId: string, status: string) => void;
+  onQuickDelete?: (postId: string) => void;
 }
 
 const PLATFORM_CONFIG: Record<
@@ -153,6 +154,7 @@ export function CalendarDayCell({
   selectedPostIds = [],
   onToggleSelection,
   onQuickStatusChange,
+  onQuickDelete,
 }: CalendarDayCellProps) {
   const [localDragOver, setLocalDragOver] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -205,7 +207,6 @@ export function CalendarDayCell({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isMoreOpen]);
 
-  // Cleanup popover timeout
   useEffect(() => {
     return () => {
       if (popoverTimeout.current) clearTimeout(popoverTimeout.current);
@@ -276,7 +277,6 @@ export function CalendarDayCell({
   const isDropTarget = isDragOver || localDragOver;
   const dayLabel = formatDayLabel(date);
 
-  // Post unit with quick actions, topic color, status badge
   const PostUnit = ({
     post,
     size = "sm",
@@ -298,7 +298,7 @@ export function CalendarDayCell({
     const statusDotColor = STATUS_STYLES[post.status] || "bg-gray-400";
 
     const tooltip = `${post.topic || post.content.substring(0, 50)}${
-      post.scheduledFor ? ` â€¢ ${formatTime(post.scheduledFor)}` : ""
+      post.scheduledFor ? ` • ${formatTime(post.scheduledFor)}` : ""
     }`;
 
     const unitSizeClasses =
@@ -313,18 +313,11 @@ export function CalendarDayCell({
     };
     const handleQuickReschedule = (e: MouseEvent) => {
       e.stopPropagation();
-      // Reschedule to today's date (or current cell date?)
       onPostDrop?.(post.id, date);
     };
     const handleQuickDelete = (e: MouseEvent) => {
       e.stopPropagation();
-      if (confirm("Delete this post?")) {
-        // We'll use the same API call as bulk delete? For simplicity, we can call onQuickStatusChange with "DELETED" but that's not a status.
-        // Better to trigger a delete endpoint; we can call a prop like onDeletePost, but we don't have one.
-        // Since the parent handles delete via the modal, we'll just open the modal for delete, or add a new prop. For now, we'll leave it as placeholder.
-        // I'll add a fallback: open the post modal (which has delete button).
-        onPostClick(post);
-      }
+      onQuickDelete?.(post.id);
     };
 
     const handleUnitClick = () => {
@@ -357,7 +350,6 @@ export function CalendarDayCell({
           post.status === "PUBLISHED" && "opacity-60"
         )}
       >
-        {/* Selection checkbox */}
         {selectionMode && canSelect && (
           <button
             onClick={(e) => handleCheckboxClick(e, post.id)}
@@ -372,7 +364,6 @@ export function CalendarDayCell({
           </button>
         )}
 
-        {/* Main post card */}
         <div
           className={cn(
             "flex flex-col items-center justify-start",
@@ -383,12 +374,10 @@ export function CalendarDayCell({
             "hover:shadow-sm",
             isSelected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-950",
             post.status === "DRAFT" && "border-dashed",
-            // Topic color left border
             topicBorderColor,
-            "border-l-4" // make left border thicker for topic
+            "border-l-4"
           )}
         >
-          {/* Platform icon and status badge */}
           <div className="flex items-center gap-0.5 mb-0.5">
             <div
               className={cn(
@@ -402,12 +391,11 @@ export function CalendarDayCell({
             <div className={cn("w-1.5 h-1.5 rounded-full", statusDotColor)} />
           </div>
 
-          {/* Time */}
           <span className="text-[10px] leading-none font-medium text-[var(--text-secondary)] dark:text-gray-400">
-            {post.scheduledFor ? formatTime(post.scheduledFor) : "â€”"}
+            {post.scheduledFor ? formatTime(post.scheduledFor) : "—"}
           </span>
 
-          {/* Quick action buttons â€“ visible on hover (desktop) or always on mobile */}
+          {/* Quick action buttons – visible on hover (desktop) or always on mobile */}
           <div className="absolute top-0 right-0 hidden sm:group-hover:flex flex-col gap-0.5 p-0.5">
             {post.status !== "PUBLISHED" && post.status !== "PUBLISHING" && (
               <>
@@ -435,7 +423,7 @@ export function CalendarDayCell({
               </>
             )}
           </div>
-          {/* Mobile quick actions: always visible (no hover needed) */}
+          {/* Mobile quick actions: always visible */}
           <div className="flex sm:hidden gap-0.5 mt-0.5">
             {post.status !== "PUBLISHED" && post.status !== "PUBLISHING" && (
               <>
@@ -537,7 +525,7 @@ export function CalendarDayCell({
         </div>
       </div>
 
-      {/* "+X more" Modal (popoverâ€‘style) */}
+      {/* "+X more" Modal */}
       {isMoreOpen && (
         <div className="fixed inset-0 z-50">
           <button
@@ -553,7 +541,7 @@ export function CalendarDayCell({
                 </div>
                 <div className="text-xs text-[var(--text-tertiary)]">
                   {sortedPosts.length} post{sortedPosts.length === 1 ? "" : "s"}
-                  {selectionMode ? " â€¢ selection mode" : ""}
+                  {selectionMode ? " • selection mode" : ""}
                 </div>
               </div>
               <button

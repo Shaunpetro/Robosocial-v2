@@ -305,7 +305,7 @@ export default function GlobalCalendarPage() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
 
-  // Core state â€“ always start on today's date
+  // Core state – always start on today's date
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [posts, setPosts] = useState<Post[]>([]);
@@ -329,10 +329,10 @@ export default function GlobalCalendarPage() {
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
-  // Ref for autoâ€‘scrolling to today
+  // Ref for auto‑scrolling to today
   const calendarGridRef = useRef<HTMLDivElement>(null);
 
-  // Company color map (unchanged)
+  // Company color map (unused but kept for potential later use)
   const companyColorMap = useMemo(() => {
     const map = new Map<string, (typeof COMPANY_COLORS)[0]>();
     companies.forEach((company, index) => {
@@ -591,14 +591,14 @@ export default function GlobalCalendarPage() {
   }, [viewMode, currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Scroll to today's cell â€“ NOW SCROLL TO TOP (first line = current week)
+  // Scroll to current week at top when month view data is ready
   // ---------------------------------------------------------------
 
   useEffect(() => {
     if (!loading && viewMode === "month" && calendarGridRef.current) {
       const todayCell = calendarGridRef.current.querySelector('[data-today="true"]');
       if (todayCell) {
-        todayCell.scrollIntoView({ block: "start", behavior: "smooth" });
+        todayCell.scrollIntoView({ block: "start", behavior: "auto" });
       }
     }
   }, [loading, viewMode, calendarData]);
@@ -901,7 +901,7 @@ export default function GlobalCalendarPage() {
   }, [companies]);
 
   // ---------------------------------------------------------------
-  // Quick status change (for inline actions) â€“ now wired to cell
+  // Quick status change (for inline actions)
   // ---------------------------------------------------------------
 
   const quickStatusChange = async (postId: string, status: string) => {
@@ -912,6 +912,22 @@ export default function GlobalCalendarPage() {
         body: JSON.stringify({ status }),
       });
       if (res.ok) fetchPosts();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Quick delete (confirm then delete directly)
+  // ---------------------------------------------------------------
+
+  const handleQuickDelete = async (postId: string) => {
+    if (!confirm("Delete this post?")) return;
+    try {
+      const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchPosts();
+      }
     } catch (e) {
       console.error(e);
     }
@@ -955,10 +971,8 @@ export default function GlobalCalendarPage() {
     );
   }
 
-  // The month grid is only used for sm+ screens; on mobile we show a vertical stack.
   const MonthGrid = () => (
     <div className="hidden sm:block h-full">
-      {/* Days of Week Header */}
       <div className="grid grid-cols-7 border-b border-[var(--border-default)] flex-shrink-0">
         {DAYS_OF_WEEK.map((day) => (
           <div
@@ -970,7 +984,6 @@ export default function GlobalCalendarPage() {
         ))}
       </div>
 
-      {/* Month body scroll container */}
       <div ref={calendarGridRef} className="flex-1 min-h-0 overflow-y-auto">
         <div
           className="grid grid-cols-7"
@@ -996,6 +1009,7 @@ export default function GlobalCalendarPage() {
                 selectedPostIds={selectedPostIds}
                 onToggleSelection={togglePostSelection}
                 onQuickStatusChange={quickStatusChange}
+                onQuickDelete={handleQuickDelete}
               />
             );
           })}
@@ -1004,7 +1018,6 @@ export default function GlobalCalendarPage() {
     </div>
   );
 
-  // Mobile month view: vertically stacked day cards
   const MobileMonthList = () => (
     <div className="sm:hidden flex flex-col gap-2 p-2 overflow-y-auto flex-1 min-h-0">
       {calendarData.days.map((day) => {
@@ -1031,6 +1044,7 @@ export default function GlobalCalendarPage() {
               selectedPostIds={selectedPostIds}
               onToggleSelection={togglePostSelection}
               onQuickStatusChange={quickStatusChange}
+              onQuickDelete={handleQuickDelete}
             />
           </div>
         );
@@ -1042,14 +1056,12 @@ export default function GlobalCalendarPage() {
     <div className="h-full flex flex-col p-4 md:p-6 overflow-hidden">
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4 flex-shrink-0">
-        {/* Left: Title and View Toggle */}
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
             <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-brand-500" />
             <span className="whitespace-nowrap">Content Calendar</span>
           </h1>
 
-          {/* View Mode Toggle */}
           <div className="flex items-center bg-[var(--bg-secondary)] rounded-xl p-1">
             <button
               onClick={() => setViewMode("month")}
@@ -1089,7 +1101,6 @@ export default function GlobalCalendarPage() {
             </button>
           </div>
 
-          {/* Stats */}
           <div className="hidden xl:flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-2 py-1 bg-brand-500/10 rounded-lg">
               <div className="w-2 h-2 rounded-full bg-brand-500" />
@@ -1111,7 +1122,6 @@ export default function GlobalCalendarPage() {
             </div>
           </div>
 
-          {/* Rescheduling indicator */}
           {isRescheduling && (
             <div className="flex items-center gap-2 text-sm text-brand-600 dark:text-brand-400">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1120,9 +1130,7 @@ export default function GlobalCalendarPage() {
           )}
         </div>
 
-        {/* Right: Navigation Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Selection Mode Toggle */}
           <button
             onClick={toggleSelectionMode}
             className={cn(
@@ -1167,7 +1175,6 @@ export default function GlobalCalendarPage() {
             Today
           </button>
 
-          {/* Date Navigation */}
           <div className="flex items-center bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl">
             <button
               onClick={viewMode === "month" ? goToPrevMonth : goToPrevWeek}
@@ -1192,7 +1199,6 @@ export default function GlobalCalendarPage() {
 
       {/* Filters Row */}
       <div className="flex flex-wrap items-center gap-3 mb-4 flex-shrink-0">
-        {/* Company Filter */}
         <MultiSelectDropdown
           label="Companies"
           icon={<Building2 size={16} />}
@@ -1202,7 +1208,6 @@ export default function GlobalCalendarPage() {
           allLabel="All Companies"
         />
 
-        {/* Platform Filter */}
         <MultiSelectDropdown
           label="Platforms"
           icon={
@@ -1216,7 +1221,6 @@ export default function GlobalCalendarPage() {
           allLabel="All Platforms"
         />
 
-        {/* Status Filter */}
         <MultiSelectDropdown
           label="Status"
           icon={
@@ -1234,7 +1238,6 @@ export default function GlobalCalendarPage() {
           allLabel="All Statuses"
         />
 
-        {/* Clear Filters */}
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
@@ -1243,40 +1246,6 @@ export default function GlobalCalendarPage() {
             <X size={14} />
             Clear filters
           </button>
-        )}
-
-        {/* Active Filter Tags */}
-        {hasActiveFilters && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {selectedCompanyIds.map((id) => {
-              const company = companies.find((c) => c.id === id);
-              const colorIndex = companies.findIndex((c) => c.id === id);
-              const color = COMPANY_COLORS[colorIndex % COMPANY_COLORS.length];
-              return (
-                <span
-                  key={id}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium",
-                    color.light,
-                    color.text
-                  )}
-                >
-                  <div className={cn("w-2 h-2 rounded-full", color.bg)} />
-                  {company?.name}
-                  <button
-                    onClick={() =>
-                      setSelectedCompanyIds((prev) =>
-                        prev.filter((cid) => cid !== id)
-                      )
-                    }
-                    className="hover:opacity-70"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              );
-            })}
-          </div>
         )}
       </div>
 
@@ -1398,6 +1367,7 @@ export default function GlobalCalendarPage() {
             selectedPostIds={selectedPostIds}
             onToggleSelection={togglePostSelection}
             onQuickStatusChange={quickStatusChange}
+            onQuickDelete={handleQuickDelete}
           />
         )}
       </div>
