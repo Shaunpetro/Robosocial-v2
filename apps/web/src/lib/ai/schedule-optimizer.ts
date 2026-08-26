@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/schedule-optimizer.ts
+﻿// apps/web/src/lib/ai/schedule-optimizer.ts
 
 /**
  * SCHEDULE OPTIMIZER
@@ -188,14 +188,14 @@ import {
           // Check day psychology match
           const psychologyMatch = DAY_CONTENT_PSYCHOLOGY[dayOfWeek]?.includes(contentType);
           if (psychologyMatch) {
-            reason += ` • ${contentType} works well on ${dayOfWeek}s`;
+            reason += ` â€¢ ${contentType} works well on ${dayOfWeek}s`;
           }
   
           // FIXED: Use createScheduledDate for proper timezone handling
           // This converts local time to UTC for database storage
           const scheduledDate = createScheduledDate(currentDate, time, timezone);
   
-          console.log(`[ScheduleOptimizer] Slot: ${dayOfWeek} ${time} ${timezone} → UTC: ${scheduledDate.toISOString()}`);
+          console.log(`[ScheduleOptimizer] Slot: ${dayOfWeek} ${time} ${timezone} â†’ UTC: ${scheduledDate.toISOString()}`);
   
           const slot: ScheduleSlot = {
             dayOfWeek,

@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/topic-variations.ts
+﻿// apps/web/src/lib/ai/topic-variations.ts
 import Groq from "groq-sdk";
 
 const groq = new Groq({

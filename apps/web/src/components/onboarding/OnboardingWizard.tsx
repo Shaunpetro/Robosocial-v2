@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/OnboardingWizard.tsx
+﻿// apps/web/src/components/onboarding/OnboardingWizard.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -272,7 +272,7 @@ export default function OnboardingWizard({
   }, [])
 
   // ============================================
-  // ANALYSIS API CALL (Step 2 → Step 3)
+  // ANALYSIS API CALL (Step 2 â†’ Step 3)
   // ============================================
 
   const runAnalysis = useCallback(async () => {

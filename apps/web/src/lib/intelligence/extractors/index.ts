@@ -1,4 +1,4 @@
-// apps/web/src/lib/intelligence/extractors/index.ts
+﻿// apps/web/src/lib/intelligence/extractors/index.ts
 
 /**
  * INTELLIGENCE EXTRACTORS

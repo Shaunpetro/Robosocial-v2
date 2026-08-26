@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/analytics-insights.ts
+﻿// apps/web/src/lib/ai/analytics-insights.ts
 /**
  * Analytics Insights Service
  * Extracts performance patterns from past posts to inform AI content generation.
@@ -673,7 +673,7 @@ export function formatInsightsForPrompt(
 }
 
 /**
- * Produces a one‑line summary of the winning patterns for use in the prompt.
+ * Produces a oneâ€‘line summary of the winning patterns for use in the prompt.
  */
 export function getWinningPatternsSummary(insights: PerformanceInsights): string {
   if (!insights.hasData) return "";

@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/PostingPreferencesStep.tsx
+﻿// apps/web/src/components/onboarding/steps/PostingPreferencesStep.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -30,12 +30,12 @@ const TIME_SLOTS = [
 ]
 
 const TONES = [
-  { id: 'professional', label: 'Professional', emoji: '👔', description: 'Formal and business-appropriate' },
-  { id: 'friendly', label: 'Friendly', emoji: '😊', description: 'Warm and approachable' },
-  { id: 'casual', label: 'Casual', emoji: '✌️', description: 'Relaxed and conversational' },
-  { id: 'inspirational', label: 'Inspirational', emoji: '✨', description: 'Motivating and uplifting' },
-  { id: 'educational', label: 'Educational', emoji: '📚', description: 'Informative and teaching-focused' },
-  { id: 'witty', label: 'Witty', emoji: '😄', description: 'Clever with light humor' }
+  { id: 'professional', label: 'Professional', emoji: 'ðŸ‘”', description: 'Formal and business-appropriate' },
+  { id: 'friendly', label: 'Friendly', emoji: 'ðŸ˜Š', description: 'Warm and approachable' },
+  { id: 'casual', label: 'Casual', emoji: 'âœŒï¸', description: 'Relaxed and conversational' },
+  { id: 'inspirational', label: 'Inspirational', emoji: 'âœ¨', description: 'Motivating and uplifting' },
+  { id: 'educational', label: 'Educational', emoji: 'ðŸ“š', description: 'Informative and teaching-focused' },
+  { id: 'witty', label: 'Witty', emoji: 'ðŸ˜„', description: 'Clever with light humor' }
 ]
 
 const TIMEZONES = [
@@ -327,7 +327,7 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
         </div>
         {data.preferredDays.length === 0 && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-            ⚠️ Select posting days first
+            âš ï¸ Select posting days first
           </p>
         )}
       </div>
@@ -440,7 +440,7 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
               })}
             </div>
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              💡 Tip: Friday posts with humor typically see 20% higher engagement!
+              ðŸ’¡ Tip: Friday posts with humor typically see 20% higher engagement!
             </p>
           </div>
         )}
@@ -449,7 +449,7 @@ export default function PostingPreferencesStep({ data, updateData }: PostingPref
       {/* Auto-Generation Summary */}
       <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
         <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-          🤖 Auto-Generation Preview
+          ðŸ¤– Auto-Generation Preview
         </h4>
         <div className="space-y-2 text-sm text-green-800 dark:text-green-200">
           <p>

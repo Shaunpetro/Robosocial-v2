@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/volume-calculator.ts
+﻿// apps/web/src/lib/ai/volume-calculator.ts
 
 /**
  * VOLUME CALCULATOR

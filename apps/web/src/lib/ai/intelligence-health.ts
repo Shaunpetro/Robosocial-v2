@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/intelligence-health.ts
+﻿// apps/web/src/lib/ai/intelligence-health.ts
 
 /**
  * INTELLIGENCE HEALTH CALCULATOR

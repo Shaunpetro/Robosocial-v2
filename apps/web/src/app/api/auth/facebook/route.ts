@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { getFacebookAuthUrl } from '@/lib/oauth/facebook';
 
 export async function GET(request: NextRequest) {

@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/post-detail-modal.tsx
+﻿// apps/web/src/app/components/calendar/post-detail-modal.tsx
 "use client";
 
 import { useState, useEffect } from "react";

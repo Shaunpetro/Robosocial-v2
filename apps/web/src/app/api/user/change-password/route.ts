@@ -1,4 +1,4 @@
-// apps/web/src/app/api/user/change-password/route.ts
+﻿// apps/web/src/app/api/user/change-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";

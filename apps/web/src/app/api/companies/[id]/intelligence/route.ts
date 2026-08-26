@@ -1,4 +1,4 @@
-// apps/web/src/app/api/companies/[id]/intelligence/route.ts
+﻿// apps/web/src/app/api/companies/[id]/intelligence/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';

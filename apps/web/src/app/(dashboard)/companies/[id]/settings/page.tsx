@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/settings/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/settings/page.tsx
 import { notFound, redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import CompanySettingsClient from './CompanySettingsClient'

@@ -1,4 +1,4 @@
-// apps/web/src/app/(admin)/admin/layout.tsx
+﻿// apps/web/src/app/(admin)/admin/layout.tsx
 import { AuthGuard } from "./AuthGuard";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

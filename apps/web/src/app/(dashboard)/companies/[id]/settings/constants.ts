@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/settings/constants.ts
+﻿// apps/web/src/app/(dashboard)/companies/[id]/settings/constants.ts
 
 import {
     Building2,

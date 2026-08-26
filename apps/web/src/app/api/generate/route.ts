@@ -1,4 +1,4 @@
-// apps/web/src/app/api/generate/route.ts
+﻿// apps/web/src/app/api/generate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateSocialContent, regenerateContent } from "@/lib/ai/openai";

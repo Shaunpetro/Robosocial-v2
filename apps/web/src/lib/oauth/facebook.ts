@@ -1,4 +1,4 @@
-// apps/web/src/lib/oauth/facebook.ts
+﻿// apps/web/src/lib/oauth/facebook.ts
 
 const FB_API_VERSION = 'v21.0';
 const FB_AUTH_URL = `https://www.facebook.com/${FB_API_VERSION}/dialog/oauth`;
@@ -34,7 +34,7 @@ export const FACEBOOK_SCOPES = USE_MINIMAL_SCOPES
   : FACEBOOK_SCOPES_PRODUCTION;
 
 // ============================================
-// URL HELPERS – DYNAMIC, NO HARDCODED FALLBACK
+// URL HELPERS â€“ DYNAMIC, NO HARDCODED FALLBACK
 // ============================================
 
 function getAppUrl(): string {
@@ -71,7 +71,7 @@ export function decodeOAuthState(state: string): Record<string, string> {
 
 /**
  * @param companyId
- * @param postMode – 'profile' | 'page' (ignored for Facebook; always page)
+ * @param postMode â€“ 'profile' | 'page' (ignored for Facebook; always page)
  */
 export function getFacebookAuthUrl(companyId: string, postMode: 'profile' | 'page' = 'page'): string {
   const redirectUri = getFacebookRedirectUri();

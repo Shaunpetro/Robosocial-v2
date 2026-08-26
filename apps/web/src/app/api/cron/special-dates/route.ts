@@ -1,4 +1,4 @@
-// apps/web/src/app/api/cron/special-dates/route.ts
+﻿// apps/web/src/app/api/cron/special-dates/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -49,12 +49,12 @@ export async function GET(request: NextRequest) {
 
       // --- NEW: enforce complete setup ---
       if (!config.logoMediaId) {
-        result.errors.push("No company logo uploaded – skipping.");
+        result.errors.push("No company logo uploaded â€“ skipping.");
         results.push(result);
         continue;
       }
       if (!config.holidaySets || config.holidaySets.length === 0) {
-        result.errors.push("No holiday sets selected – skipping.");
+        result.errors.push("No holiday sets selected â€“ skipping.");
         results.push(result);
         continue;
       }

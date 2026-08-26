@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/topic-generator.ts
+﻿// apps/web/src/lib/ai/topic-generator.ts
 
 /**
  * TOPIC GENERATOR

@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/AnalysisLoadingStep.tsx
+﻿// apps/web/src/components/onboarding/steps/AnalysisLoadingStep.tsx
 
 'use client'
 
@@ -278,7 +278,7 @@ export default function AnalysisLoadingStep({
       {analysisStatus.stage !== 'complete' && analysisStatus.stage !== 'error' && (
         <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
           <p className="text-sm text-purple-600 dark:text-purple-400 text-center">
-            💡 <span className="font-medium">Did you know?</span> Companies that post consistently 
+            ðŸ’¡ <span className="font-medium">Did you know?</span> Companies that post consistently 
             see 2x more engagement than those that post sporadically.
           </p>
         </div>

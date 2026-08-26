@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/LogoBasicsStep.tsx
+﻿// apps/web/src/components/onboarding/steps/LogoBasicsStep.tsx
 'use client'
 
 import { useState } from 'react'
@@ -177,7 +177,7 @@ export default function LogoBasicsStep({
             )}
 
             <p className="text-xs text-[var(--text-tertiary)] mt-2 text-center">
-              PNG, JPG or GIF • Max 10MB
+              PNG, JPG or GIF â€¢ Max 10MB
             </p>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function LogoBasicsStep({
       {/* Info Box */}
       <div className="p-4 rounded-xl bg-brand-500/5 border border-brand-500/10">
         <div className="flex gap-3">
-          <div className="text-2xl">💡</div>
+          <div className="text-2xl">ðŸ’¡</div>
           <div>
             <p className="text-sm font-medium text-[var(--text-primary)]">
               Why add a logo?

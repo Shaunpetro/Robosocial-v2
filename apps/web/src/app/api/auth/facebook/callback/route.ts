@@ -1,4 +1,4 @@
-// apps/web/src/app/api/auth/facebook/callback/route.ts
+﻿// apps/web/src/app/api/auth/facebook/callback/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Single page – connect directly
+    // Single page â€“ connect directly
     if (pages.length === 1) {
       const page = pages[0];
 
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Multiple pages – create pending connection for page selector
+    // Multiple pages â€“ create pending connection for page selector
     const connectionData = {
       userAccessToken: longLived.access_token,
       expiresAt: new Date(Date.now() + (longLived.expires_in || 5184000) * 1000).toISOString(),

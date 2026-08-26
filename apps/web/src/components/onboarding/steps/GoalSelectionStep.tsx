@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/GoalSelectionStep.tsx
+﻿// apps/web/src/components/onboarding/steps/GoalSelectionStep.tsx
 
 'use client'
 

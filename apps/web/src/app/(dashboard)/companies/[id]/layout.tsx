@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/layout.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/layout.tsx
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import CompanySidebar from '@/components/layout/CompanySidebar'

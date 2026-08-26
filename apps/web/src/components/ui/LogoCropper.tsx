@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/LogoCropper.tsx
+﻿// apps/web/src/components/ui/LogoCropper.tsx
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
@@ -219,7 +219,7 @@ export default function LogoCropper({
                   className="w-10 h-10 border-2 border-dashed border-[var(--border-default)] rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden"
                 >
                   <span className="text-xs text-[var(--text-tertiary)]">
-                    {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}
+                    {Math.round(completedCrop.width)}Ã—{Math.round(completedCrop.height)}
                   </span>
                 </div>
                 <span className="text-xs text-[var(--text-tertiary)]">

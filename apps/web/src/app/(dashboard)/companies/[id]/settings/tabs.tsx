@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/settings/tabs.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/settings/tabs.tsx
 'use client'
 
 import Image from 'next/image'

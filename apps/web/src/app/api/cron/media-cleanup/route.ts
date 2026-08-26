@@ -1,4 +1,4 @@
-// apps/web/src/app/api/cron/media-cleanup/route.ts
+﻿// apps/web/src/app/api/cron/media-cleanup/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { del } from "@vercel/blob";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-    // Exclude permanent / special‑dates media
+    // Exclude permanent / specialâ€‘dates media
     const expiredMedia = await prisma.media.findMany({
       where: {
         createdAt: { lte: fourteenDaysAgo },

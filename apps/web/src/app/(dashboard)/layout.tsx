@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/layout.tsx
+﻿// apps/web/src/app/(dashboard)/layout.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -141,7 +141,7 @@ function UserDropdown() {
                 className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors w-full justify-center"
               >
                 <LogOut size={16} />
-                Sign Out &amp; Re‑login
+                Sign Out &amp; Reâ€‘login
               </button>
               <p className="text-xs text-[var(--text-tertiary)] mt-2 text-center">
                 This should restore your profile data.

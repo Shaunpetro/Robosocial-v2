@@ -1,4 +1,4 @@
-// apps/web/src/app/api/media/upload/route.ts
+﻿// apps/web/src/app/api/media/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { MediaType } from "@prisma/client";
@@ -58,11 +58,11 @@ export async function POST(request: NextRequest) {
     const fileSize = fileData.size || file.size;
     const mediaType = getMediaType(file.type);
 
-    // 14‑day expiry (instead of 2 months)
+    // 14â€‘day expiry (instead of 2 months)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 14);
 
-    // AI auto‑tagging and alt‑text (non‑blocking)
+    // AI autoâ€‘tagging and altâ€‘text (nonâ€‘blocking)
     let aiResult = { tags: [] as string[], altText: fileName, contentType: "educational" };
     try {
       aiResult = await analyseMedia(

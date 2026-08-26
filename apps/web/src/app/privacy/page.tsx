@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+﻿import { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -159,7 +159,7 @@ export default function PrivacyPolicyPage() {
             href="/" 
             className="text-blue-400 hover:text-blue-300 transition-colors"
           >
-            ← Back to App
+            â† Back to App
           </Link>
         </div>
       </div>

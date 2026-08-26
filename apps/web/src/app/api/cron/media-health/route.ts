@@ -1,4 +1,4 @@
-// apps/web/src/app/api/cron/media-health/route.ts
+﻿// apps/web/src/app/api/cron/media-health/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateMediaHealthReport } from "@/lib/ai/media-analysis";

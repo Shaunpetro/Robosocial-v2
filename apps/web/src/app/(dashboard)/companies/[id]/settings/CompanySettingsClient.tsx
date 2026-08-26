@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/settings/CompanySettingsClient.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/settings/CompanySettingsClient.tsx
 'use client'
 
 import { useState } from 'react'

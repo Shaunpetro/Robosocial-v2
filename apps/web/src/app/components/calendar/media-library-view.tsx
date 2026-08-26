@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/media-library-view.tsx
+﻿// apps/web/src/app/components/calendar/media-library-view.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -225,7 +225,7 @@ export function MediaLibraryView({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            🖼️ Media Library
+            ðŸ–¼ï¸ Media Library
           </h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
             {media.length} files
@@ -448,7 +448,7 @@ export function MediaLibraryView({
                   <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {item.filename}
                   </p>
-                  <p className="text-xs text-[var(--text-tertiary)]">{item.type} • {formatSize(item.size)}</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{item.type} â€¢ {formatSize(item.size)}</p>
                 </div>
 
                 {!selectionMode && (

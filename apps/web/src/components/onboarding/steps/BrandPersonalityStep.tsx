@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Check, Sparkles, Users, Target } from 'lucide-react'
@@ -11,18 +11,18 @@ interface BrandPersonalityStepProps {
 }
 
 const PERSONALITY_TRAITS = [
-  { id: 'professional', label: 'Professional', emoji: '👔', description: 'Formal and business-focused' },
-  { id: 'friendly', label: 'Friendly', emoji: '😊', description: 'Warm and approachable' },
-  { id: 'innovative', label: 'Innovative', emoji: '💡', description: 'Cutting-edge and forward-thinking' },
-  { id: 'trustworthy', label: 'Trustworthy', emoji: '🤝', description: 'Reliable and dependable' },
-  { id: 'playful', label: 'Playful', emoji: '🎉', description: 'Fun and lighthearted' },
-  { id: 'authoritative', label: 'Authoritative', emoji: '📚', description: 'Expert and knowledgeable' },
-  { id: 'caring', label: 'Caring', emoji: '❤️', description: 'Compassionate and supportive' },
-  { id: 'bold', label: 'Bold', emoji: '🔥', description: 'Confident and daring' },
-  { id: 'creative', label: 'Creative', emoji: '🎨', description: 'Artistic and imaginative' },
-  { id: 'authentic', label: 'Authentic', emoji: '✨', description: 'Genuine and transparent' },
-  { id: 'energetic', label: 'Energetic', emoji: '⚡', description: 'Dynamic and lively' },
-  { id: 'sophisticated', label: 'Sophisticated', emoji: '🥂', description: 'Elegant and refined' }
+  { id: 'professional', label: 'Professional', emoji: 'ðŸ‘”', description: 'Formal and business-focused' },
+  { id: 'friendly', label: 'Friendly', emoji: 'ðŸ˜Š', description: 'Warm and approachable' },
+  { id: 'innovative', label: 'Innovative', emoji: 'ðŸ’¡', description: 'Cutting-edge and forward-thinking' },
+  { id: 'trustworthy', label: 'Trustworthy', emoji: 'ðŸ¤', description: 'Reliable and dependable' },
+  { id: 'playful', label: 'Playful', emoji: 'ðŸŽ‰', description: 'Fun and lighthearted' },
+  { id: 'authoritative', label: 'Authoritative', emoji: 'ðŸ“š', description: 'Expert and knowledgeable' },
+  { id: 'caring', label: 'Caring', emoji: 'â¤ï¸', description: 'Compassionate and supportive' },
+  { id: 'bold', label: 'Bold', emoji: 'ðŸ”¥', description: 'Confident and daring' },
+  { id: 'creative', label: 'Creative', emoji: 'ðŸŽ¨', description: 'Artistic and imaginative' },
+  { id: 'authentic', label: 'Authentic', emoji: 'âœ¨', description: 'Genuine and transparent' },
+  { id: 'energetic', label: 'Energetic', emoji: 'âš¡', description: 'Dynamic and lively' },
+  { id: 'sophisticated', label: 'Sophisticated', emoji: 'ðŸ¥‚', description: 'Elegant and refined' }
 ]
 
 const BRAND_VOICES = [
@@ -253,7 +253,7 @@ export default function BrandPersonalityStep({
                   onClick={() => removeUSP(index)}
                   className="text-blue-400 hover:text-blue-600"
                 >
-                  ×
+                  Ã—
                 </button>
               </span>
             ))}

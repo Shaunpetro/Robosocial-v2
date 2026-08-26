@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/analytics/analytics-charts.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/analytics/analytics-charts.tsx
 'use client';
 
 import {

@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/calendar-day-cell.tsx
+﻿// apps/web/src/app/components/calendar/calendar-day-cell.tsx
 "use client";
 
 import { useMemo, useState, DragEvent, MouseEvent, useEffect, useRef, useCallback } from "react";
@@ -298,7 +298,7 @@ export function CalendarDayCell({
     const statusDotColor = STATUS_STYLES[post.status] || "bg-gray-400";
 
     const tooltip = `${post.topic || post.content.substring(0, 50)}${
-      post.scheduledFor ? ` • ${formatTime(post.scheduledFor)}` : ""
+      post.scheduledFor ? ` â€¢ ${formatTime(post.scheduledFor)}` : ""
     }`;
 
     const unitSizeClasses =
@@ -404,10 +404,10 @@ export function CalendarDayCell({
 
           {/* Time */}
           <span className="text-[10px] leading-none font-medium text-[var(--text-secondary)] dark:text-gray-400">
-            {post.scheduledFor ? formatTime(post.scheduledFor) : "—"}
+            {post.scheduledFor ? formatTime(post.scheduledFor) : "â€”"}
           </span>
 
-          {/* Quick action buttons – visible on hover (desktop) or always on mobile */}
+          {/* Quick action buttons â€“ visible on hover (desktop) or always on mobile */}
           <div className="absolute top-0 right-0 hidden sm:group-hover:flex flex-col gap-0.5 p-0.5">
             {post.status !== "PUBLISHED" && post.status !== "PUBLISHING" && (
               <>
@@ -537,7 +537,7 @@ export function CalendarDayCell({
         </div>
       </div>
 
-      {/* "+X more" Modal (popover‑style) */}
+      {/* "+X more" Modal (popoverâ€‘style) */}
       {isMoreOpen && (
         <div className="fixed inset-0 z-50">
           <button
@@ -553,7 +553,7 @@ export function CalendarDayCell({
                 </div>
                 <div className="text-xs text-[var(--text-tertiary)]">
                   {sortedPosts.length} post{sortedPosts.length === 1 ? "" : "s"}
-                  {selectionMode ? " • selection mode" : ""}
+                  {selectionMode ? " â€¢ selection mode" : ""}
                 </div>
               </div>
               <button

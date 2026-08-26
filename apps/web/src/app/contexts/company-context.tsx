@@ -1,4 +1,4 @@
-// apps/web/src/app/contexts/company-context.tsx
+﻿// apps/web/src/app/contexts/company-context.tsx
 "use client";
 
 import {

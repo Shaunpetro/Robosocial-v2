@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/media/layout.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/media/layout.tsx
 
 import { ReactNode } from "react";
 

@@ -1,4 +1,4 @@
-// apps/web/src/lib/oauth/linkedin.ts
+﻿// apps/web/src/lib/oauth/linkedin.ts
 
 const LINKEDIN_AUTH_URL = 'https://www.linkedin.com/oauth/v2/authorization';
 const LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';

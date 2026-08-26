@@ -1,4 +1,4 @@
-// apps/web/src/lib/utils/timezone.ts
+﻿// apps/web/src/lib/utils/timezone.ts
 
 /**
  * Timezone utilities for converting between local times and UTC
@@ -64,7 +64,7 @@ const TIMEZONE_OFFSETS: Record<string, number> = {
    * @returns Date object in UTC
    * 
    * @example
-   * // 09:10 SAST → 07:10 UTC
+   * // 09:10 SAST â†’ 07:10 UTC
    * localToUTC("2026-03-24", "09:10", "Africa/Johannesburg")
    * // Returns: Date representing 2026-03-24T07:10:00.000Z
    */

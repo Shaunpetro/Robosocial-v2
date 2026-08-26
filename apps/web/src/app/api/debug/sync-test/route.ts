@@ -1,4 +1,4 @@
-// apps/web/src/app/api/debug/sync-test/route.ts
+﻿// apps/web/src/app/api/debug/sync-test/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PostStatus, PlatformType } from '@prisma/client';

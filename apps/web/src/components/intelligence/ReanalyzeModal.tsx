@@ -1,4 +1,4 @@
-// apps/web/src/components/intelligence/ReanalyzeModal.tsx
+﻿// apps/web/src/components/intelligence/ReanalyzeModal.tsx
 'use client';
 
 import { useState } from 'react';

@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/calendar/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/calendar/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';

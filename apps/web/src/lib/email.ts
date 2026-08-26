@@ -1,4 +1,4 @@
-// apps/web/src/lib/email.ts
+﻿// apps/web/src/lib/email.ts
 import { Resend } from 'resend';
 
 let resendInstance: Resend | null = null;
@@ -39,7 +39,7 @@ export async function sendWelcomeEmail(
   await r.emails.send({
     from: fromEmail || defaultFrom,
     to,
-    subject: 'Welcome to Robosocial – Your Account is Ready',
+    subject: 'Welcome to Robosocial â€“ Your Account is Ready',
     html,
   });
 }
@@ -99,7 +99,7 @@ export async function sendMediaCleanupReminderEmail(
   await r.emails.send({
     from: defaultFrom,
     to,
-    subject: `📸 Your media library for ${companyName} has been cleaned up`,
+    subject: `ðŸ“¸ Your media library for ${companyName} has been cleaned up`,
     html: `
       <p>Hi,</p>
       <p>Your media library for <strong>${companyName}</strong> has been automatically cleaned up.</p>
@@ -138,9 +138,9 @@ export async function sendMediaHealthReportEmail(
   await r.emails.send({
     from: defaultFrom,
     to,
-    subject: `📊 Media Library Health Report for ${companyName}`,
+    subject: `ðŸ“Š Media Library Health Report for ${companyName}`,
     html: `
-      <h2>Media Health Report – ${companyName}</h2>
+      <h2>Media Health Report â€“ ${companyName}</h2>
       <p><strong>Total files:</strong> ${totalMedia}</p>
       <p><strong>Unused / not attached to any post:</strong> ${unusedMedia}</p>
       <p><strong>Expiring within 7 days:</strong> ${expiringSoon}</p>

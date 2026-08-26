@@ -1,4 +1,4 @@
-// apps/web/src/app/(auth)/login/page.tsx
+﻿// apps/web/src/app/(auth)/login/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -69,7 +69,7 @@ export default function LoginPage() {
         className="absolute top-4 right-4 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-700 dark:text-gray-200 hover:shadow-lg transition"
         aria-label="Switch theme"
       >
-        {theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "💻"}
+        {theme === "light" ? "â˜€ï¸" : theme === "dark" ? "ðŸŒ™" : "ðŸ’»"}
       </button>
 
       <form

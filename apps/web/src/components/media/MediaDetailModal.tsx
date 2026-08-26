@@ -1,4 +1,4 @@
-// apps/web/src/components/media/MediaDetailModal.tsx
+﻿// apps/web/src/components/media/MediaDetailModal.tsx
 
 "use client";
 
@@ -86,10 +86,10 @@ interface MediaDetailModalProps {
 // ============================================
 
 const CONTENT_TYPES = [
-  { id: "educational", label: "📚 Educational" },
-  { id: "engagement", label: "💬 Engagement" },
-  { id: "social_proof", label: "⭐ Social Proof" },
-  { id: "promotional", label: "📢 Promotional" },
+  { id: "educational", label: "ðŸ“š Educational" },
+  { id: "engagement", label: "ðŸ’¬ Engagement" },
+  { id: "social_proof", label: "â­ Social Proof" },
+  { id: "promotional", label: "ðŸ“¢ Promotional" },
 ];
 
 // ============================================
@@ -105,7 +105,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return "—";
+  if (!dateString) return "â€”";
   const date = new Date(dateString);
   return date.toLocaleDateString("en-ZA", {
     day: "numeric",
@@ -442,7 +442,7 @@ export function MediaDetailModal({
                   <div className="p-3 rounded-lg bg-muted/50 col-span-2">
                     <p className="text-muted-foreground">Dimensions</p>
                     <p className="font-medium">
-                      {media.width} × {media.height}
+                      {media.width} Ã— {media.height}
                     </p>
                   </div>
                 )}

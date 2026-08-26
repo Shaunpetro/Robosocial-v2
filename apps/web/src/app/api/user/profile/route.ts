@@ -1,4 +1,4 @@
-// apps/web/src/app/api/user/profile/route.ts
+﻿// apps/web/src/app/api/user/profile/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";

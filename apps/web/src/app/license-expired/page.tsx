@@ -1,4 +1,4 @@
-// apps/web/src/app/license-expired/page.tsx
+﻿// apps/web/src/app/license-expired/page.tsx
 import Link from "next/link";
 
 export default function LicenseExpired() {
@@ -24,13 +24,13 @@ export default function LicenseExpired() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
           >
-            💬 Message us on WhatsApp
+            ðŸ’¬ Message us on WhatsApp
           </a>
           <a
             href="mailto:petrographics.adm@gmail.com"
             className="inline-flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition"
           >
-            📧 Email Administrator
+            ðŸ“§ Email Administrator
           </a>
         </div>
       </div>

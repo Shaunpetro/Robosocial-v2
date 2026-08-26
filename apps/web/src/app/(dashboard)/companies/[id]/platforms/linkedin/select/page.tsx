@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/platforms/linkedin/select/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/platforms/linkedin/select/page.tsx
 'use client';
 
 import { Suspense, useState } from 'react';

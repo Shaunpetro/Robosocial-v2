@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/types.ts
+﻿// apps/web/src/lib/ai/types.ts
 
 /**
  * SHARED TYPES

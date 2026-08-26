@@ -1,4 +1,4 @@
-// apps/web/src/app/api/intelligence/confirm/route.ts
+﻿// apps/web/src/app/api/intelligence/confirm/route.ts
 
 /**
  * ANALYSIS CONFIRMATION API

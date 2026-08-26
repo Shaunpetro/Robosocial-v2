@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/AnimatedLogo.tsx
+﻿// apps/web/src/components/ui/AnimatedLogo.tsx
 'use client'
 
 import { useEffect, useRef } from 'react'

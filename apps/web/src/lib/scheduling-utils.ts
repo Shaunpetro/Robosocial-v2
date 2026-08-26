@@ -1,4 +1,4 @@
-// apps/web/src/lib/scheduling-utils.ts
+﻿// apps/web/src/lib/scheduling-utils.ts
 
 /**
  * Scheduling Utilities
@@ -30,12 +30,12 @@ export const TIME_SLOT_TO_HOURS: Record<string, string[]> = {
   // ============================================
   
   /**
-   * Converts various preferredTimes formats to a normalized day → times mapping
+   * Converts various preferredTimes formats to a normalized day â†’ times mapping
    * 
    * Handles:
-   * - New format: ["morning", "afternoon"] → slot names
-   * - Old format: { "monday": ["09:00", "14:00"] } → day-specific times
-   * - Null/undefined → defaults
+   * - New format: ["morning", "afternoon"] â†’ slot names
+   * - Old format: { "monday": ["09:00", "14:00"] } â†’ day-specific times
+   * - Null/undefined â†’ defaults
    */
   export function normalizePreferredTimes(
     preferredTimes: unknown,

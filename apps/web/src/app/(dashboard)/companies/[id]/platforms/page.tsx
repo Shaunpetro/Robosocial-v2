@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/platforms/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/platforms/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';

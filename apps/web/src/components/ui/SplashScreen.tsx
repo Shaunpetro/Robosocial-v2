@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/SplashScreen.tsx
+﻿// apps/web/src/components/ui/SplashScreen.tsx
 'use client'
 
 import { useEffect, useState } from 'react'

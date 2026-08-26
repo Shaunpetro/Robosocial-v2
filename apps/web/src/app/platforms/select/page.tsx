@@ -1,4 +1,4 @@
-// apps/web/src/app/platforms/select/page.tsx
+﻿// apps/web/src/app/platforms/select/page.tsx
 
 'use client';
 

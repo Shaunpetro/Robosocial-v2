@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { PlatformCard } from '@/app/components/platforms/platform-card';
 import type { PlatformConnection } from '@/lib/platforms';

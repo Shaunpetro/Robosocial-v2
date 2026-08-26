@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/analytics/analytics-utils.ts
+﻿// apps/web/src/app/(dashboard)/companies/[id]/analytics/analytics-utils.ts
 
 // ==================== TYPES ====================
 

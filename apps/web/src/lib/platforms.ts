@@ -1,4 +1,4 @@
-export interface PlatformConfig {
+﻿export interface PlatformConfig {
   id: string;
   name: string;
   color: string;

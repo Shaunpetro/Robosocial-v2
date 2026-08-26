@@ -1,4 +1,4 @@
-// apps/web/src/lib/intelligence/analyzer.ts
+﻿// apps/web/src/lib/intelligence/analyzer.ts
 
 /**
  * COMPANY INTELLIGENCE ANALYZER

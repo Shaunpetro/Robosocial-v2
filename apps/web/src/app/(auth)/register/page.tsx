@@ -1,4 +1,4 @@
-// apps/web/src/app/(auth)/register/page.tsx
+﻿// apps/web/src/app/(auth)/register/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -53,7 +53,7 @@ export default function RegisterPage() {
         className="absolute top-4 right-4 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-700 dark:text-gray-200 hover:shadow-lg transition"
         aria-label="Switch theme"
       >
-        {theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "💻"}
+        {theme === "light" ? "â˜€ï¸" : theme === "dark" ? "ðŸŒ™" : "ðŸ’»"}
       </button>
 
       <form

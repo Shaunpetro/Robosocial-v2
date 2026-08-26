@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/generate/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/generate/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

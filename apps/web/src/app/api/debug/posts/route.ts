@@ -1,4 +1,4 @@
-// apps/web/src/app/api/debug/posts/route.ts
+﻿// apps/web/src/app/api/debug/posts/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
       summary,
       diagnosis: summary.withExternalId === 0 
-        ? '⚠️ NO posts have externalPostId! Analytics sync cannot work. Posts were marked as published but not actually sent to LinkedIn/Facebook APIs.'
-        : `✅ ${summary.withExternalId} posts have externalPostId and can be synced.`,
+        ? 'âš ï¸ NO posts have externalPostId! Analytics sync cannot work. Posts were marked as published but not actually sent to LinkedIn/Facebook APIs.'
+        : `âœ… ${summary.withExternalId} posts have externalPostId and can be synced.`,
       analysis,
       posts,
     });

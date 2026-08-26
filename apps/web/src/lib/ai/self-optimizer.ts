@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/self-optimizer.ts
+﻿// apps/web/src/lib/ai/self-optimizer.ts
 import { prisma } from "@/lib/db";
 
 interface PostWithEngagement {
@@ -12,7 +12,7 @@ interface PostWithEngagement {
 }
 
 /**
- * Weekly self‑optimization: analyses the last 7 days of published posts,
+ * Weekly selfâ€‘optimization: analyses the last 7 days of published posts,
  * extracts winning patterns, and updates CompanyIntelligence.
  * Only runs if there are at least 5 posts with real impressions.
  */

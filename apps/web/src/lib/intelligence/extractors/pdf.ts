@@ -1,4 +1,4 @@
-// apps/web/src/lib/intelligence/extractors/pdf.ts
+﻿// apps/web/src/lib/intelligence/extractors/pdf.ts
 
 /**
  * PDF EXTRACTOR

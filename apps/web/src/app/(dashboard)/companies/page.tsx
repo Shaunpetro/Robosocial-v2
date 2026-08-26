@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -353,7 +353,7 @@ export default function CompaniesPage() {
               {/* Info Box */}
               <div className="p-4 rounded-xl bg-brand-500/5 border border-brand-500/10">
                 <div className="flex gap-3">
-                  <div className="text-2xl">✨</div>
+                  <div className="text-2xl">âœ¨</div>
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">
                       What happens next?

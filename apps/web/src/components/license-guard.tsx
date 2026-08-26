@@ -1,4 +1,4 @@
-// apps/web/src/components/license-guard.tsx
+﻿// apps/web/src/components/license-guard.tsx
 "use client";
 
 import { useEffect, useState } from "react";

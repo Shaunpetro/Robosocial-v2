@@ -1,4 +1,4 @@
-// apps/web/src/app/api/admin/license/route.ts
+﻿// apps/web/src/app/api/admin/license/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAdmin, createLicense, revokeLicense } from "@/lib/license";

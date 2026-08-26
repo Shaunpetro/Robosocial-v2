@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/HelpModal.tsx
+﻿// apps/web/src/components/ui/HelpModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -373,19 +373,19 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
                 </h4>
                 <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
                   <li className="flex items-start gap-2">
-                    <span className="text-brand-500 mt-1">•</span>
+                    <span className="text-brand-500 mt-1">â€¢</span>
                     Complete your company onboarding for better AI-generated content
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-brand-500 mt-1">•</span>
+                    <span className="text-brand-500 mt-1">â€¢</span>
                     Add at least 3 content pillars with multiple topics each
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-brand-500 mt-1">•</span>
+                    <span className="text-brand-500 mt-1">â€¢</span>
                     Connect multiple platforms to maximize your reach
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-brand-500 mt-1">•</span>
+                    <span className="text-brand-500 mt-1">â€¢</span>
                     Review and approve queued content regularly
                   </li>
                 </ul>
@@ -420,7 +420,7 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
         <div className="px-6 py-4 border-t border-[var(--border-default)] bg-[var(--bg-secondary)]">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--text-tertiary)]">
-              © 2025 VSHAD RoboSocial. All rights reserved.
+              Â© 2025 VSHAD RoboSocial. All rights reserved.
             </p>
             <button
               onClick={onClose}

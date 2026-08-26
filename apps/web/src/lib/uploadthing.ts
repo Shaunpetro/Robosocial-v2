@@ -1,4 +1,4 @@
-// apps/web/src/lib/uploadthing.ts
+﻿// apps/web/src/lib/uploadthing.ts
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 
 const f = createUploadthing();

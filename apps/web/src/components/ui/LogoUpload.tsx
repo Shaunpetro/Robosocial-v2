@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/LogoUpload.tsx
+﻿// apps/web/src/components/ui/LogoUpload.tsx
 'use client'
 
 import { useState, useRef } from 'react'

@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/calendar/page.tsx
+﻿// apps/web/src/app/(dashboard)/calendar/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -305,7 +305,7 @@ export default function GlobalCalendarPage() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
 
-  // Core state – always start on today's date
+  // Core state â€“ always start on today's date
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [posts, setPosts] = useState<Post[]>([]);
@@ -329,7 +329,7 @@ export default function GlobalCalendarPage() {
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
 
-  // Ref for auto‑scrolling to today
+  // Ref for autoâ€‘scrolling to today
   const calendarGridRef = useRef<HTMLDivElement>(null);
 
   // Company color map (unchanged)
@@ -591,7 +591,7 @@ export default function GlobalCalendarPage() {
   }, [viewMode, currentDate, filteredPosts]);
 
   // ---------------------------------------------------------------
-  // Scroll to today's cell – NOW SCROLL TO TOP (first line = current week)
+  // Scroll to today's cell â€“ NOW SCROLL TO TOP (first line = current week)
   // ---------------------------------------------------------------
 
   useEffect(() => {
@@ -901,7 +901,7 @@ export default function GlobalCalendarPage() {
   }, [companies]);
 
   // ---------------------------------------------------------------
-  // Quick status change (for inline actions) – now wired to cell
+  // Quick status change (for inline actions) â€“ now wired to cell
   // ---------------------------------------------------------------
 
   const quickStatusChange = async (postId: string, status: string) => {

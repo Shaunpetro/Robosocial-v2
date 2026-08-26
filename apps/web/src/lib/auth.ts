@@ -1,4 +1,4 @@
-// apps/web/src/lib/auth.ts
+﻿// apps/web/src/lib/auth.ts
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db";
@@ -37,7 +37,7 @@ export const {
           email: user.email,
           name: user.name,
           role: user.role,
-          licenseId: user.licenseId,   // ← added
+          licenseId: user.licenseId,   // â† added
         };
       },
     }),
@@ -47,7 +47,7 @@ export const {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
-        token.licenseId = (user as any).licenseId;   // ← added
+        token.licenseId = (user as any).licenseId;   // â† added
       }
       // Allow updating the token after licence activation
       if (trigger === "update" && session?.licenseId) {
@@ -59,7 +59,7 @@ export const {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
-        (session.user as any).licenseId = token.licenseId;   // ← added
+        (session.user as any).licenseId = token.licenseId;   // â† added
       }
       return session;
     },

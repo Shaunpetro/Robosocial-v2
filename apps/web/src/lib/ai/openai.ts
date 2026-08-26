@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/openai.ts
+﻿// apps/web/src/lib/ai/openai.ts
 // Using Groq (free Llama 3.1 8B instant) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
 // Now with competitor-aware generation, anti-repetition measures, and media attachment
@@ -67,9 +67,9 @@ const toneDescriptions: Record<string, string> = {
   casual: "relaxed, approachable, friendly, and conversational",
   friendly: "warm, personable, inclusive, and engaging",
   authoritative: "confident, expert, thought-leader, and decisive",
-  cheeky: "witty, irreverent, bold, playfully disrespectful – like a Nando's billboard",
+  cheeky: "witty, irreverent, bold, playfully disrespectful â€“ like a Nando's billboard",
   banter: "casual roasting, friendly trash-talk, local street humour",
-  "ultra-short": "punchy 1-3 line statement, no explanations, maximum impact per word – Magesi FC match-day energy",
+  "ultra-short": "punchy 1-3 line statement, no explanations, maximum impact per word â€“ Magesi FC match-day energy",
   local: "authentic South African voice, mixed language (Zulu, Sesotho, Setswana), township swag, relatable",
 };
 
@@ -189,7 +189,7 @@ export async function generateSocialContent(
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-20b",
       temperature,
       max_tokens: tone === "ultra-short" ? 150 : 1024,
     });
@@ -318,7 +318,7 @@ ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not in
 - Start with a strong hype line or local slang (e.g., "Eish, the boys...", "Sho, check...")
 - If the topic is football/culture/sport, tap into township/fan energy.
 - Mix languages naturally (Zulu, English, Sesotho, Afrikaans slang) where they feel authentic.
-- No hashtags, no long explanations – just raw, instant emotion.
+- No hashtags, no long explanations â€“ just raw, instant emotion.
 - The post should feel like it was typed on a phone in the moment.
 `;
   } else if (tone === "cheeky" || tone === "banter") {
@@ -326,8 +326,8 @@ ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not in
 **CHEEKY/BANTER MODE (NANDO'S STYLE):**
 - Use playful disrespect or a witty twist.
 - Throw in a cultural zinger (a current meme reference, a hilarious truth about SA life).
-- Keep it brief – 1-4 lines maximum.
-- Emojis allowed if they amplify the cheek (🔥, 😭, 💀).
+- Keep it brief â€“ 1-4 lines maximum.
+- Emojis allowed if they amplify the cheek (ðŸ”¥, ðŸ˜­, ðŸ’€).
 - If it doesn't make you smile or say "yoh!", rewrite it.
 `;
   }
@@ -354,15 +354,15 @@ function getSystemPrompt(): string {
   return `You are a South African social media creative director who has mastered the art of ultra-short, culturally loaded, thumb-stopping posts. You live for the raw, street-smart energy of Magesi Football Club and the fearless cheek of Nando's advertising.
 
 Your core principles:
-- **Brevity is power** – if you can say it in one line, don’t use two. Every word must earn its place.
-- **Cultural fluency** – you naturally weave in South African slang (e.g., "sho", "eish", "danko", "tl tl", "siyavaya", "yoh", "sharp", "now now") and local references (Braamfontein, Soweto, load shedding, Uber to Alex) without sounding forced.
-- **Tone-switching** – you can be cheeky like a Nando's billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
-- **Platform awareness** – you know what works on Facebook (raw, 1-3 lines, easy to share) vs. LinkedIn (still professional but now more human).
-- **Never generic** – no "Here at [Company] we believe...". You write as a real human posting from a phone.
+- **Brevity is power** â€“ if you can say it in one line, donâ€™t use two. Every word must earn its place.
+- **Cultural fluency** â€“ you naturally weave in South African slang (e.g., "sho", "eish", "danko", "tl tl", "siyavaya", "yoh", "sharp", "now now") and local references (Braamfontein, Soweto, load shedding, Uber to Alex) without sounding forced.
+- **Tone-switching** â€“ you can be cheeky like a Nando's billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
+- **Platform awareness** â€“ you know what works on Facebook (raw, 1-3 lines, easy to share) vs. LinkedIn (still professional but now more human).
+- **Never generic** â€“ no "Here at [Company] we believe...". You write as a real human posting from a phone.
 
-When tones like 'cheeky', 'banter', 'ultra-short', or 'local' are requested, you MUST deliver a post that feels born on South African soil – as if a super-creative friend from Joburg wrote it.
+When tones like 'cheeky', 'banter', 'ultra-short', or 'local' are requested, you MUST deliver a post that feels born on South African soil â€“ as if a super-creative friend from Joburg wrote it.
 
-You output ONLY the final post text – no meta commentary, no quotes, no "Here's your post".`;
+You output ONLY the final post text â€“ no meta commentary, no quotes, no "Here's your post".`;
 }
 
 function cleanGeneratedContent(content: string): string {
@@ -451,7 +451,7 @@ Generate the improved post now:`;
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-20b",
       temperature: 0.7,
       max_tokens: 1024,
     });
@@ -518,7 +518,7 @@ export async function generateSpecialDatePost(params: {
   } = params;
 
   const specialPrompt = `
-**SPECIAL DATE POST – ${dateName}**
+**SPECIAL DATE POST â€“ ${dateName}**
 Date significance: ${dateDescription}
 Hashtags to include: ${hashtags.join(', ')}
 Tone: ${tone}
@@ -535,7 +535,7 @@ ${contentTypeContext || ''}
   const result = await generateSocialContent({
     companyId,
     companyName,
-    companyDescription: `${companyName} – ${companyIndustry || 'business'}`,
+    companyDescription: `${companyName} â€“ ${companyIndustry || 'business'}`,
     companyIndustry,
     platform,
     platformId,

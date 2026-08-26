@@ -1,4 +1,4 @@
-// apps/web/src/components/layout/CompanySwitcher.tsx
+﻿// apps/web/src/components/layout/CompanySwitcher.tsx
 'use client'
 
 import { useState, useRef, useEffect } from 'react'

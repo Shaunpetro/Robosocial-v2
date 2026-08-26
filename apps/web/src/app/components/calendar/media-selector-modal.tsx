@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/media-selector-modal.tsx
+﻿// apps/web/src/app/components/calendar/media-selector-modal.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";

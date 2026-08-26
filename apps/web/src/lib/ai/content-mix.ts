@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/content-mix.ts
+﻿// apps/web/src/lib/ai/content-mix.ts
 
 /**
  * CONTENT MIX CALCULATOR
@@ -157,12 +157,12 @@ import {
             // High performer - increase by up to 10%
             const increase = Math.min(10, Math.round((performanceRatio - 1) * 15));
             mix[normalizedType] = Math.min(50, mix[normalizedType] + increase);
-            adjustments.push(`↑ ${normalizedType}: +${increase}% (performing ${Math.round((performanceRatio - 1) * 100)}% above avg)`);
+            adjustments.push(`â†‘ ${normalizedType}: +${increase}% (performing ${Math.round((performanceRatio - 1) * 100)}% above avg)`);
           } else if (performanceRatio < 0.8) {
             // Low performer - decrease by up to 10%
             const decrease = Math.min(10, Math.round((1 - performanceRatio) * 15));
             mix[normalizedType] = Math.max(5, mix[normalizedType] - decrease);
-            adjustments.push(`↓ ${normalizedType}: -${decrease}% (performing ${Math.round((1 - performanceRatio) * 100)}% below avg)`);
+            adjustments.push(`â†“ ${normalizedType}: -${decrease}% (performing ${Math.round((1 - performanceRatio) * 100)}% below avg)`);
           }
         }
       }
@@ -211,9 +211,9 @@ import {
         const perf = typePerformance[type];
         const avgPerf = intel?.avgEngagementRate || 2;
         if (perf > avgPerf * 1.2) {
-          performanceNote = `🔥 High performer (+${Math.round((perf / avgPerf - 1) * 100)}%)`;
+          performanceNote = `ðŸ”¥ High performer (+${Math.round((perf / avgPerf - 1) * 100)}%)`;
         } else if (perf < avgPerf * 0.8) {
-          performanceNote = `📉 Below average (${Math.round((1 - perf / avgPerf) * 100)}% lower)`;
+          performanceNote = `ðŸ“‰ Below average (${Math.round((1 - perf / avgPerf) * 100)}% lower)`;
         }
       }
   

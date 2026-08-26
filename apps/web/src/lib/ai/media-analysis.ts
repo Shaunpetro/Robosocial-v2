@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/media-analysis.ts
+﻿// apps/web/src/lib/ai/media-analysis.ts
 import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
@@ -11,7 +11,7 @@ export interface AutoTagsResult {
 
 /**
  * Analyse an uploaded media file and return suggested tags,
- * alt‑text, and a general content type.
+ * altâ€‘text, and a general content type.
  */
 export async function analyseMedia(
   filename: string,
@@ -27,8 +27,8 @@ export async function analyseMedia(
 ${additionalContext ? `- Additional context: ${additionalContext}` : ""}
 
 Provide a JSON object with:
-- "tags": an array of 3‑8 relevant lowercase hashtag‑style tags (without #).
-- "altText": a short, descriptive alt‑text for accessibility and SEO (max 125 characters).
+- "tags": an array of 3â€‘8 relevant lowercase hashtagâ€‘style tags (without #).
+- "altText": a short, descriptive altâ€‘text for accessibility and SEO (max 125 characters).
 - "contentType": one of "educational", "promotional", "behindTheScenes", "testimonial", "engagement", "socialProof", "tips", "news", "motivational", "community".
 
 Return ONLY valid JSON, no markdown code fences. Example:
@@ -53,7 +53,7 @@ Return ONLY valid JSON, no markdown code fences. Example:
     };
   } catch (error) {
     console.error("Media analysis AI error:", error);
-    // Fallback: use filename as alt‑text and empty tags
+    // Fallback: use filename as altâ€‘text and empty tags
     return {
       tags: [],
       altText: filename.replace(/\.[^/.]+$/, ""),
@@ -92,8 +92,8 @@ Company: ${companyName}${companyIndustry ? ` (${companyIndustry})` : ""}
 - Recent tag examples: ${recentTags.join(", ") || "none"}
 
 Provide a short JSON object with:
-- "recommendations": array of 2‑4 concise, actionable pieces of advice (e.g., "Add more testimonial-style images", "Create short product demo videos").
-- "suggestedTypes": array of 2‑4 content types to focus on next (from: educational, promotional, behindTheScenes, testimonial, engagement, socialProof, tips, news, motivational, community).
+- "recommendations": array of 2â€‘4 concise, actionable pieces of advice (e.g., "Add more testimonial-style images", "Create short product demo videos").
+- "suggestedTypes": array of 2â€‘4 content types to focus on next (from: educational, promotional, behindTheScenes, testimonial, engagement, socialProof, tips, news, motivational, community).
 
 Return ONLY valid JSON, no markdown fences. Example:
 {"recommendations":["Increase behind-the-scenes photos","Create carousel posts"],"suggestedTypes":["behindTheScenes","educational"]}`;

@@ -1,4 +1,4 @@
-// apps/web/src/components/media/MediaStats.tsx
+﻿// apps/web/src/components/media/MediaStats.tsx
 
 "use client";
 
@@ -83,10 +83,10 @@ interface MediaStatsProps {
 // ============================================
 
 const CONTENT_TYPE_LABELS: Record<string, { label: string; emoji: string }> = {
-  educational: { label: "Educational", emoji: "📚" },
-  engagement: { label: "Engagement", emoji: "💬" },
-  social_proof: { label: "Social Proof", emoji: "⭐" },
-  promotional: { label: "Promotional", emoji: "📢" },
+  educational: { label: "Educational", emoji: "ðŸ“š" },
+  engagement: { label: "Engagement", emoji: "ðŸ’¬" },
+  social_proof: { label: "Social Proof", emoji: "â­" },
+  promotional: { label: "Promotional", emoji: "ðŸ“¢" },
 };
 
 // ============================================
@@ -432,7 +432,7 @@ export function MediaStats({ companyId, compact = false, className = "" }: Media
                 {stats.byContentType.map((ct) => {
                   const typeInfo = CONTENT_TYPE_LABELS[ct.contentType] || {
                     label: ct.contentType,
-                    emoji: "📄",
+                    emoji: "ðŸ“„",
                   };
                   return (
                     <ProgressBar

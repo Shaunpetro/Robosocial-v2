@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/analytics/page.tsx
+﻿// apps/web/src/app/(dashboard)/analytics/page.tsx
 // CONTINUATION - This replaces the previous incomplete file
 
 "use client";
@@ -941,12 +941,12 @@ export default function AnalyticsPage() {
                     {aiInsights.contentTips.length > 0 && (
                       <div className="p-4 bg-white/60 dark:bg-gray-800/40 rounded-lg">
                         <h4 className="font-medium text-purple-900 dark:text-purple-100 mb-3">
-                          💡 Content Tips
+                          ðŸ’¡ Content Tips
                         </h4>
                         <ul className="space-y-1">
                           {aiInsights.contentTips.map((tip, idx) => (
                             <li key={idx} className="text-sm text-gray-700 dark:text-gray-300">
-                              • {tip}
+                              â€¢ {tip}
                             </li>
                           ))}
                         </ul>
@@ -956,7 +956,7 @@ export default function AnalyticsPage() {
                     {aiInsights.timingAdvice && (
                       <div className="p-4 bg-white/60 dark:bg-gray-800/40 rounded-lg">
                         <h4 className="font-medium text-purple-900 dark:text-purple-100 mb-3">
-                          ⏰ Best Timing
+                          â° Best Timing
                         </h4>
                         <p className="text-sm text-gray-700 dark:text-gray-300">
                           {aiInsights.timingAdvice}

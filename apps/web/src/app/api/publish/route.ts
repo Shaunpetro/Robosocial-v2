@@ -1,4 +1,4 @@
-// apps/web/src/app/api/cron/publish/route.ts
+﻿// apps/web/src/app/api/cron/publish/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processScheduledPosts } from '@/lib/scheduler';

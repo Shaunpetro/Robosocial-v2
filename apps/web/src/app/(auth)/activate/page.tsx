@@ -1,4 +1,4 @@
-// apps/web/src/app/(auth)/activate/page.tsx
+﻿// apps/web/src/app/(auth)/activate/page.tsx
 "use client";
 
 import { useState } from "react";

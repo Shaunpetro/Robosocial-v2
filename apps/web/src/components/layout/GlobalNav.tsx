@@ -1,4 +1,4 @@
-// apps/web/src/components/layout/GlobalNav.tsx
+﻿// apps/web/src/components/layout/GlobalNav.tsx
 'use client'
 
 import Link from 'next/link'

@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/generate/components.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/generate/components.tsx
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';

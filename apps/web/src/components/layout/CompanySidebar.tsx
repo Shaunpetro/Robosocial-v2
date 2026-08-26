@@ -1,4 +1,4 @@
-// apps/web/src/components/layout/CompanySidebar.tsx
+﻿// apps/web/src/components/layout/CompanySidebar.tsx
 'use client'
 
 import Link from 'next/link'
@@ -189,7 +189,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               className="block p-3 bg-gradient-to-r from-brand-500/10 to-purple-500/10 border border-brand-500/20 rounded-xl hover:from-brand-500/20 hover:to-purple-500/20 transition-all duration-200 group"
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">✨</span>
+                <span className="text-lg">âœ¨</span>
                 <div>
                   <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Complete Setup</p>
                   <p className="text-xs text-[var(--text-tertiary)]">5 min to unlock AI features</p>
@@ -241,10 +241,10 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
                   className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
                 >
                   <span className="text-base">
-                    {platform.type === 'LINKEDIN' ? '💼' :
-                     platform.type === 'FACEBOOK' ? '📘' :
-                     platform.type === 'INSTAGRAM' ? '📸' :
-                     platform.type === 'TWITTER' ? '🐦' : '📱'}
+                    {platform.type === 'LINKEDIN' ? 'ðŸ’¼' :
+                     platform.type === 'FACEBOOK' ? 'ðŸ“˜' :
+                     platform.type === 'INSTAGRAM' ? 'ðŸ“¸' :
+                     platform.type === 'TWITTER' ? 'ðŸ¦' : 'ðŸ“±'}
                   </span>
                   <span className="truncate flex-1">{platform.platformName}</span>
                   <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 shadow-sm shadow-green-500/50" />
@@ -287,7 +287,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               href={`${baseUrl}/onboarding`}
               className="px-2 py-1 text-xs font-medium bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg"
             >
-              Setup ✨
+              Setup âœ¨
             </Link>
           )}
         </div>

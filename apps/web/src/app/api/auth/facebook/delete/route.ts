@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
 // Facebook Data Deletion Callback
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
       </head>
       <body>
         <div class="card">
-          <h1>✓ Data Deletion Confirmed</h1>
+          <h1>âœ“ Data Deletion Confirmed</h1>
           <p><span class="status">COMPLETED</span></p>
           <p>Your data has been successfully deleted from VSHAD RoboSocial.</p>
           <p><strong>Confirmation Code:</strong></p>

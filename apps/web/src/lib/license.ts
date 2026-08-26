@@ -1,4 +1,4 @@
-// apps/web/src/lib/license.ts
+﻿// apps/web/src/lib/license.ts
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 

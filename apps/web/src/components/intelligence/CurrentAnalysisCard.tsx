@@ -1,4 +1,4 @@
-// apps/web/src/components/intelligence/CurrentAnalysisCard.tsx
+﻿// apps/web/src/components/intelligence/CurrentAnalysisCard.tsx
 'use client';
 
 import { useState } from 'react';
@@ -140,7 +140,7 @@ export default function CurrentAnalysisCard({
                   {allConfirmed ? 'Analysis Confirmed' : 'Analysis Needs Review'}
                 </p>
                 <p className="text-xs text-[var(--text-tertiary)]">
-                  Version {intelligence?.analysisVersion || 1} • Last analyzed {formatDate(intelligence?.lastAnalyzedAt || null)}
+                  Version {intelligence?.analysisVersion || 1} â€¢ Last analyzed {formatDate(intelligence?.lastAnalyzedAt || null)}
                 </p>
               </div>
             </div>

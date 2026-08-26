@@ -1,4 +1,4 @@
-// apps/web/src/app/(admin)/admin/dashboard/page.tsx
+﻿// apps/web/src/app/(admin)/admin/dashboard/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -111,7 +111,7 @@ export default function AdminDashboard() {
         fetchWithRetry("/api/admin/users", headers),
       ]);
 
-      // Stale key → clear and redirect to login
+      // Stale key â†’ clear and redirect to login
       if (licRes.status === 401 || usrRes.status === 401) {
         sessionStorage.removeItem("admin_key");
         router.push("/admin/login");
@@ -396,7 +396,7 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-gray-500">Loading admin data…</p>
+            <p className="text-sm text-gray-500">Loading admin dataâ€¦</p>
           </div>
         </div>
       ) : (
@@ -422,7 +422,7 @@ export default function AdminDashboard() {
                     <div className="relative">
                       <input type={showPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                         className={`w-full rounded-md border p-2 ${userErrors.password ? "border-red-500" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-700`} />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm">👁️</button>
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-sm">ðŸ‘ï¸</button>
                     </div>
                     {userErrors.password && <p className="text-red-500 text-xs mt-1">{userErrors.password}</p>}
                   </div>

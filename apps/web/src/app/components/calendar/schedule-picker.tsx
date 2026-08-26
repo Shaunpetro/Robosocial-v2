@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/schedule-picker.tsx
+﻿// apps/web/src/app/components/calendar/schedule-picker.tsx
 "use client";
 
 import { Calendar, Clock, Plus, Trash2, CalendarRange } from "lucide-react";
@@ -178,7 +178,7 @@ export function SchedulePicker(props: SchedulePickerProps) {
       {props.startDate && props.endDate && daysDiff > 0 && (
         <div className="rounded-lg bg-blue-50 dark:bg-blue-950 p-3 text-sm">
           <p className="font-medium text-blue-700 dark:text-blue-300">
-            📊 Schedule Summary
+            ðŸ“Š Schedule Summary
           </p>
           <p className="text-blue-600 dark:text-blue-400 mt-1">
             {props.postsCount} posts will be distributed across {daysDiff} day{daysDiff > 1 ? "s" : ""},

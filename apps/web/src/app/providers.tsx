@@ -1,8 +1,8 @@
-// apps/web/src/app/providers.tsx
+﻿// apps/web/src/app/providers.tsx
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { SessionProvider } from 'next-auth/react'; // ← added
+import { SessionProvider } from 'next-auth/react'; // â† added
 
 type Theme = 'light' | 'dark' | 'system';
 type ResolvedTheme = 'light' | 'dark';

@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/ConfirmAnalysisStep.tsx
+﻿// apps/web/src/components/onboarding/steps/ConfirmAnalysisStep.tsx
 
 'use client'
 
@@ -322,7 +322,7 @@ export default function ConfirmAnalysisStep({
                   <Edit3 size={16} /> Edit
                 </button>
                 <button onClick={() => handleConfirm('industries')} className={`flex-1 py-2 px-4 rounded-lg transition-colors ${confirmationStatus.industries ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-                  {confirmationStatus.industries ? '✓ Confirmed' : 'Confirm Industries'}
+                  {confirmationStatus.industries ? 'âœ“ Confirmed' : 'Confirm Industries'}
                 </button>
               </>
             )}
@@ -415,7 +415,7 @@ export default function ConfirmAnalysisStep({
                   <Edit3 size={16} /> Edit
                 </button>
                 <button onClick={() => handleConfirm('services')} className={`flex-1 py-2 px-4 rounded-lg transition-colors ${confirmationStatus.services ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-                  {confirmationStatus.services ? '✓ Confirmed' : 'Confirm Services'}
+                  {confirmationStatus.services ? 'âœ“ Confirmed' : 'Confirm Services'}
                 </button>
               </>
             )}
@@ -504,7 +504,7 @@ export default function ConfirmAnalysisStep({
                   <Edit3 size={16} /> Edit
                 </button>
                 <button onClick={() => handleConfirm('usps')} className={`flex-1 py-2 px-4 rounded-lg transition-colors ${confirmationStatus.usps ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-                  {confirmationStatus.usps ? '✓ Confirmed' : 'Confirm USPs'}
+                  {confirmationStatus.usps ? 'âœ“ Confirmed' : 'Confirm USPs'}
                 </button>
               </>
             )}
@@ -516,7 +516,7 @@ export default function ConfirmAnalysisStep({
           id="audience"
           icon={Users}
           title="Target Audience"
-          subtitle={`${editedAudience.businessType} • ${editedAudience.primarySectors.slice(0, 2).join(', ')}`}
+          subtitle={`${editedAudience.businessType} â€¢ ${editedAudience.primarySectors.slice(0, 2).join(', ')}`}
           confirmed={confirmationStatus.audience}
         >
           {editingSection === 'audience' ? (
@@ -610,7 +610,7 @@ export default function ConfirmAnalysisStep({
                   <Edit3 size={16} /> Edit
                 </button>
                 <button onClick={() => handleConfirm('audience')} className={`flex-1 py-2 px-4 rounded-lg transition-colors ${confirmationStatus.audience ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-                  {confirmationStatus.audience ? '✓ Confirmed' : 'Confirm Audience'}
+                  {confirmationStatus.audience ? 'âœ“ Confirmed' : 'Confirm Audience'}
                 </button>
               </>
             )}
@@ -622,7 +622,7 @@ export default function ConfirmAnalysisStep({
           id="voice"
           icon={MessageSquare}
           title="Brand Voice"
-          subtitle={`${editedVoice.formality} • ${editedVoice.personality.slice(0, 2).join(', ')}`}
+          subtitle={`${editedVoice.formality} â€¢ ${editedVoice.personality.slice(0, 2).join(', ')}`}
           confirmed={confirmationStatus.voice}
         >
           {editingSection === 'voice' ? (
@@ -719,7 +719,7 @@ export default function ConfirmAnalysisStep({
                   <Edit3 size={16} /> Edit
                 </button>
                 <button onClick={() => handleConfirm('voice')} className={`flex-1 py-2 px-4 rounded-lg transition-colors ${confirmationStatus.voice ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-brand-500 text-white hover:bg-brand-600'}`}>
-                  {confirmationStatus.voice ? '✓ Confirmed' : 'Confirm Voice'}
+                  {confirmationStatus.voice ? 'âœ“ Confirmed' : 'Confirm Voice'}
                 </button>
               </>
             )}

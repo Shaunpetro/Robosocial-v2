@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/brand-voice-loader.ts
+﻿// apps/web/src/lib/ai/brand-voice-loader.ts
 // Bridges company intelligence with generation - closes the brand-blindness loophole
 
 import { prisma } from "@/lib/db";
@@ -81,10 +81,10 @@ export async function loadBrandVoiceProfile(
     }
   }
 
-  // --- If no performance data yet → experimentation mode ---
+  // --- If no performance data yet â†’ experimentation mode ---
   if (!intel?.avgEngagementRate && !intel?.topPerformingTopics) {
     profile.experimentationMode = true;
-    profile.additionalContext += `⚠️ This company has no performance history. 
+    profile.additionalContext += `âš ï¸ This company has no performance history. 
 - Vary your tone across posts (try cheeky, ultra-short, local). 
 - Keep posts extremely short to test engagement. 
 - Observe what resonates and learn.`;

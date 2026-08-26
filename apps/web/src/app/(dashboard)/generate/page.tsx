@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/generate/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/generate/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -752,7 +752,7 @@ export default function EnhancedGeneratePage() {
                           <span className="text-xs text-muted-foreground">Avg Engagement</span>
                         </div>
                         <p className="text-lg font-bold">
-                          {intelligence?.avgEngagementRate?.toFixed(1) || '—'}%
+                          {intelligence?.avgEngagementRate?.toFixed(1) || 'â€”'}%
                         </p>
                       </div>
                       <div className="p-3 rounded-lg bg-background/50 border border-border/40">
@@ -799,7 +799,7 @@ export default function EnhancedGeneratePage() {
                             </p>
                             <ul className="mt-1 space-y-1">
                               {contentPlan.intelligenceHealth.recommendations.map((rec, i) => (
-                                <li key={i} className="text-xs text-muted-foreground">• {rec}</li>
+                                <li key={i} className="text-xs text-muted-foreground">â€¢ {rec}</li>
                               ))}
                             </ul>
                           </div>
@@ -1006,7 +1006,7 @@ export default function EnhancedGeneratePage() {
                       {/* Reasoning */}
                       <div className="text-xs text-muted-foreground space-y-1">
                         {contentPlan.volume.reasoning.map((reason, i) => (
-                          <p key={i}>• {reason}</p>
+                          <p key={i}>â€¢ {reason}</p>
                         ))}
                       </div>
                     </div>
@@ -1031,7 +1031,7 @@ export default function EnhancedGeneratePage() {
                     <h2 className="text-lg font-semibold">Content Strategy</h2>
                     <p className="text-sm text-muted-foreground">
                       {contentPlan.contentMix.isPerformanceBased
-                        ? '✨ Optimized based on your performance'
+                        ? 'âœ¨ Optimized based on your performance'
                         : 'Using industry best practices'}
                     </p>
                   </div>
@@ -1156,7 +1156,7 @@ export default function EnhancedGeneratePage() {
                         <div className="text-xs text-muted-foreground space-y-1">
                           <p className="font-medium">AI Adjustments:</p>
                           {contentPlan.contentMix.adjustments.map((adj, i) => (
-                            <p key={i}>• {adj}</p>
+                            <p key={i}>â€¢ {adj}</p>
                           ))}
                         </div>
                       )}
@@ -1220,7 +1220,7 @@ export default function EnhancedGeneratePage() {
                                   {slot.contentType}
                                 </span>
                                 {slot.confidence === 'high' && (
-                                  <span className="text-[10px] text-green-500">🔥 High confidence</span>
+                                  <span className="text-[10px] text-green-500">ðŸ”¥ High confidence</span>
                                 )}
                               </div>
                               {slot.topic && (
@@ -1235,7 +1235,7 @@ export default function EnhancedGeneratePage() {
                     {contentPlan.schedule.optimizationNotes.length > 0 && (
                       <div className="mt-3 text-xs text-muted-foreground">
                         {contentPlan.schedule.optimizationNotes.map((note, i) => (
-                          <p key={i}>• {note}</p>
+                          <p key={i}>â€¢ {note}</p>
                         ))}
                       </div>
                     )}
@@ -1251,7 +1251,7 @@ export default function EnhancedGeneratePage() {
               <div>
                 <h3 className="text-lg font-semibold">Ready to Generate</h3>
                 <p className="text-sm text-muted-foreground">
-                  {customPostCount || contentPlan?.volume.recommended || 0} posts • {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} • {periodLabels[period].label}
+                  {customPostCount || contentPlan?.volume.recommended || 0} posts â€¢ {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} â€¢ {periodLabels[period].label}
                 </p>
                 {contentPlan?.summary.estimatedEngagement === 'above_average' && (
                   <p className="text-xs text-green-500 mt-1 flex items-center gap-1">

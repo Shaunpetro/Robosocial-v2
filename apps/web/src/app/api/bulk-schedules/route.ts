@@ -1,4 +1,4 @@
-// apps/web/src/app/api/bulk-schedules/route.ts
+﻿// apps/web/src/app/api/bulk-schedules/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { BulkScheduleStatus } from "@prisma/client";
@@ -36,9 +36,9 @@ function normalizeTone(tone: string | undefined): ValidTone {
   return "professional";
 }
 
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MEDIA DISTRIBUTION HELPERS
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 interface MediaItem {
   id: string;
@@ -160,9 +160,9 @@ async function fetchCompanyMedia(
   }));
 }
 
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // GET HANDLER
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export async function GET(request: NextRequest) {
   try {
@@ -189,9 +189,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // POST HANDLER
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 export async function POST(request: NextRequest) {
   try {
@@ -214,9 +214,9 @@ export async function POST(request: NextRequest) {
       preferImages = true,
     } = body;
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // VALIDATION
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (!companyId || !startDate || !endDate || !postsCount) {
       return NextResponse.json(
         { error: "Missing required fields: companyId, startDate, endDate, postsCount" },
@@ -238,9 +238,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // FETCH COMPANY, SETTINGS & PLATFORMS
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
     });
 
     const companyTimezone = contentSettings?.timezone || DEFAULT_TIMEZONE;
-    console.log(`🕐 Using timezone: ${companyTimezone}`);
+    console.log(`ðŸ• Using timezone: ${companyTimezone}`);
 
     const allPlatformRecords = await prisma.platform.findMany({
       where: { companyId },
@@ -295,10 +295,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // FETCH & PREPARE MEDIA
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`🖼️ Preparing media for ${postsCount} posts...`);
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    console.log(`ðŸ–¼ï¸ Preparing media for ${postsCount} posts...`);
 
     let userSelectedMedia: MediaItem[] = [];
     if (mediaIds && mediaIds.length > 0) {
@@ -320,7 +320,7 @@ export async function POST(request: NextRequest) {
         url: m.url,
         filename: m.filename,
       }));
-      console.log(`  ✓ User selected ${userSelectedMedia.length} media items`);
+      console.log(`  âœ“ User selected ${userSelectedMedia.length} media items`);
     }
 
     let libraryMedia: MediaItem[] = [];
@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
         libraryMedia = [...libraryMedia, ...additionalMedia];
       }
       
-      console.log(`  ✓ Library has ${libraryMedia.length} additional media items`);
+      console.log(`  âœ“ Library has ${libraryMedia.length} additional media items`);
     }
 
     const mediaDistribution = distributeMedia(
@@ -354,11 +354,11 @@ export async function POST(request: NextRequest) {
     );
 
     const totalMediaToUse = mediaDistribution.flat().length;
-    console.log(`  ✓ Distributed ${totalMediaToUse} media items across ${postsCount} posts`);
+    console.log(`  âœ“ Distributed ${totalMediaToUse} media items across ${postsCount} posts`);
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // ANALYZE PREVIOUS POSTS (Last 7 Days)
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -377,7 +377,7 @@ export async function POST(request: NextRequest) {
 
     let previousAnalysis = null;
     if (recentPosts.length > 0) {
-      console.log(`📊 Analyzing ${recentPosts.length} recent posts for optimization...`);
+      console.log(`ðŸ“Š Analyzing ${recentPosts.length} recent posts for optimization...`);
       previousAnalysis = await analyzeRecentPosts(
         recentPosts.map((p) => ({
           content: p.content,
@@ -390,13 +390,13 @@ export async function POST(request: NextRequest) {
         }))
       );
     } else {
-      console.log("📊 No recent posts found - creating fresh content baseline");
+      console.log("ðŸ“Š No recent posts found - creating fresh content baseline");
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // GENERATE TOPIC VARIATIONS
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`🎯 Generating ${postsCount} unique topic variations...`);
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    console.log(`ðŸŽ¯ Generating ${postsCount} unique topic variations...`);
 
     const topicVariations = await generateTopicVariations({
       mainTopic: topic || "company updates and industry insights",
@@ -409,11 +409,11 @@ export async function POST(request: NextRequest) {
       previousAnalysis,
     });
 
-    console.log(`✅ Generated ${topicVariations.length} unique variations`);
+    console.log(`âœ… Generated ${topicVariations.length} unique variations`);
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CREATE BULK SCHEDULE RECORD
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const bulkSchedule = await prisma.bulkSchedule.create({
       data: {
         companyId,
@@ -427,9 +427,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // CALCULATE SCHEDULE SLOTS (WITH TIMEZONE CONVERSION)
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const start = new Date(startDate);
     const end = new Date(endDate);
     const now = new Date();
@@ -438,7 +438,7 @@ export async function POST(request: NextRequest) {
     const currentDate = new Date(start);
     let variationIndex = 0;
 
-    console.log(`📅 Calculating schedule slots from ${startDate} to ${endDate}`);
+    console.log(`ðŸ“… Calculating schedule slots from ${startDate} to ${endDate}`);
     console.log(`   Times per day: ${timesPerDay.join(', ')} (${companyTimezone})`);
 
     while (currentDate <= end && scheduleSlots.length < postsCount) {
@@ -458,7 +458,7 @@ export async function POST(request: NextRequest) {
             variationIndex: variationIndex % topicVariations.length,
           });
           
-          console.log(`   ✓ Slot ${scheduleSlots.length}: ${dateStr} ${time} ${companyTimezone} → ${slotDateUTC.toISOString()} UTC`);
+          console.log(`   âœ“ Slot ${scheduleSlots.length}: ${dateStr} ${time} ${companyTimezone} â†’ ${slotDateUTC.toISOString()} UTC`);
           variationIndex++;
         }
       }
@@ -473,14 +473,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // GENERATE & CREATE POSTS FOR EACH SLOT
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     const createdPosts = [];
     const errors: string[] = [];
     const normalizedTone = normalizeTone(tone);
 
-    console.log(`📝 Creating ${scheduleSlots.length} unique posts with media...`);
+    console.log(`ðŸ“ Creating ${scheduleSlots.length} unique posts with media...`);
 
     for (let i = 0; i < scheduleSlots.length; i++) {
       const slot = scheduleSlots[i];
@@ -563,23 +563,23 @@ ${postMedia.length > 0 ? `\nNOTE: This post will include ${postMedia.length} ima
         });
 
         console.log(
-          `  ✓ Post ${i + 1}/${scheduleSlots.length}: "${variation.title.substring(0, 40)}..." (${postMedia.length} media)`
+          `  âœ“ Post ${i + 1}/${scheduleSlots.length}: "${variation.title.substring(0, 40)}..." (${postMedia.length} media)`
         );
 
         if (i < scheduleSlots.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (genError) {
-        console.error(`  ✗ Failed post ${i + 1}:`, genError);
+        console.error(`  âœ— Failed post ${i + 1}:`, genError);
         errors.push(
           `Post ${i + 1} (${variation.title}): ${genError instanceof Error ? genError.message : "Unknown error"}`
         );
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // UPDATE BULK SCHEDULE & RETURN RESPONSE
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     await prisma.bulkSchedule.update({
       where: { id: bulkSchedule.id },
       data: {

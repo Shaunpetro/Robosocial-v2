@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/calendar-view.tsx
+﻿// apps/web/src/app/components/calendar/calendar-view.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";

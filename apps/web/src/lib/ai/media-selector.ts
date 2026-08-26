@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/media-selector.ts
+﻿// apps/web/src/lib/ai/media-selector.ts
 import { selectMedia, markMediaAsUsed, type MediaSelectionResult } from "@/lib/media/auto-select";
 
 export interface SelectedMedia {
@@ -43,6 +43,6 @@ export async function attachMediaToPost(
     };
   } catch (error) {
     console.error("[MediaSelector] Failed to attach media:", error);
-    return null; // non-critical – post can still be text‑only
+    return null; // non-critical â€“ post can still be textâ€‘only
   }
 }

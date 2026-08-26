@@ -1,4 +1,4 @@
-// apps/web/src/app/api/posts/[id]/publish/route.ts
+﻿// apps/web/src/app/api/posts/[id]/publish/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createLinkedInPost } from '@/lib/publisher/linkedin';

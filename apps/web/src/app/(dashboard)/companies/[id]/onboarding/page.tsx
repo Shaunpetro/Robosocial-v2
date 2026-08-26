@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/onboarding/page.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/onboarding/page.tsx
 import { Metadata } from 'next'
 import { prisma } from '@/lib/db'
 import { notFound, redirect } from 'next/navigation'

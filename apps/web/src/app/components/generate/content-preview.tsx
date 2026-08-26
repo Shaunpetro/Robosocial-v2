@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -94,7 +94,7 @@ export function ContentPreview({
         <div className="flex items-center gap-2">
           <Icon size={18} className="text-muted-foreground" />
           <span className="text-sm font-medium capitalize">{platform} Post</span>
-          <span className="text-xs text-muted-foreground">• {companyName}</span>
+          <span className="text-xs text-muted-foreground">â€¢ {companyName}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs font-mono ${

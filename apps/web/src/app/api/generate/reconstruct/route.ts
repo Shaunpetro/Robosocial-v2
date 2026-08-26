@@ -1,4 +1,4 @@
-// apps/web/src/app/api/intelligence/reconstruct/route.ts
+﻿// apps/web/src/app/api/intelligence/reconstruct/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { analysePlatformPosts, type PlatformPost } from "@/lib/ai/analyze-posts";

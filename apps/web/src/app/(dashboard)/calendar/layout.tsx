@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/calendar/layout.tsx
+﻿// apps/web/src/app/(dashboard)/calendar/layout.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -36,16 +36,16 @@ interface PostStats {
 }
 
 function safeDateLabel(value: unknown): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const d = new Date(String(value));
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "â€”";
   return d.toLocaleDateString();
 }
 
 function safeTimeLabel(value: unknown): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const d = new Date(String(value));
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "â€”";
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -310,7 +310,7 @@ function DraftsView({
 
       {drafts.length === 0 ? (
         <div className="bg-white dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center">
-          <span className="text-4xl mb-4 block">📝</span>
+          <span className="text-4xl mb-4 block">ðŸ“</span>
           <p className="text-gray-500 dark:text-gray-400">No drafts yet</p>
           <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
             Create a post and save it as a draft
@@ -467,7 +467,7 @@ function QueueView({ companyId }: { companyId: string }) {
 
       {scheduled.length === 0 ? (
         <div className="bg-white dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center">
-          <span className="text-4xl mb-4 block">📋</span>
+          <span className="text-4xl mb-4 block">ðŸ“‹</span>
           <p className="text-gray-500 dark:text-gray-400">No scheduled posts</p>
           <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
             Create and schedule posts to see them here
@@ -478,7 +478,7 @@ function QueueView({ companyId }: { companyId: string }) {
           {sortedDates.map((date) => (
             <div key={date}>
               <h2 className="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
-                <span>📅</span>
+                <span>ðŸ“…</span>
                 {date}
                 <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs">
                   {groupedByDate[date].length} post
@@ -506,7 +506,7 @@ function QueueView({ companyId }: { companyId: string }) {
                                 "Unknown"}
                             </span>
                             <span className="text-xs text-gray-500">
-                              🕒 {safeTimeLabel(post.scheduledFor)}
+                              ðŸ•’ {safeTimeLabel(post.scheduledFor)}
                             </span>
                             {post.isPartOfBulk && (
                               <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-xs">
@@ -534,7 +534,7 @@ function QueueView({ companyId }: { companyId: string }) {
                                       />
                                     ) : (
                                       <div className="w-full h-full flex items-center justify-center text-xs">
-                                        📄
+                                        ðŸ“„
                                       </div>
                                     )}
                                   </div>

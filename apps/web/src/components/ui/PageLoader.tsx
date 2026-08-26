@@ -1,4 +1,4 @@
-// apps/web/src/components/ui/PageLoader.tsx
+﻿// apps/web/src/components/ui/PageLoader.tsx
 'use client'
 
 import AnimatedLogo from './AnimatedLogo'

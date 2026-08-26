@@ -1,4 +1,4 @@
-// apps/web/src/app/components/platforms/platform-connect-modal.tsx
+﻿// apps/web/src/app/components/platforms/platform-connect-modal.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -268,7 +268,7 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                       onClick={handleBack}
                       className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                     >
-                      ← Back to companies
+                      â† Back to companies
                     </button>
                   )}
                 </div>
@@ -368,7 +368,7 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                           onClick={handleBack}
                           className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                         >
-                          ← Back
+                          â† Back
                         </button>
                         <div className="flex items-center gap-3">
                           <button

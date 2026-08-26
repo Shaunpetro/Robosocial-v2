@@ -1,4 +1,4 @@
-// apps/web/src/lib/intelligence/prompts/analysis-prompt.ts
+﻿// apps/web/src/lib/intelligence/prompts/analysis-prompt.ts
 
 /**
  * ANALYSIS PROMPT TEMPLATES

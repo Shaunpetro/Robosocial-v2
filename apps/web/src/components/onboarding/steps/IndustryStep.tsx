@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/IndustryStep.tsx
+﻿// apps/web/src/components/onboarding/steps/IndustryStep.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'

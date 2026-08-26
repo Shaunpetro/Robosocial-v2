@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/ReviewStep.tsx
+﻿// apps/web/src/components/onboarding/steps/ReviewStep.tsx
 
 'use client'
 
@@ -180,7 +180,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">Industries</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {industries.length} detected
-                {data.confirmationStatus?.industries && ' • Confirmed ✓'}
+                {data.confirmationStatus?.industries && ' â€¢ Confirmed âœ“'}
               </p>
             </div>
           </div>
@@ -279,7 +279,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
 
           {data.humorEnabled ? (
             <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-              😄 Humor on: {data.humorDays.join(', ') || 'selected days'}
+              ðŸ˜„ Humor on: {data.humorDays.join(', ') || 'selected days'}
             </p>
           ) : (
             <p className="text-sm text-[var(--text-tertiary)] mt-2">Humor disabled</p>
@@ -297,8 +297,8 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             <div>
               <h4 className="font-semibold text-[var(--text-primary)]">Services</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
-                {services.length} services • {coreServices.length} core
-                {data.confirmationStatus?.services && ' • Confirmed ✓'}
+                {services.length} services â€¢ {coreServices.length} core
+                {data.confirmationStatus?.services && ' â€¢ Confirmed âœ“'}
               </p>
             </div>
           </div>
@@ -313,7 +313,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
                     : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
                 }`}
               >
-                {service.isCore && '★ '}{service.name}
+                {service.isCore && 'â˜… '}{service.name}
               </span>
             ))}
             {services.length > 8 && (
@@ -336,7 +336,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">What Makes You Special</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {usps.length} unique selling points
-                {data.confirmationStatus?.usps && ' • Confirmed ✓'}
+                {data.confirmationStatus?.usps && ' â€¢ Confirmed âœ“'}
               </p>
             </div>
           </div>
@@ -368,7 +368,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
               <h4 className="font-semibold text-[var(--text-primary)]">Target Audience</h4>
               <p className="text-xs text-[var(--text-tertiary)]">
                 {audience.businessType}
-                {data.confirmationStatus?.audience && ' • Confirmed ✓'}
+                {data.confirmationStatus?.audience && ' â€¢ Confirmed âœ“'}
               </p>
             </div>
           </div>
@@ -429,7 +429,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
           </div>
 
           <div className="text-center p-3 bg-[var(--bg-primary)] rounded-lg">
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{coreServices.length || '—'}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{coreServices.length || 'â€”'}</div>
             <div className="text-xs text-[var(--text-tertiary)]">content themes</div>
           </div>
 
@@ -492,7 +492,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
             </div>
             <div>
               <p className="font-medium text-[var(--text-primary)]">Review, Edit & Approve</p>
-              <p className="text-sm text-[var(--text-secondary)]">Quick review → Approve or tweak → Auto-schedule</p>
+              <p className="text-sm text-[var(--text-secondary)]">Quick review â†’ Approve or tweak â†’ Auto-schedule</p>
             </div>
           </div>
 
@@ -502,7 +502,7 @@ export default function ReviewStep({ data, companyName }: ReviewStepProps) {
 
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-              ✓
+              âœ“
             </div>
             <div>
               <p className="font-medium text-green-700 dark:text-green-300">Posts publish automatically!</p>

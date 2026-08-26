@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/competitor-insights.ts
+﻿// apps/web/src/lib/ai/competitor-insights.ts
 import { prisma } from "@/lib/db";
 
 /**
@@ -34,6 +34,6 @@ export async function getCompetitorInsights(companyId: string): Promise<string |
     return `**Competitor Landscape:**\n${lines.join("\n")}\nMake your post stand out from these patterns.`;
   } catch (error) {
     console.error("[CompetitorInsights] Failed to fetch competitor insights:", error);
-    return null; // fail silently – don't block generation
+    return null; // fail silently â€“ don't block generation
   }
 }

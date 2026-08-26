@@ -1,4 +1,4 @@
-// apps/web/src/app/api/generate/voice-preview/route.ts
+﻿// apps/web/src/app/api/generate/voice-preview/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 
@@ -26,7 +26,7 @@ Return only the post text, no explanations, no hashtags.`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-20b",
       temperature: 0.7,
       max_tokens: 100,
     });

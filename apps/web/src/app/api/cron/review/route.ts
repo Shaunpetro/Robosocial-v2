@@ -1,11 +1,11 @@
-// apps/web/src/app/api/cron/review/route.ts
+﻿// apps/web/src/app/api/cron/review/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PostStatus, PostingPeriod } from '@prisma/client';
 
 /**
- * Enhanced Self-Review Cron Job – Period-Aware
+ * Enhanced Self-Review Cron Job â€“ Period-Aware
  * Runs daily (external cron). Internally only reviews companies
  * whose last intelligence update is older than their posting period.
  * Applies engagement quality rule: posts with <5 likes AND <5 comments are non-engaging.
@@ -289,7 +289,7 @@ export async function GET() {
 
         // Skip if already reviewed within the period
         if (lastUpdate && (now.getTime() - new Date(lastUpdate).getTime()) < periodDays * 24 * 60 * 60 * 1000) {
-          console.log(`[Review] Skipping ${company.name} – already reviewed within ${period}`);
+          console.log(`[Review] Skipping ${company.name} â€“ already reviewed within ${period}`);
           results.push(result);
           continue;
         }

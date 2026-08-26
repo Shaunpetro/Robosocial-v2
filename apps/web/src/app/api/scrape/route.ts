@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 
 interface ScrapeResult {
   name: string;
@@ -96,7 +96,7 @@ function extractKeywords(text: string, maxKeywords: number = 15): string[] {
     .map(([word]) => word);
 }
 
-// POST /api/scrape — scrape a website URL using Firecrawl REST API
+// POST /api/scrape â€” scrape a website URL using Firecrawl REST API
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
           logo: '',
         },
         source: 'domain',
-        message: 'Firecrawl API key not configured — using domain analysis only',
+        message: 'Firecrawl API key not configured â€” using domain analysis only',
       });
     }
 
@@ -182,9 +182,9 @@ export async function POST(request: NextRequest) {
     const pageTitle = metadata.title || '';
 
     if (ogTitle) {
-      result.name = ogTitle.split(/\s*[|–—-]\s*/)[0].trim();
+      result.name = ogTitle.split(/\s*[|â€“â€”-]\s*/)[0].trim();
     } else if (pageTitle) {
-      result.name = pageTitle.split(/\s*[|–—-]\s*/)[0].trim();
+      result.name = pageTitle.split(/\s*[|â€“â€”-]\s*/)[0].trim();
     }
     if (!result.name) {
       result.name = fallbackName;

@@ -1,4 +1,4 @@
-// apps/web/src/app/api/debug/check/route.ts
+﻿// apps/web/src/app/api/debug/check/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PlatformType } from '@prisma/client';

@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/bulk-actions.tsx
+﻿// apps/web/src/app/components/calendar/bulk-actions.tsx
 "use client";
 
 import { useState } from "react";

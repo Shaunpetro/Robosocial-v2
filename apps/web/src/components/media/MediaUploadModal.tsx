@@ -1,4 +1,4 @@
-// apps/web/src/components/media/MediaUploadModal.tsx
+﻿// apps/web/src/components/media/MediaUploadModal.tsx
 
 "use client";
 
@@ -47,10 +47,10 @@ interface MediaUploadModalProps {
 // ============================================
 
 const CONTENT_TYPES = [
-  { id: "educational", label: "📚 Educational", description: "How-tos, tips, tutorials" },
-  { id: "engagement", label: "💬 Engagement", description: "Questions, polls, discussions" },
-  { id: "social_proof", label: "⭐ Social Proof", description: "Testimonials, case studies" },
-  { id: "promotional", label: "📢 Promotional", description: "Products, services, offers" },
+  { id: "educational", label: "ðŸ“š Educational", description: "How-tos, tips, tutorials" },
+  { id: "engagement", label: "ðŸ’¬ Engagement", description: "Questions, polls, discussions" },
+  { id: "social_proof", label: "â­ Social Proof", description: "Testimonials, case studies" },
+  { id: "promotional", label: "ðŸ“¢ Promotional", description: "Products, services, offers" },
 ];
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -428,7 +428,7 @@ export function MediaUploadModal({
                         {formatFileSize(uploadFile.file.size)}
                         {uploadFile.error && (
                           <span className="text-red-500 ml-2">
-                            • {uploadFile.error}
+                            â€¢ {uploadFile.error}
                           </span>
                         )}
                       </p>
@@ -564,7 +564,7 @@ export function MediaUploadModal({
           <div className="text-sm text-muted-foreground">
             {pendingCount > 0 && `${pendingCount} file(s) ready to upload`}
             {errorCount > 0 && (
-              <span className="text-red-500 ml-2">• {errorCount} failed</span>
+              <span className="text-red-500 ml-2">â€¢ {errorCount} failed</span>
             )}
           </div>
 

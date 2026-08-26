@@ -1,4 +1,4 @@
-// apps/web/src/components/media/index.ts
+﻿// apps/web/src/components/media/index.ts
 
 // Grid display for media items
 export { default as MediaGrid } from './MediaGrid'

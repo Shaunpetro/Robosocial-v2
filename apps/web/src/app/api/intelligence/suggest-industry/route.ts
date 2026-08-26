@@ -1,4 +1,4 @@
-// apps/web/src/app/api/intelligence/suggest-industry/route.ts
+﻿// apps/web/src/app/api/intelligence/suggest-industry/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import Groq from 'groq-sdk'

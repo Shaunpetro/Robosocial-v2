@@ -1,4 +1,4 @@
-// apps/web/src/lib/scheduler/index.ts
+﻿// apps/web/src/lib/scheduler/index.ts
 
 import { prisma } from '@/lib/db';
 import { createLinkedInPost } from '@/lib/publisher/linkedin';
@@ -188,7 +188,7 @@ export async function processScheduledPosts(): Promise<SchedulerResult> {
             },
           });
 
-          console.log(`[Scheduler] ✅ Successfully published post ${post.id}`, {
+          console.log(`[Scheduler] âœ… Successfully published post ${post.id}`, {
             postId: publishResult.postId,
             postUrl: publishResult.postUrl,
             externalPostId: publishResult.postId,
@@ -200,7 +200,7 @@ export async function processScheduledPosts(): Promise<SchedulerResult> {
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[Scheduler] ❌ Failed to publish post ${post.id}:`, errorMessage);
+        console.error(`[Scheduler] âŒ Failed to publish post ${post.id}:`, errorMessage);
 
         // Mark as FAILED
         await prisma.generatedPost.update({

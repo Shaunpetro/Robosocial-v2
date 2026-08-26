@@ -1,4 +1,4 @@
-// apps/web/src/app/api/cron/auto-generate/route.ts
+﻿// apps/web/src/app/api/cron/auto-generate/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
         const today = new Date();
 
         if (!isGenerationDay(period, today)) {
-          console.log(`[AutoGenerate] Skipping ${company.name} – not a generation day for ${period}`);
+          console.log(`[AutoGenerate] Skipping ${company.name} â€“ not a generation day for ${period}`);
           results.push(result);
           continue;
         }
@@ -220,7 +220,7 @@ export async function GET(request: NextRequest) {
         console.log(`[AutoGenerate] Funnel mix:`, contentMix.funnelBreakdown);
 
         for (const slot of contentMix.slots) {
-          console.log(`[AutoGenerate] Slot: ${slot.dayOfWeek} ${slot.time} → ${slot.date.toISOString()}`);
+          console.log(`[AutoGenerate] Slot: ${slot.dayOfWeek} ${slot.time} â†’ ${slot.date.toISOString()}`);
         }
 
         result.contentMix = contentMix.mixBreakdown as Record<string, number>;

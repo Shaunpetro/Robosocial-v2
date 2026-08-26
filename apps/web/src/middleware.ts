@@ -1,4 +1,4 @@
-// apps/web/src/middleware.ts
+﻿// apps/web/src/middleware.ts
 import { auth } from "@/lib/auth";
 
 export const config = {

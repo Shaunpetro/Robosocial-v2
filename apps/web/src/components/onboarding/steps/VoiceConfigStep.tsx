@@ -1,4 +1,4 @@
-// apps/web/src/components/onboarding/steps/VoiceConfigStep.tsx
+﻿// apps/web/src/components/onboarding/steps/VoiceConfigStep.tsx
 
 'use client'
 
@@ -37,11 +37,11 @@ interface VoiceConfigStepProps {
 // ============================================
 
 const FORMALITY_OPTIONS = [
-  { value: 'casual', label: 'Casual', emoji: '😊', description: 'Friendly and relaxed' },
-  { value: 'friendly', label: 'Friendly', emoji: '👋', description: 'Warm and approachable' },
-  { value: 'professional', label: 'Professional', emoji: '💼', description: 'Business-like but personable' },
-  { value: 'corporate', label: 'Corporate', emoji: '🏢', description: 'Formal and authoritative' },
-  { value: 'formal', label: 'Formal', emoji: '📋', description: 'Traditional and serious' },
+  { value: 'casual', label: 'Casual', emoji: 'ðŸ˜Š', description: 'Friendly and relaxed' },
+  { value: 'friendly', label: 'Friendly', emoji: 'ðŸ‘‹', description: 'Warm and approachable' },
+  { value: 'professional', label: 'Professional', emoji: 'ðŸ’¼', description: 'Business-like but personable' },
+  { value: 'corporate', label: 'Corporate', emoji: 'ðŸ¢', description: 'Formal and authoritative' },
+  { value: 'formal', label: 'Formal', emoji: 'ðŸ“‹', description: 'Traditional and serious' },
 ]
 
 const PERSONALITY_TRAITS = [
@@ -336,7 +336,7 @@ export default function VoiceConfigStep({
 
         <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
           {isGenerating ? (
-            <p className="text-sm text-[var(--text-tertiary)] italic">Generating preview…</p>
+            <p className="text-sm text-[var(--text-tertiary)] italic">Generating previewâ€¦</p>
           ) : aiPreview ? (
             <p className="text-sm text-[var(--text-primary)] leading-relaxed">{aiPreview}</p>
           ) : (

@@ -1,4 +1,4 @@
-// apps/web/src/app/api/generate/bulk/route.ts
+﻿// apps/web/src/app/api/generate/bulk/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
     const slots = contentPlan.schedule.slots.slice(0, targetPostCount);
     const topicQueue = [...manualTopics];
 
-    // 🔀 Shuffle slots to avoid chronological monotony
+    // ðŸ”€ Shuffle slots to avoid chronological monotony
     for (let i = slots.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [slots[i], slots[j]] = [slots[j], slots[i]];
@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
       errors: [],
     };
 
-    const previousHooks: string[] = [];   // anti‑repetition
+    const previousHooks: string[] = [];   // antiâ€‘repetition
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];

@@ -1,4 +1,4 @@
-// apps/web/src/app/components/calendar/create-post-view.tsx
+﻿// apps/web/src/app/components/calendar/create-post-view.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -111,10 +111,10 @@ const PLATFORM_CONFIG: Record<
 };
 
 const TONE_OPTIONS = [
-  { value: "professional", label: "Professional", emoji: "👔" },
-  { value: "casual", label: "Casual", emoji: "😊" },
-  { value: "friendly", label: "Friendly", emoji: "🤗" },
-  { value: "authoritative", label: "Authoritative", emoji: "📚" },
+  { value: "professional", label: "Professional", emoji: "ðŸ‘”" },
+  { value: "casual", label: "Casual", emoji: "ðŸ˜Š" },
+  { value: "friendly", label: "Friendly", emoji: "ðŸ¤—" },
+  { value: "authoritative", label: "Authoritative", emoji: "ðŸ“š" },
 ];
 
 // Helper to get platform type from platform object
@@ -516,7 +516,7 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <div className="text-center">
-          <span className="text-6xl mb-4 block">🏢</span>
+          <span className="text-6xl mb-4 block">ðŸ¢</span>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             No Company Selected
           </h2>
@@ -672,7 +672,7 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
 
                   {selectedPlatforms.length > 0 && (
                     <p className="text-xs text-green-600 dark:text-green-400 mt-3">
-                      ✓ {selectedPlatforms.length} platform(s) selected
+                      âœ“ {selectedPlatforms.length} platform(s) selected
                     </p>
                   )}
                 </>
@@ -937,7 +937,7 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
                   
                   {selectedMedia.length > 0 ? (
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      📸 Your {selectedMedia.length} selected media will be randomly distributed across {bulkPostsCount} posts.
+                      ðŸ“¸ Your {selectedMedia.length} selected media will be randomly distributed across {bulkPostsCount} posts.
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -1177,10 +1177,10 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
                 {selectedMedia.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                      📎 Media ({selectedMedia.length})
+                      ðŸ“Ž Media ({selectedMedia.length})
                       {scheduleMode === "bulk" && (
                         <span className="text-purple-500 ml-1">
-                          → distributed across {bulkPostsCount} posts
+                          â†’ distributed across {bulkPostsCount} posts
                         </span>
                       )}
                     </p>
@@ -1230,7 +1230,7 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
                         : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
                     )}
                   >
-                    {saveMessage.type === "success" ? "✓" : "✕"} {saveMessage.text}
+                    {saveMessage.type === "success" ? "âœ“" : "âœ•"} {saveMessage.text}
                   </div>
                 )}
 
@@ -1285,19 +1285,19 @@ export function CreatePostView({ companyId, onClose }: CreatePostViewProps) {
                 {/* Quick info */}
                 <div className="text-xs text-gray-500 dark:text-gray-400 text-center space-y-1">
                   {mode === "ai" && generatedContents.length > 0 && (
-                    <p>✓ {generatedContents.length} post(s) ready</p>
+                    <p>âœ“ {generatedContents.length} post(s) ready</p>
                   )}
                   {mode === "manual" &&
                     selectedPlatforms.length > 0 &&
                     manualContent.trim() && (
-                      <p>✓ Will post to {selectedPlatforms.length} platform(s)</p>
+                      <p>âœ“ Will post to {selectedPlatforms.length} platform(s)</p>
                     )}
                   {scheduledFor && scheduleMode === "single" && (
-                    <p>📅 {scheduledFor.toLocaleString()}</p>
+                    <p>ðŸ“… {scheduledFor.toLocaleString()}</p>
                   )}
                   {scheduleMode === "bulk" && bulkStartDate && bulkEndDate && (
                     <p>
-                      📅 {bulkPostsCount} unique posts
+                      ðŸ“… {bulkPostsCount} unique posts
                       {bulkAutoSelectMedia && selectedMedia.length === 0 && " with auto-media"}
                       {selectedMedia.length > 0 && ` with ${selectedMedia.length} media`}
                     </p>

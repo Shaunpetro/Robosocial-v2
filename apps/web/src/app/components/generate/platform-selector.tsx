@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Linkedin, Twitter, Facebook, Instagram, Globe } from 'lucide-react';
 

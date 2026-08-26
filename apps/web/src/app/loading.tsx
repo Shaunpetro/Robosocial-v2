@@ -1,4 +1,4 @@
-// apps/web/src/app/loading.tsx
+﻿// apps/web/src/app/loading.tsx
 import PageLoader from '@/components/ui/PageLoader'
 
 export default function Loading() {

@@ -1,4 +1,4 @@
-// apps/web/src/lib/ai/generate-insights.ts
+﻿// apps/web/src/lib/ai/generate-insights.ts
 /**
  * AI-Powered Analytics Insights Generator
  * Uses Groq (Llama 3.3) to analyze performance data and generate actionable recommendations

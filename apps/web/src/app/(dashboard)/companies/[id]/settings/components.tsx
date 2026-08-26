@@ -1,4 +1,4 @@
-// apps/web/src/app/(dashboard)/companies/[id]/settings/components.tsx
+﻿// apps/web/src/app/(dashboard)/companies/[id]/settings/components.tsx
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
