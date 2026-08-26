@@ -1,8 +1,7 @@
 // apps/web/src/lib/ai/openai.ts
-// Using Groq (free Llama 3.3 70B) with Performance Analytics + Content Strategy Integration
+// Using Groq (free Llama 3.1 8B instant) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
 // Now with competitor-aware generation, anti-repetition measures, and media attachment
-// Updated with model fallback (GROQ_MODEL env var, fallback to qwen/qwen3.6-27b)
 
 import Groq from "groq-sdk";
 import {
@@ -11,46 +10,12 @@ import {
   type PerformanceInsights,
 } from "./analytics-insights";
 import { getCompetitorInsights } from "./competitor-insights";
-import { attachMediaToPost } from "./media-selector";   // NEW
+import { attachMediaToPost } from "./media-selector";
 
 // Initialize Groq
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
 });
-
-// Model configuration with fallback
-const PRIMARY_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-const FALLBACK_MODEL = "qwen/qwen3.6-27b";
-
-/**
- * Wrapper for Groq chat completion that automatically falls back
- * to a known working model if the primary model is unavailable.
- */
-async function callGroq(
-  messages: Array<{ role: "system" | "user"; content: string }>,
-  temperature: number,
-  maxTokens: number
-): Promise<string> {
-  try {
-    const completion = await groq.chat.completions.create({
-      messages,
-      model: PRIMARY_MODEL,
-      temperature,
-      max_tokens: maxTokens,
-    });
-    return completion.choices[0]?.message?.content?.trim() || "";
-  } catch (error) {
-    // If primary model not found, try fallback
-    console.warn(`Groq primary model failed, falling back to ${FALLBACK_MODEL}:`, error);
-    const fallbackCompletion = await groq.chat.completions.create({
-      messages,
-      model: FALLBACK_MODEL,
-      temperature,
-      max_tokens: maxTokens,
-    });
-    return fallbackCompletion.choices[0]?.message?.content?.trim() || "";
-  }
-}
 
 // Platform-specific configurations (unchanged)
 const platformConfigs = {
@@ -129,9 +94,9 @@ export interface GenerateContentParams {
   includeEmojis?: boolean;
   useAnalytics?: boolean;
   contentTypeContext?: string;
-  previousHooks?: string[];            // anti‑repetition
-  isBulkGeneration?: boolean;          // bulk variety boost
-  includeMedia?: boolean;              // NEW – attach media to post
+  previousHooks?: string[];
+  isBulkGeneration?: boolean;
+  includeMedia?: boolean;
 }
 
 export interface GeneratedContent {
@@ -141,7 +106,7 @@ export interface GeneratedContent {
   platform: string;
   analyticsUsed?: boolean;
   insights?: PerformanceInsights;
-  selectedMedia?: { id: string; url: string; type: string } | null;  // NEW
+  selectedMedia?: { id: string; url: string; type: string } | null;
 }
 
 export async function generateSocialContent(
@@ -168,7 +133,6 @@ export async function generateSocialContent(
   const config = platformConfigs[platform];
   const toneDesc = toneDescriptions[tone];
 
-  // Fetch competitor insights (if companyId provided)
   let competitorInsights = "";
   if (companyId) {
     try {
@@ -179,7 +143,6 @@ export async function generateSocialContent(
     }
   }
 
-  // Fetch performance insights if enabled and companyId provided
   let insights: PerformanceInsights | null = null;
   let insightsPrompt = "";
 
@@ -221,23 +184,25 @@ export async function generateSocialContent(
   const temperature = isBulkGeneration ? 0.9 : (tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75);
 
   try {
-    const content = await callGroq(
-      [
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
+      model: "llama-3.1-8b-instant",
       temperature,
-      tone === "ultra-short" ? 150 : 1024
-    );
+      max_tokens: tone === "ultra-short" ? 150 : 1024,
+    });
 
-    let cleaned = cleanGeneratedContent(content);
+    let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
+    content = cleanGeneratedContent(content);
 
     if (tone === "ultra-short") {
-      cleaned = enforceUltraShort(cleaned);
+      content = enforceUltraShort(content);
     }
 
     const hashtagRegex = /#\w+/g;
-    const hashtags = cleaned.match(hashtagRegex) || [];
+    const hashtags = content.match(hashtagRegex) || [];
 
     let selectedMedia = null;
     if (includeMedia && companyId) {
@@ -256,9 +221,9 @@ export async function generateSocialContent(
     }
 
     return {
-      content: cleaned,
+      content,
       hashtags: hashtags.map((tag) => tag.replace("#", "")),
-      characterCount: cleaned.length,
+      characterCount: content.length,
       platform,
       analyticsUsed: insights?.hasData ?? false,
       insights: insights ?? undefined,
@@ -272,9 +237,6 @@ export async function generateSocialContent(
   }
 }
 
-/**
- * Build the enhanced prompt with South African cultural coding
- */
 function buildEnhancedPrompt(params: {
   companyName: string;
   companyDescription?: string;
@@ -330,21 +292,15 @@ ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not in
 `;
 
   if (contentTypeContext) {
-    prompt += `
-${contentTypeContext}
-`;
+    prompt += `\n${contentTypeContext}\n`;
   }
 
   if (competitorInsights) {
-    prompt += `
-${competitorInsights}
-`;
+    prompt += `\n${competitorInsights}\n`;
   }
 
   if (insightsPrompt) {
-    prompt += `
-${insightsPrompt}
-`;
+    prompt += `\n${insightsPrompt}\n`;
   }
 
   if (previousHooks && previousHooks.length > 0) {
@@ -394,16 +350,13 @@ Generate the post now:`;
   return prompt;
 }
 
-/**
- * 🔥 SYSTEM PROMPT – South African Social Native
- */
 function getSystemPrompt(): string {
-  return `You are a South African social media creative director who has mastered the art of ultra-short, culturally loaded, thumb-stopping posts. You live for the raw, street-smart energy of Magesi Football Club and the fearless cheek of Nando’s advertising.
+  return `You are a South African social media creative director who has mastered the art of ultra-short, culturally loaded, thumb-stopping posts. You live for the raw, street-smart energy of Magesi Football Club and the fearless cheek of Nando's advertising.
 
 Your core principles:
 - **Brevity is power** – if you can say it in one line, don’t use two. Every word must earn its place.
 - **Cultural fluency** – you naturally weave in South African slang (e.g., "sho", "eish", "danko", "tl tl", "siyavaya", "yoh", "sharp", "now now") and local references (Braamfontein, Soweto, load shedding, Uber to Alex) without sounding forced.
-- **Tone-switching** – you can be cheeky like a Nando’s billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
+- **Tone-switching** – you can be cheeky like a Nando's billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
 - **Platform awareness** – you know what works on Facebook (raw, 1-3 lines, easy to share) vs. LinkedIn (still professional but now more human).
 - **Never generic** – no "Here at [Company] we believe...". You write as a real human posting from a phone.
 
@@ -412,9 +365,6 @@ When tones like 'cheeky', 'banter', 'ultra-short', or 'local' are requested, you
 You output ONLY the final post text – no meta commentary, no quotes, no "Here's your post".`;
 }
 
-/**
- * Clean up generated content from common AI artifacts
- */
 function cleanGeneratedContent(content: string): string {
   return content
     .replace(/^(Here's|Here is|Sure,|Okay,|Certainly,|Of course,).*?:\s*/i, "")
@@ -425,9 +375,6 @@ function cleanGeneratedContent(content: string): string {
     .replace(/\n(Call|Contact) .* for (more|further) information\.?/gi, "");
 }
 
-/**
- * ✂️ Force ultra-short content to stay within Magesi territory
- */
 function enforceUltraShort(content: string): string {
   const maxChars = 200;
   const sentences = content.match(/[^\.!\?]+[\.!\?]+/g);
@@ -499,24 +446,26 @@ ${insights?.hasData ? "6. Apply insights from high-performing posts to maximize 
 Generate the improved post now:`;
 
   try {
-    const content = await callGroq(
-      [
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: prompt },
       ],
-      0.7,
-      1024
-    );
+      model: "llama-3.1-8b-instant",
+      temperature: 0.7,
+      max_tokens: 1024,
+    });
 
-    let cleaned = cleanGeneratedContent(content);
+    let content = chatCompletion.choices[0]?.message?.content?.trim() || "";
+    content = cleanGeneratedContent(content);
 
     const hashtagRegex = /#\w+/g;
-    const hashtags = cleaned.match(hashtagRegex) || [];
+    const hashtags = content.match(hashtagRegex) || [];
 
     return {
-      content: cleaned,
+      content,
       hashtags: hashtags.map((tag) => tag.replace("#", "")),
-      characterCount: cleaned.length,
+      characterCount: content.length,
       platform,
       analyticsUsed: insights?.hasData ?? false,
       insights: insights ?? undefined,
@@ -543,9 +492,6 @@ export function validateContentLength(
   return { valid: true };
 }
 
-/**
- * NEW: Generate a post specifically for a special date (holiday, awareness day).
- */
 export async function generateSpecialDatePost(params: {
   companyId: string;
   companyName: string;
