@@ -1,8 +1,32 @@
 ﻿// apps/web/src/app/api/generate/voice-preview/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+function buildPreview(
+  companyName: string,
+  industry: string | null,
+  formality: string,
+  personality: string[],
+  technicalLevel: string
+): string {
+  const name = companyName || "Your business";
+  const industryText = industry ? ` in the ${industry} industry` : "";
+  const traits = Array.isArray(personality) && personality.length > 0
+    ? personality.join(", ")
+    : "expertise";
+
+  switch (formality) {
+    case "casual":
+      return `Hey! ${name}${industryText} just made things easier for you. We're excited to share what we've been working on 😊`;
+    case "friendly":
+      return `Hello! At ${name}${industryText}, we love making our customers happy. Here's something we think you'll enjoy.`;
+    case "corporate":
+      return `${name}${industryText} is pleased to announce a significant milestone. Our commitment to excellence remains unwavering.`;
+    case "formal":
+      return `To our valued stakeholders, ${name}${industryText} formally announces the successful delivery of a key project.`;
+    default:
+      return `${name}${industryText} delivers quality results backed by ${traits} and a ${technicalLevel} technical approach. Learn more today.`;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,25 +37,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "companyName is required" }, { status: 400 });
     }
 
-    const personalityStr = Array.isArray(personality) && personality.length > 0
-      ? personality.join(", ")
-      : "professional";
+    const preview = buildPreview(
+      companyName,
+      industry || null,
+      formality || "professional",
+      Array.isArray(personality) ? personality : [],
+      technicalLevel || "medium"
+    );
 
-    const prompt = `Generate a short social media post (20-50 words) for ${companyName}${industry ? ` in the ${industry} industry` : ""}.
-Tone: ${formality}
-Personality traits: ${personalityStr}
-Technical level: ${technicalLevel}
-The post should demonstrate the brand voice described above. It should be authentic, engaging, and appropriate for LinkedIn or Facebook.
-Return only the post text, no explanations, no hashtags.`;
-
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "openai/gpt-oss-20b",
-      temperature: 0.7,
-      max_tokens: 100,
-    });
-
-    const preview = completion.choices[0]?.message?.content?.trim() || "";
     return NextResponse.json({ preview });
   } catch (error) {
     console.error("Voice preview generation failed:", error);
