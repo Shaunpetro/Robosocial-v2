@@ -155,16 +155,16 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
+          {/* Frosted glass overlay outside the modal */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-white/10 dark:bg-black/40 backdrop-blur-xl"
           />
 
-          {/* Modal */}
+          {/* Solid modal panel */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -192,7 +192,6 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
 
             {/* Content */}
             <div className="p-6">
-              {/* Error Message */}
               {error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
                   {error}
@@ -268,7 +267,7 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                       onClick={handleBack}
                       className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                     >
-                      â† Back to companies
+                      ← Back to companies
                     </button>
                   )}
                 </div>
@@ -325,7 +324,6 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                         </div>
                       </div>
 
-                      {/* Account Name Input */}
                       <div>
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
                           Account / Page Name <span className="text-red-500">*</span>
@@ -343,7 +341,6 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                         </p>
                       </div>
 
-                      {/* Permissions */}
                       <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800/50">
                         <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
                           Permissions requested:
@@ -361,14 +358,13 @@ export function PlatformConnectModal({ open, onClose, onSuccess, companies }: Pl
                         </div>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
                         <button
                           type="button"
                           onClick={handleBack}
                           className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                         >
-                          â† Back
+                          ← Back
                         </button>
                         <div className="flex items-center gap-3">
                           <button

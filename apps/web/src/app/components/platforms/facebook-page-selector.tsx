@@ -1,4 +1,5 @@
-﻿"use client";
+﻿// apps/web/src/app/components/platforms/facebook-page-selector.tsx
+"use client";
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -92,14 +93,16 @@ export function FacebookPageSelector({
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Frosted glass overlay outside the modal */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-white/10 dark:bg-black/40 backdrop-blur-xl"
           />
 
+          {/* Solid modal panel */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

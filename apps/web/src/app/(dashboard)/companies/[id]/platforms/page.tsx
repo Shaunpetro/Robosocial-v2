@@ -51,7 +51,11 @@ function LinkedInModeDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Frosted glass overlay */}
+      <div
+        className="absolute inset-0 bg-white/10 dark:bg-black/40 backdrop-blur-xl"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-md bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] p-6 shadow-xl mx-4">
         <h2 className="text-xl font-semibold text-[var(--text-primary)] text-center">
           Choose LinkedIn Account
@@ -149,7 +153,11 @@ function FacebookModeDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Frosted glass overlay */}
+      <div
+        className="absolute inset-0 bg-white/10 dark:bg-black/40 backdrop-blur-xl"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-md bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] p-6 shadow-xl mx-4">
         <h2 className="text-xl font-semibold text-[var(--text-primary)] text-center">
           Connect Facebook Page
@@ -223,9 +231,7 @@ function PlatformsContent() {
     connectionId: string;
   }>({ open: false, connectionId: '' });
 
-  // LinkedIn mode dialog state
   const [showLinkedInDialog, setShowLinkedInDialog] = useState(false);
-  // Facebook mode dialog state
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
 
   useEffect(() => {
@@ -347,7 +353,6 @@ function PlatformsContent() {
       setShowFacebookDialog(true);
       return;
     }
-    // fallback
     try {
       const res = await fetch(`/api/platforms/${connection.id}`, {
         method: 'PUT',
@@ -520,7 +525,11 @@ function PlatformsContent() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div onClick={() => setDeleteConfirm(null)} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          {/* Frosted glass overlay */}
+          <div
+            onClick={() => setDeleteConfirm(null)}
+            className="absolute inset-0 bg-white/10 dark:bg-black/40 backdrop-blur-xl"
+          />
           <div className="relative w-full max-w-sm rounded-xl border border-border/60 bg-background p-6 shadow-xl mx-4">
             <h3 className="text-lg font-semibold">Remove Connection</h3>
             <p className="text-sm text-muted-foreground mt-2">
