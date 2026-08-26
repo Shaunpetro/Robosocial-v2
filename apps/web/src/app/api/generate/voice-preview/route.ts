@@ -26,7 +26,7 @@ Return only the post text, no explanations, no hashtags.`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       temperature: 0.7,
       max_tokens: 100,
     });
