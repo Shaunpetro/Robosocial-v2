@@ -33,7 +33,9 @@ interface Post {
 interface PlatformConnection {
   id: string;
   type: string;
-  platformName: string;
+  name: string;
+  username: string | null;
+  isConnected: boolean;
 }
 
 function startOfWeek(date: Date): Date {
@@ -60,12 +62,12 @@ const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const ROWS_DEFAULT = 4;
 const ROWS_MAX = 26;
 
-const PLATFORM_ICONS: Record<string, any> = {
-  linkedin: Linkedin,
-  facebook: Facebook,
-  instagram: Instagram,
-  twitter: Twitter,
-  wordpress: Globe,
+const PLATFORM_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
+  linkedin: { icon: Linkedin, color: "bg-blue-600", label: "LinkedIn" },
+  facebook: { icon: Facebook, color: "bg-blue-700", label: "Facebook" },
+  instagram: { icon: Instagram, color: "bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500", label: "Instagram" },
+  twitter: { icon: Twitter, color: "bg-black", label: "X (Twitter)" },
+  wordpress: { icon: Globe, color: "bg-slate-600", label: "WordPress" },
 };
 
 export default function CompanyCalendarPage() {
@@ -88,10 +90,25 @@ export default function CompanyCalendarPage() {
   const [activePost, setActivePost] = useState<Post | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<PlatformConnection[]>([]);
 
-  // fetch posts for this company
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Fetch connected platforms
+  useEffect(() => {
+    const fetchPlatforms = async () => {
+      try {
+        const res = await fetch(`/api/platforms?companyId=${companyId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setConnectedPlatforms(data.filter((p: any) => p.isConnected));
+        }
+      } catch (e) { console.error(e); }
+    };
+    fetchPlatforms();
+  }, [companyId]);
+
+  // Fetch posts
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
@@ -107,6 +124,21 @@ export default function CompanyCalendarPage() {
   }, [companyId, anchorDate, weekRowCount]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  // Scroll listener for infinite loading
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || viewMode !== "rolling") return;
+
+    const handleScroll = () => {
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 500) {
+        setWeekRowCount(c => Math.min(c + 3, ROWS_MAX));
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [viewMode, weekRowCount]);
 
   const filteredPosts = useMemo(() => {
     return posts.filter(p => {
@@ -148,18 +180,6 @@ export default function CompanyCalendarPage() {
     }
     return rows;
   }, [weekStart, filteredPosts, weekRowCount]);
-
-  useEffect(() => {
-    if (viewMode !== "rolling") return;
-    const node = sentinelRef.current;
-    const root = scrollRef.current;
-    if (!node || !root) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) setWeekRowCount(c => Math.min(c + 3, ROWS_MAX));
-    }, { root, rootMargin: "300px" });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [viewMode, weekRowCount]);
 
   const goToday = () => { setAnchorDate(new Date()); setWeekRowCount(ROWS_DEFAULT); };
   const goPrev = () => { if (viewMode === "week") setAnchorDate(d => addDays(d, -7)); else { setAnchorDate(d => addDays(d, -ROWS_DEFAULT * 7)); setWeekRowCount(ROWS_DEFAULT); } };
@@ -299,11 +319,11 @@ export default function CompanyCalendarPage() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowPlatformDropdown(false)} />
               <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg">
-                {["linkedin","instagram","twitter","facebook","wordpress"].map(key => (
-                  <button key={key} onClick={() => setSelectedPlatforms(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <div className={`h-4 w-4 rounded ${key === "linkedin" ? "bg-blue-600" : key === "instagram" ? "bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500" : key === "twitter" ? "bg-black" : key === "facebook" ? "bg-blue-700" : "bg-slate-600"}`}></div>
-                    <span className="flex-1 text-left capitalize">{key}</span>
-                    {selectedPlatforms.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
+                {connectedPlatforms.map(p => (
+                  <button key={p.id} onClick={() => setSelectedPlatforms(prev => prev.includes(p.type) ? prev.filter(t => t !== p.type) : [...prev, p.type])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <div className={`h-4 w-4 rounded ${PLATFORM_CONFIG[p.type]?.color || "bg-gray-400"}`}></div>
+                    <span className="flex-1 text-left">{PLATFORM_CONFIG[p.type]?.label || p.name}</span>
+                    {selectedPlatforms.includes(p.type) && <Check className="h-3 w-3 text-blue-500" />}
                   </button>
                 ))}
               </div>
@@ -376,9 +396,7 @@ export default function CompanyCalendarPage() {
                 </div>
               </div>
             ))}
-            <div ref={sentinelRef} className="flex items-center justify-center py-3 text-[11px] text-gray-300 dark:text-gray-600">
-              {weekRowCount >= ROWS_MAX ? "That's as far as we go" : "Loading more weeks..."}
-            </div>
+            {/* Removed old sentinel; scroll listener handles load */}
           </div>
         )}
       </div>
@@ -386,15 +404,20 @@ export default function CompanyCalendarPage() {
       {/* Connected platforms at bottom */}
       <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 flex items-center gap-2 flex-wrap">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Connected:</span>
-        {["linkedin","facebook","instagram","twitter"].map((key) => {
-          const Icon = PLATFORM_ICONS[key] || Globe;
+        {connectedPlatforms.map(p => {
+          const conf = PLATFORM_CONFIG[p.type];
+          if (!conf) return null;
+          const Icon = conf.icon;
           return (
-            <span key={key} className="flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs text-gray-700 dark:text-gray-300">
-              <Icon className="h-3.5 w-3.5 text-gray-600 dark:text-gray-300" />
-              {key}
+            <span key={p.id} className="flex items-center gap-1.5 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+              <span className={cn("flex h-4 w-4 items-center justify-center rounded", conf.color)}>
+                <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
+              </span>
+              {conf.label}
             </span>
           );
         })}
+        {connectedPlatforms.length === 0 && <span className="text-xs text-gray-400 dark:text-gray-500">None</span>}
       </div>
 
       {/* Bulk action bar */}
