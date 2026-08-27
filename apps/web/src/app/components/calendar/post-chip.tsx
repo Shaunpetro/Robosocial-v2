@@ -20,7 +20,7 @@ export interface PostChipPost {
 interface PostChipProps {
   post: PostChipPost;
   compact?: boolean;
-  mini?: boolean; // ultra compact for rolling week cells
+  mini?: boolean;
   selectionMode?: boolean;
   selected?: boolean;
   onSelect?: (postId: string) => void;
@@ -118,42 +118,42 @@ export function PostChip({
   const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
   const statusDot = STATUS_DOT[post.status] || "bg-gray-400";
 
-  // Mini mode: ultra compact – platform icon, status dot, drag handle only.
-  // Designed for 2-column grid in rolling week cells.
+  // Ultra compact mini mode: only icon + status dot, grip appears on hover absolute
   if (mini) {
     return (
       <div
         draggable={isDraggable}
         onClick={handleClick}
         className={cn(
-          "group relative flex items-center gap-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1 py-0.5 shadow-sm hover:shadow cursor-pointer",
+          "group relative flex items-center justify-center gap-0.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-0.5 shadow-sm hover:shadow cursor-pointer w-full min-w-0 overflow-hidden",
           selected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30",
           post.status === "PUBLISHED" && "opacity-60",
-          isDraggable && "cursor-grab active:cursor-grabbing",
-          "w-full"
+          isDraggable && "cursor-grab active:cursor-grabbing"
         )}
+        title={post.scheduledFor ? formatTime(post.scheduledFor) : post.content}
       >
-        {!selectionMode && isDraggable && <GripVertical className="h-3 w-3 flex-shrink-0 text-gray-300 dark:text-gray-600" />}
+        {!selectionMode && isDraggable && (
+          <GripVertical className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 flex-shrink-0" />
+        )}
         <div className={cn("flex h-4 w-4 flex-shrink-0 items-center justify-center rounded", config.chip)}>
           <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
         </div>
         <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", statusDot)} />
-        {/* no text */}
       </div>
     );
   }
 
+  // Standard mode
   return (
     <div
       draggable={isDraggable}
       onClick={handleClick}
       className={cn(
-        "group relative flex items-center gap-1.5 rounded-md border-l-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1.5 py-1 text-left shadow-sm hover:shadow transition-shadow cursor-pointer",
+        "group relative flex items-center gap-1.5 rounded-md border-l-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1.5 py-1 text-left shadow-sm hover:shadow transition-shadow cursor-pointer w-full min-w-0 overflow-hidden",
         topicBorder,
         selected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30",
         post.status === "PUBLISHED" && "opacity-60",
-        isDraggable && "cursor-grab active:cursor-grabbing",
-        compact ? "w-full" : ""
+        isDraggable && "cursor-grab active:cursor-grabbing"
       )}
     >
       {selectionMode && canSelect && (
