@@ -135,7 +135,7 @@ export function PostChip({
 
   const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
 
-  // Mini mode – ultra compact with hover quick actions
+  // Mini mode – vertical quick actions on hover
   if (mini) {
     return (
       <div
@@ -159,9 +159,9 @@ export function PostChip({
         </div>
         <StatusIcon className={cn("h-3 w-3 flex-shrink-0", statusConfig.color)} />
 
-        {/* Quick actions appear on hover */}
+        {/* Vertical quick actions */}
         {!selectionMode && canSelect && (
-          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Publish">
               <Send className="h-3 w-3" />
             </button>
@@ -177,7 +177,7 @@ export function PostChip({
     );
   }
 
-  // Standard mode
+  // Standard mode – vertical quick actions on hover (right side)
   return (
     <div
       draggable={isDraggable}
@@ -207,25 +207,27 @@ export function PostChip({
       </span>
 
       {!selectionMode && canSelect && (
-        <>
-          <div className="hidden sm:group-hover:flex items-center gap-0.5 flex-shrink-0">
-            <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Publish">
-              <Send className="h-3 w-3" />
-            </button>
-            <button onClick={handleReschedule} className="p-0.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded" title="Reschedule to this day">
-              <Calendar className="h-3 w-3" />
-            </button>
-            <button onClick={handleQuickDelete} className="p-0.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete">
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-          <div className="flex sm:hidden items-center gap-0.5 flex-shrink-0">
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden sm:flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Publish">
+            <Send className="h-3 w-3" />
+          </button>
+          <button onClick={handleReschedule} className="p-0.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded" title="Reschedule to this day">
+            <Calendar className="h-3 w-3" />
+          </button>
+          <button onClick={handleQuickDelete} className="p-0.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+      <div className="sm:hidden flex items-center gap-0.5 flex-shrink-0">
+        {canSelect && (
+          <>
             <button onClick={handleQuickPublish} className="p-0.5 text-green-600" title="Publish"><Send className="h-3 w-3" /></button>
             <button onClick={handleReschedule} className="p-0.5 text-brand-600" title="Reschedule"><Calendar className="h-3 w-3" /></button>
             <button onClick={handleQuickDelete} className="p-0.5 text-red-600" title="Delete"><Trash2 className="h-3 w-3" /></button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
