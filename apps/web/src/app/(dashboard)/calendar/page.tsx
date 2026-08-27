@@ -3,42 +3,20 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Calendar as CalendarIcon,
-  RefreshCw,
-  LayoutGrid,
-  CalendarDays,
-  Building2,
-  Check,
-  ChevronDown,
-  X,
-  List,
-  Clock,
-  MapPin,
-  Edit3,
-  Image as ImageIcon,
-  Send,
-  Trash2,
-  Eye,
+  ChevronLeft, ChevronRight, RefreshCw, Calendar as CalendarIcon, Rows3,
+  LayoutGrid, CheckSquare, X, Filter, ChevronDown, Check, Send, Trash2, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CalendarDayCell } from "@/app/components/calendar/calendar-day-cell";
+import { PostChip, PostChipPost } from "@/app/components/calendar/post-chip";
 import { CalendarWeekView } from "@/app/components/calendar/calendar-week-view";
 import { PostDetailModal } from "@/app/components/calendar/post-detail-modal";
 import { BulkActions } from "@/app/components/calendar/bulk-actions";
 
-// ---------------------------------------------------------------
-// Types (unchanged)
-// ---------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-interface Company {
-  id: string;
-  name: string;
-  logoUrl?: string | null;
-}
-
+interface Company { id: string; name: string; }
 interface Post {
   id: string;
   content: string;
@@ -48,1351 +26,387 @@ interface Post {
   topic: string | null;
   tone: string | null;
   hashtags: string[];
-  likes?: number;
-  comments?: number;
-  shares?: number;
-  impressions?: number;
+  likes?: number; comments?: number; shares?: number; impressions?: number;
   companyId: string;
-  platform: {
-    id: string;
-    type: string;
-    name: string | null;
-  } | null;
-  postMedia: Array<{
-    id: string;
-    media: {
-      id: string;
-      url: string;
-      type: string;
-      filename: string;
-    };
-  }>;
+  platform: { id: string; type: string; name: string | null } | null;
+  postMedia: Array<{ id: string; media: { id: string; url: string; type: string; filename: string } }>;
 }
 
-interface Platform {
-  id: string;
-  type?: string;
-  platform?: string;
-  name?: string | null;
-  accountName?: string | null;
-  companyId: string;
+// ---------------------------------------------------------------------------
+// Date helpers
+// ---------------------------------------------------------------------------
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate() - d.getDay()); return d;
 }
-
-type ViewMode = "month" | "week" | "list";
-
-// ---------------------------------------------------------------
-// Constants (unchanged)
-// ---------------------------------------------------------------
-
-const DAYS_OF_WEEK = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-const COMPANY_COLORS = [
-  { bg: "bg-blue-500", text: "text-blue-500", light: "bg-blue-100 dark:bg-blue-900/30" },
-  { bg: "bg-purple-500", text: "text-purple-500", light: "bg-purple-100 dark:bg-purple-900/30" },
-  { bg: "bg-green-500", text: "text-green-500", light: "bg-green-100 dark:bg-green-900/30" },
-  { bg: "bg-orange-500", text: "text-orange-500", light: "bg-orange-100 dark:bg-orange-900/30" },
-  { bg: "bg-pink-500", text: "text-pink-500", light: "bg-pink-100 dark:bg-pink-900/30" },
-  { bg: "bg-cyan-500", text: "text-cyan-500", light: "bg-cyan-100 dark:bg-cyan-900/30" },
-  { bg: "bg-amber-500", text: "text-amber-500", light: "bg-amber-100 dark:bg-amber-900/30" },
-  { bg: "bg-indigo-500", text: "text-indigo-500", light: "bg-indigo-100 dark:bg-indigo-900/30" },
-];
-
-const STATUS_OPTIONS = [
-  { value: "DRAFT", label: "Draft", color: "bg-gray-400" },
-  { value: "SCHEDULED", label: "Scheduled", color: "bg-blue-500" },
-  { value: "PUBLISHING", label: "Publishing", color: "bg-yellow-500" },
-  { value: "PUBLISHED", label: "Published", color: "bg-green-500" },
-  { value: "FAILED", label: "Failed", color: "bg-red-500" },
-];
-
-// ---------------------------------------------------------------
-// Utility Functions (unchanged)
-// ---------------------------------------------------------------
-
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date); d.setDate(d.getDate() + n); return d;
+}
+function startOfDay(date: Date): Date {
+  const d = new Date(date); d.setHours(0,0,0,0); return d;
+}
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 function toLocalISOString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
-
-  const timezoneOffset = -date.getTimezoneOffset();
-  const offsetHours = String(Math.floor(Math.abs(timezoneOffset) / 60)).padStart(2, "0");
-  const offsetMinutes = String(Math.abs(timezoneOffset) % 60).padStart(2, "0");
-  const offsetSign = timezoneOffset >= 0 ? "+" : "-";
-
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+  const year = date.getFullYear(); const month = String(date.getMonth()+1).padStart(2,"0"); const day = String(date.getDate()).padStart(2,"0");
+  const hours = String(date.getHours()).padStart(2,"0"); const minutes = String(date.getMinutes()).padStart(2,"0"); const seconds = String(date.getSeconds()).padStart(2,"0");
+  const tzOffset = -date.getTimezoneOffset(); const offsetHours = String(Math.floor(Math.abs(tzOffset)/60)).padStart(2,"0"); const offsetMinutes = String(Math.abs(tzOffset)%60).padStart(2,"0");
+  const sign = tzOffset >= 0 ? "+" : "-";
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMinutes}`;
 }
-
-function getLocalDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getWeekEnd(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() + (6 - day));
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-function formatWeekRange(start: Date, end: Date): string {
-  const startMonth = MONTHS[start.getMonth()];
-  const endMonth = MONTHS[end.getMonth()];
-  const startDay = start.getDate();
-  const endDay = end.getDate();
-  const year = end.getFullYear();
-
-  if (start.getMonth() === end.getMonth()) {
-    return `${startMonth} ${startDay} - ${endDay}, ${year}`;
-  }
-  return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`;
-}
-
-// ---------------------------------------------------------------
-// Multi-Select Dropdown (unchanged)
-// ---------------------------------------------------------------
-
-interface MultiSelectProps {
-  label: string;
-  icon: React.ReactNode;
-  options: Array<{ id: string; name: string; color?: string }>;
-  selected: string[];
-  onChange: (selected: string[]) => void;
-  allLabel?: string;
-}
-
-function MultiSelectDropdown({
-  label,
-  icon,
-  options,
-  selected,
-  onChange,
-  allLabel = "All",
-}: MultiSelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const allSelected = selected.length === 0 || selected.length === options.length;
-  const displayText = allSelected
-    ? allLabel
-    : selected.length === 1
-      ? options.find((o) => o.id === selected[0])?.name || "1 selected"
-      : `${selected.length} selected`;
-
-  const toggleOption = (id: string) => {
-    if (selected.includes(id)) {
-      onChange(selected.filter((s) => s !== id));
-    } else {
-      onChange([...selected, id]);
-    }
-  };
-
-  const selectAll = () => {
-    onChange([]);
-  };
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "flex items-center gap-2 px-3 py-2 text-sm rounded-xl border transition-all",
-          isOpen || selected.length > 0
-            ? "border-brand-500 bg-brand-500/10 text-[var(--text-primary)]"
-            : "border-[var(--border-default)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--border-hover)]"
-        )}
-      >
-        {icon}
-        <span className="font-medium">{label}:</span>
-        <span className={cn(selected.length > 0 && "text-brand-600 dark:text-brand-400")}>
-          {displayText}
-        </span>
-        <ChevronDown
-          size={14}
-          className={cn("transition-transform", isOpen && "rotate-180")}
-        />
-      </button>
-
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute top-full left-0 mt-2 z-20 w-64 max-h-80 overflow-y-auto rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-xl">
-            <button
-              onClick={selectAll}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-[var(--bg-secondary)] transition-colors border-b border-[var(--border-default)]"
-            >
-              <div
-                className={cn(
-                  "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
-                  allSelected
-                    ? "bg-brand-500 border-brand-500"
-                    : "border-[var(--border-default)]"
-                )}
-              >
-                {allSelected && <Check size={12} className="text-white" />}
-              </div>
-              <span className="font-medium text-[var(--text-primary)]">
-                {allLabel}
-              </span>
-            </button>
-
-            {options.map((option) => {
-              const isSelected = selected.length === 0 || selected.includes(option.id);
-              return (
-                <button
-                  key={option.id}
-                  onClick={() => toggleOption(option.id)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-[var(--bg-secondary)] transition-colors"
-                >
-                  <div
-                    className={cn(
-                      "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
-                      isSelected
-                        ? "bg-brand-500 border-brand-500"
-                        : "border-[var(--border-default)]"
-                    )}
-                  >
-                    {isSelected && <Check size={12} className="text-white" />}
-                  </div>
-                  {option.color && (
-                    <div className={cn("w-3 h-3 rounded-full", option.color)} />
-                  )}
-                  <span className="text-[var(--text-primary)] truncate">
-                    {option.name}
-                  </span>
-                </button>
-              );
-            })}
-
-            {options.length === 0 && (
-              <div className="px-4 py-6 text-sm text-[var(--text-tertiary)] text-center">
-                No options available
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------
-// Main Component
-// ---------------------------------------------------------------
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const ROWS_DEFAULT = 4;
+const ROWS_MAX = 26;
 
 export default function GlobalCalendarPage() {
-  // Companies state
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
-
-  // Core state – always start on today's date
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [posts, setPosts] = useState<Post[]>([]);
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [platforms, setPlatforms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal state
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [showPostModal, setShowPostModal] = useState(false);
+  const [anchorDate, setAnchorDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<"week" | "rolling">("rolling");
+  const [weekRowCount, setWeekRowCount] = useState(ROWS_DEFAULT);
 
-  // Filter state
-  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
-  // Selection state for bulk actions
-  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
-  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activePost, setActivePost] = useState<Post | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
-  // Drag state
-  const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
-  const [isRescheduling, setIsRescheduling] = useState(false);
-
-  // Ref for auto‑scrolling to today
-  const calendarGridRef = useRef<HTMLDivElement>(null);
-
-  // Company color map (unused but kept for potential later use)
-  const companyColorMap = useMemo(() => {
-    const map = new Map<string, (typeof COMPANY_COLORS)[0]>();
-    companies.forEach((company, index) => {
-      map.set(company.id, COMPANY_COLORS[index % COMPANY_COLORS.length]);
-    });
-    return map;
-  }, [companies]);
-
-  // ---------------------------------------------------------------
-  // Fetch Companies (unchanged)
-  // ---------------------------------------------------------------
+  const draggingId = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        setCompaniesLoading(true);
         const res = await fetch("/api/companies");
-        if (res.ok) {
-          const data = await res.json();
-          setCompanies(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch companies:", error);
-      } finally {
-        setCompaniesLoading(false);
-      }
+        if (res.ok) setCompanies(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setCompaniesLoading(false); }
     };
     fetchCompanies();
   }, []);
 
-  // ---------------------------------------------------------------
-  // Fetch Platforms (unchanged)
-  // ---------------------------------------------------------------
-
-  useEffect(() => {
-    const fetchPlatforms = async () => {
-      if (companies.length === 0) return;
-
-      try {
-        const companyIds =
-          selectedCompanyIds.length === 0
-            ? companies.map((c) => c.id)
-            : selectedCompanyIds;
-
-        const allPlatforms: Platform[] = [];
-        for (const companyId of companyIds) {
-          const res = await fetch(`/api/platforms?companyId=${companyId}`);
-          if (res.ok) {
-            const data = await res.json();
-            allPlatforms.push(
-              ...data.map((p: Platform) => ({ ...p, companyId }))
-            );
-          }
-        }
-        setPlatforms(allPlatforms);
-      } catch (error) {
-        console.error("Failed to fetch platforms:", error);
-      }
-    };
-    fetchPlatforms();
-  }, [companies, selectedCompanyIds]);
-
-  // ---------------------------------------------------------------
-  // Fetch Posts (unchanged)
-  // ---------------------------------------------------------------
-
   const fetchPosts = useCallback(async () => {
     if (companies.length === 0) return;
-
     setLoading(true);
     try {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-
-      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      const end = new Date(year, month + 2, 0, 23, 59, 59, 999);
-
-      const startDate = toLocalISOString(start);
-      const endDate = toLocalISOString(end);
-
-      const companyIds =
-        selectedCompanyIds.length === 0
-          ? companies.map((c) => c.id)
-          : selectedCompanyIds;
-
+      const rangeStart = startOfWeek(anchorDate);
+      const rangeEnd = addDays(rangeStart, weekRowCount * 7 - 1);
+      const companyIds = selectedCompanyIds.length > 0 ? selectedCompanyIds : companies.map(c => c.id);
       const allPosts: Post[] = [];
       for (const companyId of companyIds) {
-        const res = await fetch(
-          `/api/posts?companyId=${companyId}&startDate=${encodeURIComponent(
-            startDate
-          )}&endDate=${encodeURIComponent(endDate)}`
-        );
+        const res = await fetch(`/api/posts?companyId=${companyId}&startDate=${encodeURIComponent(toLocalISOString(rangeStart))}&endDate=${encodeURIComponent(toLocalISOString(rangeEnd))}`);
         if (res.ok) {
           const data = await res.json();
-          allPosts.push(...data.map((p: Post) => ({ ...p, companyId })));
+          allPosts.push(...data.map((p: any) => ({ ...p, companyId })));
         }
       }
       setPosts(allPosts);
-    } catch (error) {
-      console.error("Failed to fetch posts:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [companies, selectedCompanyIds, currentDate]);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [companies, selectedCompanyIds, anchorDate, weekRowCount]);
 
   useEffect(() => {
-    if (!companiesLoading) {
-      fetchPosts();
-    }
+    if (!companiesLoading) fetchPosts();
   }, [fetchPosts, companiesLoading]);
 
-  // ---------------------------------------------------------------
-  // Filter Posts (unchanged)
-  // ---------------------------------------------------------------
-
   const filteredPosts = useMemo(() => {
-    return posts.filter((post) => {
-      if (selectedPlatformIds.length > 0) {
-        if (!post.platform) return false;
-        if (!selectedPlatformIds.includes(post.platform.id)) return false;
-      }
-      if (selectedStatuses.length > 0) {
-        if (!selectedStatuses.includes(post.status)) {
-          return false;
-        }
-      }
+    return posts.filter(p => {
+      if (selectedPlatforms.length > 0 && !selectedPlatforms.includes(p.platform?.type?.toLowerCase() || "")) return false;
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(p.status)) return false;
       return true;
     });
-  }, [posts, selectedPlatformIds, selectedStatuses]);
+  }, [posts, selectedPlatforms, selectedStatuses]);
 
-  // ---------------------------------------------------------------
-  // Week Data Computation (unchanged)
-  // ---------------------------------------------------------------
+  function postsForDate(date: Date): Post[] {
+    return filteredPosts.filter(p => p.scheduledFor && isSameDay(new Date(p.scheduledFor), date)).sort((a,b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime());
+  }
 
-  const weekData = useMemo(() => {
-    const weekStart = getWeekStart(currentDate);
-    const weekEnd = getWeekEnd(currentDate);
+  const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate]);
+  const weekDays = useMemo(() => {
+    const today = startOfDay(new Date());
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(weekStart, i);
+      return { date, isToday: isSameDay(date, today), posts: postsForDate(date) };
+    });
+  }, [weekStart, filteredPosts]);
 
-    const days: Array<{
-      date: Date;
-      isToday: boolean;
-      posts: Post[];
-    }> = [];
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(weekStart);
-      date.setDate(weekStart.getDate() + i);
-
-      const dateStr = getLocalDateString(date);
-      const dayPosts = filteredPosts.filter((post) => {
-        if (!post.scheduledFor) return false;
-        const postDate = new Date(post.scheduledFor);
-        return getLocalDateString(postDate) === dateStr;
+  const rollingWeeks = useMemo(() => {
+    const today = startOfDay(new Date());
+    const rows = [];
+    for (let w = 0; w < weekRowCount; w++) {
+      const rowStart = addDays(weekStart, w * 7);
+      const days = Array.from({ length: 7 }, (_, d) => {
+        const date = addDays(rowStart, d);
+        return { date, isToday: isSameDay(date, today), posts: postsForDate(date) };
       });
-
-      const dateOnly = new Date(date);
-      dateOnly.setHours(0, 0, 0, 0);
-
-      days.push({
-        date,
-        isToday: dateOnly.getTime() === today.getTime(),
-        posts: dayPosts,
+      const crossesIntoNewMonth = days.some((d) => d.date.getDate() === 1);
+      const labelDate = w === 0 ? rowStart : days.find((d) => d.date.getDate() === 1)?.date;
+      rows.push({
+        key: w,
+        days,
+        label: w === 0 || crossesIntoNewMonth ? `${MONTHS[labelDate!.getMonth()]} ${labelDate!.getFullYear()}` : null,
       });
     }
-
-    return { weekStart, weekEnd, days };
-  }, [currentDate, filteredPosts]);
-
-  // ---------------------------------------------------------------
-  // Calendar Data Computation (Month View)
-  // ---------------------------------------------------------------
-
-  const calendarData = useMemo(() => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDayOfWeek = firstDay.getDay();
-    const daysInMonth = lastDay.getDate();
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    const totalCells = 42;
-
-    const days: Array<{
-      date: Date;
-      isCurrentMonth: boolean;
-      isToday: boolean;
-      posts: Post[];
-    }> = [];
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const getPostsForDate = (date: Date): Post[] => {
-      const dateStr = getLocalDateString(date);
-      return filteredPosts.filter((post) => {
-        if (!post.scheduledFor) return false;
-        const postDate = new Date(post.scheduledFor);
-        const postDateStr = getLocalDateString(postDate);
-        return postDateStr === dateStr;
-      });
-    };
-
-    for (let i = startDayOfWeek - 1; i >= 0; i--) {
-      const date = new Date(year, month - 1, prevMonthLastDay - i);
-      days.push({
-        date,
-        isCurrentMonth: false,
-        isToday: false,
-        posts: getPostsForDate(date),
-      });
-    }
-
-    for (let i = 1; i <= daysInMonth; i++) {
-      const date = new Date(year, month, i);
-      const dateOnly = new Date(date);
-      dateOnly.setHours(0, 0, 0, 0);
-
-      days.push({
-        date,
-        isCurrentMonth: true,
-        isToday: dateOnly.getTime() === today.getTime(),
-        posts: getPostsForDate(date),
-      });
-    }
-
-    const remainingCells = totalCells - days.length;
-    for (let i = 1; i <= remainingCells; i++) {
-      const date = new Date(year, month + 1, i);
-      days.push({
-        date,
-        isCurrentMonth: false,
-        isToday: false,
-        posts: getPostsForDate(date),
-      });
-    }
-
-    return { year, month, monthName: MONTHS[month], days };
-  }, [currentDate, filteredPosts]);
-
-  // ---------------------------------------------------------------
-  // List View Posts (unchanged)
-  // ---------------------------------------------------------------
-
-  const listPosts = useMemo(() => {
-    if (viewMode !== "list") return [];
-    const rangeStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const rangeEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
-    return filteredPosts.filter(post => {
-      if (!post.scheduledFor) return false;
-      const d = new Date(post.scheduledFor);
-      return d >= rangeStart && d <= rangeEnd;
-    }).sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime());
-  }, [viewMode, currentDate, filteredPosts]);
-
-  // ---------------------------------------------------------------
-  // Scroll to current week at top when month view data is ready
-  // ---------------------------------------------------------------
+    return rows;
+  }, [weekStart, filteredPosts, weekRowCount]);
 
   useEffect(() => {
-    if (!loading && viewMode === "month" && calendarGridRef.current) {
-      const todayCell = calendarGridRef.current.querySelector('[data-today="true"]');
-      if (todayCell) {
-        todayCell.scrollIntoView({ block: "start", behavior: "auto" });
-      }
-    }
-  }, [loading, viewMode, calendarData]);
+    if (viewMode !== "rolling") return;
+    const node = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!node || !root) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setWeekRowCount(c => Math.min(c + 3, ROWS_MAX));
+    }, { root, rootMargin: "300px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [viewMode, weekRowCount]);
 
-  // ---------------------------------------------------------------
-  // Navigation (unchanged)
-  // ---------------------------------------------------------------
+  const goToday = () => { setAnchorDate(new Date()); setWeekRowCount(ROWS_DEFAULT); };
+  const goPrev = () => { if (viewMode === "week") setAnchorDate(d => addDays(d, -7)); else { setAnchorDate(d => addDays(d, -ROWS_DEFAULT * 7)); setWeekRowCount(ROWS_DEFAULT); } };
+  const goNext = () => { if (viewMode === "week") setAnchorDate(d => addDays(d, 7)); else { setAnchorDate(d => addDays(d, ROWS_DEFAULT * 7)); setWeekRowCount(ROWS_DEFAULT); } };
 
-  const goToPrevMonth = () => {
-    setCurrentDate(
-      new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-    );
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(
-      new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
-    );
-  };
-
-  const goToPrevWeek = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() - 7);
-    setCurrentDate(newDate);
-  };
-
-  const goToNextWeek = () => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + 7);
-    setCurrentDate(newDate);
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  // ---------------------------------------------------------------
-  // Post Handlers
-  // ---------------------------------------------------------------
-
-  const togglePostSelection = (postId: string) => {
-    setSelectedPostIds((prev) =>
-      prev.includes(postId)
-        ? prev.filter((id) => id !== postId)
-        : [...prev, postId]
-    );
-  };
-
-  const handlePostClick = (post: Post) => {
-    if (selectionMode) {
-      togglePostSelection(post.id);
-      return;
-    }
-    setSelectedPost(post);
-    setShowPostModal(true);
-  };
-
-  const handlePostUpdate = () => {
-    fetchPosts();
-    setShowPostModal(false);
-    setSelectedPost(null);
-  };
-
-  // ---------------------------------------------------------------
-  // Drag and Drop (unchanged)
-  // ---------------------------------------------------------------
-
-  const handlePostDrop = async (postId: string, newDate: Date) => {
-    setIsRescheduling(true);
-    setDragOverDate(null);
-
-    const scheduledForLocal = toLocalISOString(newDate);
-
+  const reschedule = async (id: string, newDate: Date) => {
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduledFor: scheduledForLocal,
-          status: "SCHEDULED",
-        }),
-      });
-
-      if (res.ok) {
-        setPosts((prev) =>
-          prev.map((post) =>
-            post.id === postId
-              ? { ...post, scheduledFor: scheduledForLocal, status: "SCHEDULED" }
-              : post
-          )
-        );
-      } else {
-        console.error("Failed to reschedule post");
-        fetchPosts();
-      }
-    } catch (error) {
-      console.error("Error rescheduling post:", error);
-      fetchPosts();
-    } finally {
-      setIsRescheduling(false);
-    }
-  };
-
-  const handlePostDropWithTime = async (
-    postId: string,
-    newDate: Date,
-    hour: number
-  ) => {
-    const dateWithTime = new Date(
-      newDate.getFullYear(),
-      newDate.getMonth(),
-      newDate.getDate(),
-      hour,
-      0,
-      0,
-      0
-    );
-    await handlePostDrop(postId, dateWithTime);
-  };
-
-  // ---------------------------------------------------------------
-  // Selection Handlers (unchanged)
-  // ---------------------------------------------------------------
-
-  const toggleSelectionMode = () => {
-    if (selectionMode) {
-      setSelectedPostIds([]);
-    }
-    setSelectionMode(!selectionMode);
-  };
-
-  const selectAllVisible = () => {
-    const allVisiblePostIds = filteredPosts
-      .filter(
-        (post) => post.status !== "PUBLISHED" && post.status !== "PUBLISHING"
-      )
-      .map((post) => post.id);
-    setSelectedPostIds(allVisiblePostIds);
-  };
-
-  const clearSelection = () => {
-    setSelectedPostIds([]);
-  };
-
-  // ---------------------------------------------------------------
-  // Bulk Action Handlers (unchanged)
-  // ---------------------------------------------------------------
-
-  const handleBulkReschedule = async (newDate: Date) => {
-    setIsProcessingBulk(true);
-    try {
-      const res = await fetch("/api/posts/bulk", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postIds: selectedPostIds,
-          action: "reschedule",
-          data: { scheduledFor: toLocalISOString(newDate) },
-        }),
-      });
-
-      if (res.ok) {
-        await fetchPosts();
-        clearSelection();
-        setSelectionMode(false);
-      }
-    } catch (error) {
-      console.error("Bulk reschedule failed:", error);
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    setIsProcessingBulk(true);
-    try {
-      const res = await fetch("/api/posts/bulk", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postIds: selectedPostIds,
-          action: "delete",
-        }),
-      });
-
-      if (res.ok) {
-        await fetchPosts();
-        clearSelection();
-        setSelectionMode(false);
-      }
-    } catch (error) {
-      console.error("Bulk delete failed:", error);
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
-
-  const handleBulkStatusChange = async (status: string) => {
-    setIsProcessingBulk(true);
-    try {
-      const res = await fetch("/api/posts/bulk", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postIds: selectedPostIds,
-          action: "changeStatus",
-          data: { status },
-        }),
-      });
-
-      if (res.ok) {
-        await fetchPosts();
-        clearSelection();
-        setSelectionMode(false);
-      }
-    } catch (error) {
-      console.error("Bulk status change failed:", error);
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
-
-  // ---------------------------------------------------------------
-  // Clear Filters (unchanged)
-  // ---------------------------------------------------------------
-
-  const clearAllFilters = () => {
-    setSelectedCompanyIds([]);
-    setSelectedPlatformIds([]);
-    setSelectedStatuses([]);
-  };
-
-  const hasActiveFilters =
-    selectedCompanyIds.length > 0 ||
-    selectedPlatformIds.length > 0 ||
-    selectedStatuses.length > 0;
-
-  // ---------------------------------------------------------------
-  // Stats (unchanged)
-  // ---------------------------------------------------------------
-
-  const monthStats = useMemo(() => {
-    const relevantPosts =
-      viewMode === "month"
-        ? filteredPosts.filter((post) => {
-            if (!post.scheduledFor) return false;
-            const postDate = new Date(post.scheduledFor);
-            return (
-              postDate.getMonth() === currentDate.getMonth() &&
-              postDate.getFullYear() === currentDate.getFullYear()
-            );
-          })
-        : viewMode === "week"
-        ? filteredPosts.filter((post) => {
-            if (!post.scheduledFor) return false;
-            const postDate = new Date(post.scheduledFor);
-            const weekStart = getWeekStart(currentDate);
-            const weekEnd = getWeekEnd(currentDate);
-            return postDate >= weekStart && postDate <= weekEnd;
-          })
-        : listPosts;
-
-    return {
-      total: relevantPosts.length,
-      scheduled: relevantPosts.filter((p) => p.status === "SCHEDULED").length,
-      published: relevantPosts.filter((p) => p.status === "PUBLISHED").length,
-      draft: relevantPosts.filter((p) => p.status === "DRAFT").length,
-    };
-  }, [filteredPosts, currentDate, viewMode, listPosts]);
-
-  // Navigation label (unchanged)
-  const navigationLabel =
-    viewMode === "month"
-      ? `${calendarData.monthName} ${calendarData.year}`
-      : viewMode === "week"
-      ? formatWeekRange(weekData.weekStart, weekData.weekEnd)
-      : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-
-  // Platform options for dropdown (unchanged)
-  const platformOptions = useMemo(() => {
-    const uniquePlatforms = new Map<string, Platform>();
-    platforms.forEach((p) => {
-      if (!uniquePlatforms.has(p.id)) {
-        uniquePlatforms.set(p.id, p);
-      }
-    });
-    return Array.from(uniquePlatforms.values()).map((p) => ({
-      id: p.id,
-      name: p.accountName || p.name || (p.platform || p.type || "Unknown"),
-    }));
-  }, [platforms]);
-
-  // Company options for dropdown (unchanged)
-  const companyOptions = useMemo(() => {
-    return companies.map((c, index) => ({
-      id: c.id,
-      name: c.name,
-      color: COMPANY_COLORS[index % COMPANY_COLORS.length].bg,
-    }));
-  }, [companies]);
-
-  // ---------------------------------------------------------------
-  // Quick status change (for inline actions)
-  // ---------------------------------------------------------------
-
-  const quickStatusChange = async (postId: string, status: string) => {
-    try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
+      const res = await fetch(`/api/posts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduledFor: toLocalISOString(newDate), status: "SCHEDULED" }) });
       if (res.ok) fetchPosts();
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
-
-  // ---------------------------------------------------------------
-  // Quick delete (confirm then delete directly)
-  // ---------------------------------------------------------------
-
-  const handleQuickDelete = async (postId: string) => {
+  const setStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`/api/posts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      if (res.ok) fetchPosts();
+    } catch (e) { console.error(e); }
+  };
+  const removePost = async (id: string) => {
     if (!confirm("Delete this post?")) return;
     try {
-      const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
-      if (res.ok) {
-        fetchPosts();
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
+      if (res.ok) fetchPosts();
+    } catch (e) { console.error(e); }
   };
 
-  // ---------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------
+  const toggleSelect = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const clearSelection = () => { setSelectedIds([]); setSelectionMode(false); };
+  const bulkPublish = async () => {
+    try {
+      await fetch("/api/posts/bulk", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postIds: selectedIds, action: "changeStatus", data: { status: "PUBLISHED" } }) });
+      clearSelection(); fetchPosts();
+    } catch (e) { console.error(e); }
+  };
+  const bulkDelete = async () => {
+    if (!confirm("Delete selected posts?")) return;
+    try {
+      await fetch("/api/posts/bulk", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postIds: selectedIds, action: "delete" }) });
+      clearSelection(); fetchPosts();
+    } catch (e) { console.error(e); }
+  };
+  const bulkReschedule = async () => {
+    const target = new Date(); target.setDate(target.getDate() + 1); target.setHours(9,0,0,0);
+    try {
+      await fetch("/api/posts/bulk", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postIds: selectedIds, action: "reschedule", data: { scheduledFor: toLocalISOString(target) } }) });
+      clearSelection(); fetchPosts();
+    } catch (e) { console.error(e); }
+  };
 
-  if (companiesLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 size={24} className="animate-spin text-[var(--text-tertiary)]" />
-          <p className="text-sm text-[var(--text-tertiary)]">Loading calendar...</p>
-        </div>
-      </div>
-    );
-  }
+  const onChipDragStart = (post: Post) => (e: React.DragEvent) => {
+    if (selectionMode || post.status === "PUBLISHED" || post.status === "PUBLISHING") { e.preventDefault(); return; }
+    draggingId.current = post.id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onCellDragOver = (key: string) => (e: React.DragEvent) => { e.preventDefault(); setDragOverKey(key); };
+  const onCellDrop = (date: Date, hour?: number) => (e: React.DragEvent) => {
+    e.preventDefault(); setDragOverKey(null);
+    const id = draggingId.current; draggingId.current = null;
+    if (!id) return;
+    const post = posts.find(p => p.id === id);
+    const newDate = new Date(date);
+    if (typeof hour === "number") newDate.setHours(hour, 0, 0, 0);
+    else if (post) newDate.setHours(new Date(post.scheduledFor!).getHours(), new Date(post.scheduledFor!).getMinutes(), 0, 0);
+    reschedule(id, newDate);
+  };
 
-  if (companies.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <CalendarIcon size={48} className="mx-auto text-[var(--text-tertiary)] mb-4" />
-          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
-            No Companies Yet
-          </h2>
-          <p className="text-[var(--text-secondary)] mb-4">
-            Create a company to start scheduling content
-          </p>
-          <a
-            href="/companies"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors"
-          >
-            <Building2 size={18} />
-            Go to Companies
-          </a>
-        </div>
-      </div>
-    );
-  }
+  const visiblePosts = viewMode === "week" ? weekDays.flatMap(d => d.posts) : rollingWeeks.flatMap(row => row.days.flatMap(d => d.posts));
+  const stats = {
+    scheduled: visiblePosts.filter(p => p.status === "SCHEDULED").length,
+    published: visiblePosts.filter(p => p.status === "PUBLISHED").length,
+    draft: visiblePosts.filter(p => p.status === "DRAFT").length,
+  };
 
-  const MonthGrid = () => (
-    <div className="hidden sm:block h-full">
-      <div className="grid grid-cols-7 border-b border-[var(--border-default)] flex-shrink-0">
-        {DAYS_OF_WEEK.map((day) => (
-          <div
-            key={day}
-            className="py-2 text-center text-xs font-semibold text-[var(--text-tertiary)] tracking-wider border-r border-[var(--border-subtle)] last:border-r-0"
-          >
-            {day}
-          </div>
-        ))}
-      </div>
+  const headerLabel = viewMode === "week" ? `${weekStart.toLocaleDateString(undefined,{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString(undefined,{month:"short",day:"numeric"})}` : `${weekStart.toLocaleDateString(undefined,{month:"short",day:"numeric"})} – ${addDays(weekStart, weekRowCount*7-1).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}`;
 
-      <div ref={calendarGridRef} className="flex-1 min-h-0 overflow-y-auto">
-        <div
-          className="grid grid-cols-7"
-          style={{ gridTemplateRows: "repeat(6, minmax(7rem, 1fr))" }}
-        >
-          {calendarData.days.map((day) => {
-            const key = getLocalDateString(day.date);
-            return (
-              <CalendarDayCell
-                key={key}
-                date={day.date}
-                isCurrentMonth={day.isCurrentMonth}
-                isToday={day.isToday}
-                posts={day.posts}
-                onPostClick={handlePostClick}
-                onPostDrop={handlePostDrop}
-                isDragOver={
-                  dragOverDate?.toDateString() === day.date.toDateString()
-                }
-                onDragOver={setDragOverDate}
-                onDragLeave={() => setDragOverDate(null)}
-                selectionMode={selectionMode}
-                selectedPostIds={selectedPostIds}
-                onToggleSelection={togglePostSelection}
-                onQuickStatusChange={quickStatusChange}
-                onQuickDelete={handleQuickDelete}
-              />
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-
-  const MobileMonthList = () => (
-    <div className="sm:hidden flex flex-col gap-2 p-2 overflow-y-auto flex-1 min-h-0">
-      {calendarData.days.map((day) => {
-        const key = getLocalDateString(day.date);
-        return (
-          <div key={key} className="border border-[var(--border-subtle)] rounded-lg p-1.5">
-            <div className="text-xs font-semibold text-[var(--text-primary)] mb-1">
-              {day.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-              {day.isToday && (
-                <span className="ml-1 px-1 py-0.5 bg-brand-500 text-white text-[10px] rounded-full">Today</span>
-              )}
-            </div>
-            <CalendarDayCell
-              date={day.date}
-              isCurrentMonth={day.isCurrentMonth}
-              isToday={day.isToday}
-              posts={day.posts}
-              onPostClick={handlePostClick}
-              onPostDrop={handlePostDrop}
-              isDragOver={false}
-              onDragOver={() => {}}
-              onDragLeave={() => {}}
-              selectionMode={selectionMode}
-              selectedPostIds={selectedPostIds}
-              onToggleSelection={togglePostSelection}
-              onQuickStatusChange={quickStatusChange}
-              onQuickDelete={handleQuickDelete}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+  if (companiesLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-500" /></div>;
+  if (companies.length === 0) return <div className="p-8 text-center">No companies found. Create a company first.</div>;
 
   return (
-    <div className="h-full flex flex-col p-4 md:p-6 overflow-hidden">
+    <div className="flex h-full flex-col bg-gray-50">
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4 flex-shrink-0">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-brand-500" />
-            <span className="whitespace-nowrap">Content Calendar</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white p-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="flex items-center gap-1.5 text-base font-bold text-gray-900">
+            <CalendarIcon className="h-4 w-4 text-blue-500" /> Content Calendar
           </h1>
-
-          <div className="flex items-center bg-[var(--bg-secondary)] rounded-xl p-1">
-            <button
-              onClick={() => setViewMode("month")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium rounded-lg transition-all",
-                viewMode === "month"
-                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Month</span>
-            </button>
-            <button
-              onClick={() => setViewMode("week")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium rounded-lg transition-all",
-                viewMode === "week"
-                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              <CalendarDays className="h-4 w-4" />
-              <span className="hidden sm:inline">Week</span>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium rounded-lg transition-all",
-                viewMode === "list"
-                  ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              <List className="h-4 w-4" />
-              <span className="hidden sm:inline">List</span>
-            </button>
-          </div>
-
-          <div className="hidden xl:flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-brand-500/10 rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-brand-500" />
-              <span className="text-xs font-medium text-brand-600 dark:text-brand-400">
-                {monthStats.scheduled} scheduled
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                {monthStats.published} published
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-[var(--bg-secondary)] rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-gray-400" />
-              <span className="text-xs font-medium text-[var(--text-tertiary)]">
-                {monthStats.draft} drafts
-              </span>
-            </div>
-          </div>
-
-          {isRescheduling && (
-            <div className="flex items-center gap-2 text-sm text-brand-600 dark:text-brand-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="hidden sm:inline">Rescheduling...</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={toggleSelectionMode}
-            className={cn(
-              "px-2.5 py-1.5 text-sm font-medium rounded-xl transition-all whitespace-nowrap",
-              selectionMode
-                ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
-            )}
-          >
-            {selectionMode ? "Exit Select" : "Select Posts"}
-          </button>
-
-          {selectionMode && (
-            <button
-              onClick={selectAllVisible}
-              className="px-2.5 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] rounded-xl transition-all whitespace-nowrap"
-            >
-              Select All
-            </button>
-          )}
-
-          <div className="w-px h-6 bg-[var(--border-default)]" />
-
-          <button
-            onClick={fetchPosts}
-            disabled={loading}
-            className="p-2 hover:bg-[var(--bg-secondary)] rounded-xl transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw
-              className={cn(
-                "h-4 w-4 text-[var(--text-tertiary)]",
-                loading && "animate-spin"
-              )}
-            />
-          </button>
-
-          <button
-            onClick={goToToday}
-            className="px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-500/10 dark:text-brand-400 rounded-xl transition-colors whitespace-nowrap"
-          >
-            Today
-          </button>
-
-          <div className="flex items-center bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl">
-            <button
-              onClick={viewMode === "month" ? goToPrevMonth : goToPrevWeek}
-              className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-l-lg transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4 text-[var(--text-secondary)]" />
-            </button>
-
-            <span className="px-3 py-1.5 text-sm font-semibold text-[var(--text-primary)] whitespace-nowrap min-w-[140px] text-center">
-              {navigationLabel}
+          <div className="hidden md:flex items-center gap-2">
+            <span className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> {stats.scheduled} scheduled
             </span>
-
-            <button
-              onClick={viewMode === "month" ? goToNextMonth : goToNextWeek}
-              className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-r-lg transition-colors"
-            >
-              <ChevronRight className="h-4 w-4 text-[var(--text-secondary)]" />
+            <span className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> {stats.published} published
+            </span>
+            <span className="flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> {stats.draft} drafts
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={() => setSelectionMode(s => !s)} className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${selectionMode ? "bg-purple-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+            <CheckSquare className="h-3.5 w-3.5" /> {selectionMode ? "Done" : "Select"}
+          </button>
+          <button onClick={() => fetchPosts()} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100" title="Refresh">
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={goToday} className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">
+            {viewMode === "week" ? "This week" : "Back to today"}
+          </button>
+          <div className="flex items-center gap-0.5 rounded-md border border-gray-200 p-0.5">
+            <button onClick={goPrev} className="rounded p-1 hover:bg-gray-100"><ChevronLeft className="h-3.5 w-3.5 text-gray-500" /></button>
+            <span className="min-w-[120px] px-1 text-center text-xs font-semibold text-gray-800">{headerLabel}</span>
+            <button onClick={goNext} className="rounded p-1 hover:bg-gray-100"><ChevronRight className="h-3.5 w-3.5 text-gray-500" /></button>
+          </div>
+          <div className="flex items-center gap-0.5 rounded-md bg-gray-100 p-0.5">
+            <button onClick={() => setViewMode("week")} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "week" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+              <Rows3 className="h-3 w-3" /> Week
+            </button>
+            <button onClick={() => { setViewMode("rolling"); setWeekRowCount(ROWS_DEFAULT); }} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "rolling" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+              <LayoutGrid className="h-3 w-3" /> Weeks
             </button>
           </div>
         </div>
       </div>
 
-      {/* Filters Row */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 flex-shrink-0">
-        <MultiSelectDropdown
-          label="Companies"
-          icon={<Building2 size={16} />}
-          options={companyOptions}
-          selected={selectedCompanyIds}
-          onChange={setSelectedCompanyIds}
-          allLabel="All Companies"
-        />
-
-        <MultiSelectDropdown
-          label="Platforms"
-          icon={
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-            </svg>
-          }
-          options={platformOptions}
-          selected={selectedPlatformIds}
-          onChange={setSelectedPlatformIds}
-          allLabel="All Platforms"
-        />
-
-        <MultiSelectDropdown
-          label="Status"
-          icon={
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-          options={STATUS_OPTIONS.map((s) => ({
-            id: s.value,
-            name: s.label,
-            color: s.color,
-          }))}
-          selected={selectedStatuses}
-          onChange={setSelectedStatuses}
-          allLabel="All Statuses"
-        />
-
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-xl transition-all"
-          >
-            <X size={14} />
-            Clear filters
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
+        <span className="flex items-center gap-1 text-xs text-gray-400"><Filter className="h-3 w-3" /> Filters:</span>
+        <div className="relative">
+          <button onClick={() => { setShowPlatformDropdown(s => !s); setShowStatusDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedPlatforms.length ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+            Platform {selectedPlatforms.length > 0 && `(${selectedPlatforms.length})`} <ChevronDown className="h-3 w-3" />
           </button>
+          {showPlatformDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowPlatformDropdown(false)} />
+              <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                {["linkedin","instagram","twitter","facebook","wordpress"].map(key => (
+                  <button key={key} onClick={() => setSelectedPlatforms(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                    <div className={`h-4 w-4 rounded ${key === "linkedin" ? "bg-blue-600" : key === "instagram" ? "bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500" : key === "twitter" ? "bg-black" : key === "facebook" ? "bg-blue-700" : "bg-slate-600"}`}></div>
+                    <span className="flex-1 text-left capitalize">{key}</span>
+                    {selectedPlatforms.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="relative">
+          <button onClick={() => { setShowStatusDropdown(s => !s); setShowPlatformDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedStatuses.length ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+            Status {selectedStatuses.length > 0 && `(${selectedStatuses.length})`} <ChevronDown className="h-3 w-3" />
+          </button>
+          {showStatusDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowStatusDropdown(false)} />
+              <div className="absolute left-0 top-full z-20 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                {Object.entries({ DRAFT: "Draft", SCHEDULED: "Scheduled", PUBLISHING: "Publishing", PUBLISHED: "Published", FAILED: "Failed" }).map(([key,label]) => (
+                  <button key={key} onClick={() => setSelectedStatuses(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                    <span className={`h-2 w-2 rounded-full ${key === "DRAFT" ? "bg-gray-400" : key === "SCHEDULED" ? "bg-blue-500" : key === "PUBLISHING" ? "bg-yellow-500" : key === "PUBLISHED" ? "bg-green-500" : "bg-red-500"}`} />
+                    <span className="flex-1 text-left">{label}</span>
+                    {selectedStatuses.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        {(selectedPlatforms.length > 0 || selectedStatuses.length > 0) && (
+          <button onClick={() => { setSelectedPlatforms([]); setSelectedStatuses([]); }} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"><X className="h-3 w-3" /> Clear</button>
         )}
       </div>
 
-      {/* Selection Mode Hint */}
-      {selectionMode ? (
-        <div className="mb-2 text-xs text-purple-600 dark:text-purple-400 flex items-center gap-2 flex-shrink-0">
-          <span className="inline-block w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-          <span>
-            Selection mode: Click posts to select them for bulk actions
-          </span>
-          {selectedPostIds.length > 0 && (
-            <span className="font-semibold">
-              ({selectedPostIds.length} selected)
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="mb-2 text-xs text-[var(--text-tertiary)] flex-shrink-0">
-          Tip: Drag and drop posts to reschedule, or use &quot;Select Posts&quot;
-          for bulk actions
-        </div>
-      )}
-
-      {/* Calendar Grid / List View */}
-      <div className="flex-1 min-h-0 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-default)] overflow-hidden flex flex-col">
+      {/* Calendar body */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-          </div>
-        ) : viewMode === "list" ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-4">
-            <div className="space-y-3">
-              {listPosts.length === 0 ? (
-                <div className="text-center py-12 text-[var(--text-tertiary)]">
-                  No posts in this period
-                </div>
-              ) : (
-                listPosts.map(post => {
-                  const scheduledDate = post.scheduledFor ? new Date(post.scheduledFor) : null;
-                  const hasImage = post.postMedia?.[0]?.media?.url;
-                  return (
-                    <div
-                      key={post.id}
-                      className={cn(
-                        "flex items-start gap-3 p-3 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-secondary)] cursor-pointer transition-colors",
-                        selectedPostIds.includes(post.id) && "ring-2 ring-purple-500"
-                      )}
-                      onClick={() => handlePostClick(post)}
-                    >
-                      {hasImage ? (
-                        <img src={hasImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center shrink-0">
-                          <ImageIcon size={20} className="text-[var(--text-tertiary)]" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)] mb-1">
-                          {scheduledDate && (
-                            <span className="flex items-center gap-1">
-                              <Clock size={12} />
-                              {scheduledDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                              {scheduledDate.getHours() > 0 && ` at ${scheduledDate.getHours()}:00`}
-                            </span>
-                          )}
-                          {post.platform && (
-                            <span className="flex items-center gap-1">
-                              <MapPin size={12} />
-                              {post.platform.name || post.platform.type}
-                            </span>
-                          )}
-                          <span className={cn(
-                            "px-1.5 py-0.5 rounded text-xs font-medium",
-                            post.status === "PUBLISHED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
-                            post.status === "SCHEDULED" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
-                            "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300"
-                          )}>
-                            {post.status}
-                          </span>
-                        </div>
-                        <p className="text-sm text-[var(--text-primary)] line-clamp-2">{post.content}</p>
-                        {post.topic && (
-                          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Topic: {post.topic}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handlePostClick(post); }}
-                          className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded"
-                        >
-                          <Edit3 size={14} className="text-[var(--text-secondary)]" />
-                        </button>
-                        {selectionMode && (
-                          <div className={cn(
-                            "w-5 h-5 rounded border-2 flex items-center justify-center",
-                            selectedPostIds.includes(post.id) ? "bg-purple-500 border-purple-500" : "border-[var(--border-default)]"
-                          )}>
-                            {selectedPostIds.includes(post.id) && <Check size={12} className="text-white" />}
-                          </div>
-                        )}
+          <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
+        ) : viewMode === "week" ? (
+          <CalendarWeekView
+            days={weekDays.map(d => ({ ...d, posts: d.posts as PostChipPost[] }))}
+            onPostClick={(post) => setActivePost(post as unknown as Post)}
+            onPostDrop={reschedule}
+            selectionMode={selectionMode}
+            selectedPostIds={selectedIds}
+            onToggleSelection={toggleSelect}
+            onQuickStatusChange={setStatus}
+            onQuickDelete={removePost}
+          />
+        ) : (
+          <div>
+            <div className="grid grid-cols-7 border-b border-gray-100 sticky top-0 bg-white z-10">
+              {DAYS_SHORT.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold uppercase text-gray-400">{d}</div>)}
+            </div>
+            {rollingWeeks.map((row) => (
+              <div key={row.key}>
+                {row.label && <div className="bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-500 border-b border-gray-100">{row.label}</div>}
+                <div className="grid grid-cols-7">
+                  {row.days.map((day, i) => (
+                    <div key={i} onDragOver={onCellDragOver(`r-${row.key}-${i}`)} onDrop={onCellDrop(day.date)} className={`flex h-24 flex-col overflow-hidden border-b border-r border-gray-100 p-1 ${day.isToday ? "bg-blue-50/40" : ""} ${dragOverKey === `r-${row.key}-${i}` ? "ring-2 ring-blue-400 ring-inset" : ""}`}>
+                      <span className={`mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${day.isToday ? "bg-blue-600 text-white" : "text-gray-700"}`}>{day.date.getDate()}</span>
+                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                        {day.posts.slice(0,3).map(post => (
+                          <PostChip key={post.id} post={post as PostChipPost} compact selectionMode={selectionMode} selected={selectedIds.includes(post.id)} onSelect={toggleSelect} onQuickStatusChange={setStatus} onQuickDelete={removePost} onReschedule={(id,newDate)=>reschedule(id,newDate)} onPostClick={(p) => setActivePost(p as unknown as Post)} />
+                        ))}
+                        {day.posts.length > 3 && <span className="px-1 text-[10px] font-medium text-blue-600">+{day.posts.length-3} more</span>}
                       </div>
                     </div>
-                  );
-                })
-              )}
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div ref={sentinelRef} className="flex items-center justify-center py-3 text-[11px] text-gray-300">
+              {weekRowCount >= ROWS_MAX ? "That's as far as we go" : "Loading more weeks..."}
             </div>
           </div>
-        ) : viewMode === "month" ? (
-          <>
-            <MonthGrid />
-            <MobileMonthList />
-          </>
-        ) : (
-          <CalendarWeekView
-            days={weekData.days}
-            onPostClick={handlePostClick}
-            onPostDrop={handlePostDropWithTime}
-            selectionMode={selectionMode}
-            selectedPostIds={selectedPostIds}
-            onToggleSelection={togglePostSelection}
-            onQuickStatusChange={quickStatusChange}
-            onQuickDelete={handleQuickDelete}
-          />
         )}
       </div>
 
-      {/* Post Detail Modal */}
-      <PostDetailModal
-        isOpen={showPostModal}
-        onClose={() => {
-          setShowPostModal(false);
-          setSelectedPost(null);
-        }}
-        post={selectedPost}
-        onUpdate={handlePostUpdate}
-      />
-
-      {/* Bulk Actions */}
-      {selectedPostIds.length > 0 && (
+      {/* Bulk action bar */}
+      {selectedIds.length > 0 && (
         <BulkActions
-          selectedCount={selectedPostIds.length}
-          selectedPostIds={selectedPostIds}
-          onBulkReschedule={handleBulkReschedule}
-          onBulkDelete={handleBulkDelete}
-          onBulkStatusChange={handleBulkStatusChange}
+          selectedCount={selectedIds.length}
+          selectedPostIds={selectedIds}
+          onBulkReschedule={bulkReschedule}
+          onBulkDelete={bulkDelete}
+          onBulkStatusChange={(status) => bulkPublish()}
           onClearSelection={clearSelection}
-          isProcessing={isProcessingBulk}
+          isProcessing={false}
+        />
+      )}
+
+      {/* Post detail modal */}
+      {activePost && (
+        <PostDetailModal
+          isOpen={!!activePost}
+          onClose={() => setActivePost(null)}
+          post={activePost}
+          onUpdate={fetchPosts}
         />
       )}
     </div>
