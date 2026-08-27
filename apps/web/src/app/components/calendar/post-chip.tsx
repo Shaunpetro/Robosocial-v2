@@ -1,7 +1,7 @@
 // apps/web/src/app/components/calendar/post-chip.tsx
 "use client";
 
-import { GripVertical, Check, Send, Calendar, Trash2, Linkedin, Instagram, Twitter, Facebook, Globe } from "lucide-react";
+import { GripVertical, Check, Send, Calendar, Trash2, Linkedin, Instagram, Twitter, Facebook, Globe, Clock, CheckCircle2, XCircle, Loader2, Edit3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface PostChipPost {
@@ -45,12 +45,12 @@ const PLATFORM_CONFIG: Record<string, PlatformConfig> = {
   wordpress: { icon: Globe, chip: "bg-slate-600", label: "WordPress" },
 };
 
-const STATUS_DOT: Record<string, string> = {
-  DRAFT: "bg-gray-400",
-  SCHEDULED: "bg-blue-500",
-  PUBLISHING: "bg-yellow-500",
-  PUBLISHED: "bg-green-500",
-  FAILED: "bg-red-500",
+const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string }> = {
+  DRAFT: { icon: Edit3, color: "text-gray-400" },
+  SCHEDULED: { icon: Clock, color: "text-blue-500" },
+  PUBLISHING: { icon: Loader2, color: "text-yellow-500" },
+  PUBLISHED: { icon: CheckCircle2, color: "text-green-500" },
+  FAILED: { icon: XCircle, color: "text-red-500" },
 };
 
 const TOPIC_BORDER: Record<string, string> = {
@@ -91,6 +91,8 @@ export function PostChip({
   const platformKey = post.platform?.type?.toLowerCase() || "wordpress";
   const config = PLATFORM_CONFIG[platformKey] || PLATFORM_CONFIG.wordpress;
   const Icon = config.icon;
+  const statusConfig = STATUS_CONFIG[post.status] || STATUS_CONFIG.DRAFT;
+  const StatusIcon = statusConfig.icon;
   const isDraggable = !selectionMode && post.status !== "PUBLISHED" && post.status !== "PUBLISHING";
   const canSelect = post.status !== "PUBLISHED" && post.status !== "PUBLISHING";
 
@@ -115,14 +117,30 @@ export function PostChip({
     }
   };
 
-  const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
-  const statusDot = STATUS_DOT[post.status] || "bg-gray-400";
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("postId", post.id);
+    e.dataTransfer.effectAllowed = "move";
+    if (post.scheduledFor) {
+      const d = new Date(post.scheduledFor);
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      e.dataTransfer.setData("originalTime", `${hours}:${minutes}`);
+    }
+    (e.currentTarget as HTMLElement).style.opacity = "0.5";
+  };
 
-  // Ultra compact mini mode: only icon + status dot, grip appears on hover absolute
+  const handleDragEnd = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).style.opacity = "1";
+  };
+
+  const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
+
   if (mini) {
     return (
       <div
         draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         onClick={handleClick}
         className={cn(
           "group relative flex items-center justify-center gap-0.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-0.5 shadow-sm hover:shadow cursor-pointer w-full min-w-0 overflow-hidden",
@@ -130,7 +148,7 @@ export function PostChip({
           post.status === "PUBLISHED" && "opacity-60",
           isDraggable && "cursor-grab active:cursor-grabbing"
         )}
-        title={post.scheduledFor ? formatTime(post.scheduledFor) : post.content}
+        title={`${post.status}${post.scheduledFor ? ` • ${formatTime(post.scheduledFor)}` : ""}`}
       >
         {!selectionMode && isDraggable && (
           <GripVertical className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 flex-shrink-0" />
@@ -138,15 +156,16 @@ export function PostChip({
         <div className={cn("flex h-4 w-4 flex-shrink-0 items-center justify-center rounded", config.chip)}>
           <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
         </div>
-        <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", statusDot)} />
+        <StatusIcon className={cn("h-3 w-3 flex-shrink-0", statusConfig.color)} />
       </div>
     );
   }
 
-  // Standard mode
   return (
     <div
       draggable={isDraggable}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={handleClick}
       className={cn(
         "group relative flex items-center gap-1.5 rounded-md border-l-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1.5 py-1 text-left shadow-sm hover:shadow transition-shadow cursor-pointer w-full min-w-0 overflow-hidden",
@@ -165,7 +184,7 @@ export function PostChip({
       <div className={cn("flex items-center justify-center rounded", config.chip, "h-4 w-4 flex-shrink-0")}>
         <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
       </div>
-      <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", statusDot)} />
+      <StatusIcon className={cn("h-3.5 w-3.5 flex-shrink-0", statusConfig.color)} />
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700 dark:text-gray-300">
         {compact ? post.content : post.scheduledFor ? formatTime(post.scheduledFor) : "—"}
       </span>

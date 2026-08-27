@@ -12,10 +12,6 @@ import { CalendarWeekView } from "@/app/components/calendar/calendar-week-view";
 import { PostDetailModal } from "@/app/components/calendar/post-detail-modal";
 import { BulkActions } from "@/app/components/calendar/bulk-actions";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface Company { id: string; name: string; }
 interface Post {
   id: string;
@@ -31,10 +27,6 @@ interface Post {
   platform: { id: string; type: string; name: string | null } | null;
   postMedia: Array<{ id: string; media: { id: string; url: string; type: string; filename: string } }>;
 }
-
-// ---------------------------------------------------------------------------
-// Date helpers
-// ---------------------------------------------------------------------------
 
 function startOfWeek(date: Date): Date {
   const d = new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate() - d.getDay()); return d;
@@ -65,7 +57,6 @@ export default function GlobalCalendarPage() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [platforms, setPlatforms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [anchorDate, setAnchorDate] = useState(new Date());
@@ -82,7 +73,6 @@ export default function GlobalCalendarPage() {
   const [activePost, setActivePost] = useState<Post | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
-  const draggingId = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -221,21 +211,27 @@ export default function GlobalCalendarPage() {
     } catch (e) { console.error(e); }
   };
 
-  const onChipDragStart = (post: Post) => (e: React.DragEvent) => {
-    if (selectionMode || post.status === "PUBLISHED" || post.status === "PUBLISHING") { e.preventDefault(); return; }
-    draggingId.current = post.id;
-    e.dataTransfer.effectAllowed = "move";
-  };
   const onCellDragOver = (key: string) => (e: React.DragEvent) => { e.preventDefault(); setDragOverKey(key); };
   const onCellDrop = (date: Date, hour?: number) => (e: React.DragEvent) => {
-    e.preventDefault(); setDragOverKey(null);
-    const id = draggingId.current; draggingId.current = null;
-    if (!id) return;
-    const post = posts.find(p => p.id === id);
+    e.preventDefault();
+    setDragOverKey(null);
+    const postId = e.dataTransfer.getData("postId");
+    if (!postId) return;
+    const post = posts.find(p => p.id === postId);
     const newDate = new Date(date);
-    if (typeof hour === "number") newDate.setHours(hour, 0, 0, 0);
-    else if (post) newDate.setHours(new Date(post.scheduledFor!).getHours(), new Date(post.scheduledFor!).getMinutes(), 0, 0);
-    reschedule(id, newDate);
+    if (typeof hour === "number") {
+      newDate.setHours(hour, 0, 0, 0);
+    } else if (post) {
+      const originalTime = e.dataTransfer.getData("originalTime");
+      if (originalTime) {
+        const [hours, minutes] = originalTime.split(":").map(Number);
+        newDate.setHours(hours, minutes, 0, 0);
+      } else if (post.scheduledFor) {
+        const original = new Date(post.scheduledFor);
+        newDate.setHours(original.getHours(), original.getMinutes(), 0, 0);
+      }
+    }
+    reschedule(postId, newDate);
   };
 
   const visiblePosts = viewMode === "week" ? weekDays.flatMap(d => d.posts) : rollingWeeks.flatMap(row => row.days.flatMap(d => d.posts));
