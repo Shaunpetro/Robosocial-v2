@@ -2,9 +2,10 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import {
   ImageIcon,
   Building2,
@@ -22,9 +23,13 @@ import {
   Loader2,
   ArrowRight,
   FolderOpen,
+  Upload,
+  X,
+  Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useCompany } from "@/app/contexts/company-context";
 
-// Import components
 import { MediaGrid } from "@/components/media/MediaGrid";
 import { MediaDetailModal } from "@/components/media/MediaDetailModal";
 import { MediaStats } from "@/components/media/MediaStats";
@@ -99,62 +104,13 @@ const TYPE_OPTIONS = [
 ];
 
 // ============================================
-// COMPANY CARD COMPONENT
-// ============================================
-
-interface CompanyCardProps {
-  company: Company;
-  mediaCount: number;
-  expiringCount: number;
-}
-
-function CompanyCard({ company, mediaCount, expiringCount }: CompanyCardProps) {
-  return (
-    <Link
-      href={`/companies/${company.id}/media`}
-      className="group p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:shadow-lg transition-all"
-    >
-      <div className="flex items-center gap-3 mb-3">
-        {company.logoUrl ? (
-          <Image
-            src={company.logoUrl}
-            alt={company.name}
-            width={40}
-            height={40}
-            className="rounded-lg object-cover"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-primary" />
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate group-hover:text-primary transition-colors">
-            {company.name}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {mediaCount} media item{mediaCount !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-      </div>
-
-      {expiringCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-500 text-sm">
-          <AlertTriangle className="w-4 h-4" />
-          {expiringCount} expiring soon
-        </div>
-      )}
-    </Link>
-  );
-}
-
-// ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function GlobalMediaPage() {
-  // State
+  const searchParams = useSearchParams();
+  const { selectedCompanyId } = useCompany();
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [stats, setStats] = useState<GlobalStats | null>(null);
@@ -162,26 +118,45 @@ export default function GlobalMediaPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // View mode
   const [viewMode, setViewMode] = useState<"companies" | "all">("companies");
   const [showStats, setShowStats] = useState(false);
 
-  // Filters (for "all" view)
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Selection for bulk actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Modals
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // Fetch companies
+  // Upload modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync companyFilter from URL or selectedCompanyId
+  useEffect(() => {
+    const urlCompanyId = searchParams.get("companyId");
+    if (urlCompanyId) {
+      setCompanyFilter(urlCompanyId);
+      setViewMode("all");
+    } else if (selectedCompanyId) {
+      setCompanyFilter(selectedCompanyId);
+      setViewMode("all");
+    } else {
+      setCompanyFilter("all");
+      setViewMode("companies");
+    }
+  }, [searchParams, selectedCompanyId]);
+
   const fetchCompanies = useCallback(async () => {
     try {
       const response = await fetch("/api/companies");
@@ -194,32 +169,23 @@ export default function GlobalMediaPage() {
     }
   }, []);
 
-  // Fetch all media
   const fetchMedia = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
     else setRefreshing(true);
 
     try {
       const params = new URLSearchParams();
-
-      if (statusFilter !== "all") {
-        params.set("status", statusFilter);
-      }
-      if (typeFilter !== "all") {
-        params.set("type", typeFilter);
-      }
-      if (companyFilter !== "all") {
-        params.set("companyId", companyFilter);
-      }
-      if (search) {
-        params.set("search", search);
-      }
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (typeFilter !== "all") params.set("type", typeFilter);
+      if (companyFilter !== "all") params.set("companyId", companyFilter);
+      if (search) params.set("search", search);
 
       const response = await fetch(`/api/media?${params}`);
-
       if (response.ok) {
         const data = await response.json();
-        setMedia(data.media || []);
+        // Handle both array and object responses
+        const mediaList = Array.isArray(data) ? data : data.media || data.data || [];
+        setMedia(mediaList);
       }
     } catch (error) {
       console.error("Failed to fetch media:", error);
@@ -229,7 +195,6 @@ export default function GlobalMediaPage() {
     }
   }, [statusFilter, typeFilter, companyFilter, search]);
 
-  // Fetch global stats
   const fetchStats = useCallback(async () => {
     try {
       const response = await fetch("/api/media/stats");
@@ -241,15 +206,10 @@ export default function GlobalMediaPage() {
           used: data.overview.used,
           expiring: data.overview.expiring,
         });
-
-        // Build company media counts
         if (data.companyBreakdown) {
           const counts: Record<string, { total: number; expiring: number }> = {};
           for (const company of data.companyBreakdown) {
-            counts[company.id] = {
-              total: company.mediaCount,
-              expiring: 0, // Will be calculated separately
-            };
+            counts[company.id] = { total: company.mediaCount, expiring: company.expiring || 0 };
           }
           setCompanyMediaCounts(counts);
         }
@@ -259,32 +219,22 @@ export default function GlobalMediaPage() {
     }
   }, []);
 
-  // Fetch expiring counts per company
   const fetchExpiringCounts = useCallback(async () => {
     try {
       const response = await fetch("/api/media?status=expiring");
       if (response.ok) {
         const data = await response.json();
-        const mediaList = data.media || [];
-
-        // Count expiring per company
+        const mediaList = Array.isArray(data) ? data : data.media || [];
         const expiringCounts: Record<string, number> = {};
         for (const m of mediaList) {
           const companyId = m.company?.id || m.companyId;
-          if (companyId) {
-            expiringCounts[companyId] = (expiringCounts[companyId] || 0) + 1;
-          }
+          if (companyId) expiringCounts[companyId] = (expiringCounts[companyId] || 0) + 1;
         }
-
-        // Update company media counts
         setCompanyMediaCounts((prev) => {
           const updated = { ...prev };
           for (const [companyId, count] of Object.entries(expiringCounts)) {
-            if (updated[companyId]) {
-              updated[companyId].expiring = count;
-            } else {
-              updated[companyId] = { total: 0, expiring: count };
-            }
+            if (updated[companyId]) updated[companyId].expiring = count;
+            else updated[companyId] = { total: 0, expiring: count };
           }
           return updated;
         });
@@ -294,7 +244,6 @@ export default function GlobalMediaPage() {
     }
   }, []);
 
-  // Initial fetch
   useEffect(() => {
     fetchCompanies();
     fetchStats();
@@ -302,44 +251,107 @@ export default function GlobalMediaPage() {
   }, [fetchCompanies, fetchStats, fetchExpiringCounts]);
 
   useEffect(() => {
-    if (viewMode === "all") {
-      fetchMedia();
-    }
+    if (viewMode === "all") fetchMedia();
   }, [viewMode, fetchMedia]);
 
-  // Handle selection
+  // Upload handlers
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleFiles = async (files: FileList) => {
+    if (!companyFilter || companyFilter === "all") return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadProgress(0);
+
+    const totalFiles = files.length;
+    let uploadedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      const validTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+        'video/mp4', 'video/webm', 'video/quicktime', 'application/pdf'
+      ];
+      if (!validTypes.includes(file.type)) {
+        errors.push(`Invalid file type: ${file.name}`);
+        continue;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        errors.push(`File too large: ${file.name} (max 50MB)`);
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("companyId", companyFilter);
+        const res = await fetch("/api/media/upload", { method: "POST", body: formData });
+        if (res.ok) {
+          uploadedCount++;
+          setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
+        } else {
+          const errorData = await res.json().catch(() => ({ error: "Upload failed" }));
+          errors.push(`${file.name}: ${errorData.error || "Upload failed"}`);
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
+        errors.push(`${file.name}: Network error`);
+      }
+    }
+
+    setUploading(false);
+    if (uploadedCount > 0) {
+      setUploadSuccess(`Successfully uploaded ${uploadedCount} file(s)`);
+      fetchMedia(false);
+      fetchStats();
+      setTimeout(() => setUploadSuccess(null), 3000);
+    }
+    if (errors.length > 0) setUploadError(errors.join("; "));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSelect = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
+  const handleSelectAll = (ids: string[]) => setSelectedIds(ids);
 
-  const handleSelectAll = (ids: string[]) => {
-    setSelectedIds(ids);
-  };
-
-  // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedIds.length} media item(s)? This cannot be undone.`
-    );
-
+    const confirmed = window.confirm(`Are you sure you want to delete ${selectedIds.length} media item(s)?`);
     if (!confirmed) return;
-
     setIsDeleting(true);
-
     try {
       const response = await fetch("/api/media/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delete",
-          mediaIds: selectedIds,
-        }),
+        body: JSON.stringify({ action: "delete", mediaIds: selectedIds }),
       });
-
       if (response.ok) {
         setSelectedIds([]);
         fetchMedia(false);
@@ -355,25 +367,16 @@ export default function GlobalMediaPage() {
     }
   };
 
-  // Handle view media
   const handleViewMedia = (media: MediaItem) => {
     setSelectedMedia(media);
     setShowDetailModal(true);
   };
 
-  // Handle delete single media
   const handleDeleteMedia = async (media: MediaItem) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${media.filename}"? This cannot be undone.`
-    );
-
+    const confirmed = window.confirm(`Are you sure you want to delete "${media.filename}"?`);
     if (!confirmed) return;
-
     try {
-      const response = await fetch(`/api/media/${media.id}?force=true`, {
-        method: "DELETE",
-      });
-
+      const response = await fetch(`/api/media/${media.id}?force=true`, { method: "DELETE" });
       if (response.ok) {
         fetchMedia(false);
         fetchStats();
@@ -386,15 +389,11 @@ export default function GlobalMediaPage() {
     }
   };
 
-  // Handle media update
   const handleMediaUpdate = (updatedMedia: MediaItem) => {
-    setMedia((prev) =>
-      prev.map((m) => (m.id === updatedMedia.id ? updatedMedia : m))
-    );
+    setMedia((prev) => prev.map((m) => (m.id === updatedMedia.id ? updatedMedia : m)));
     setSelectedMedia(updatedMedia);
   };
 
-  // Handle media delete from modal
   const handleMediaDelete = (mediaId: string) => {
     setMedia((prev) => prev.filter((m) => m.id !== mediaId));
     setSelectedIds((prev) => prev.filter((id) => id !== mediaId));
@@ -402,35 +401,34 @@ export default function GlobalMediaPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* Header */}
-      <div className="border-b border-border bg-card">
+      <div className="border-b border-[var(--border-default)] bg-[var(--bg-elevated)]">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-3">
-                <ImageIcon className="w-7 h-7 text-primary" />
-                Global Media Library
+              <h1 className="text-2xl font-bold flex items-center gap-3 text-[var(--text-primary)]">
+                <ImageIcon className="w-7 h-7 text-brand-500" />
+                Media Library
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-[var(--text-tertiary)] mt-1">
                 Manage media across all companies
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Stats toggle */}
               <button
                 onClick={() => setShowStats(!showStats)}
-                className={`
-                  p-2 rounded-lg border transition-colors
-                  ${showStats ? "bg-primary/10 border-primary" : "border-border hover:border-primary/50"}
-                `}
+                className={`p-2 rounded-lg border transition-colors ${
+                  showStats
+                    ? "bg-brand-500/10 border-brand-500"
+                    : "border-[var(--border-default)] hover:border-brand-500/50"
+                }`}
                 title="Toggle statistics"
               >
-                <BarChart3 className="w-5 h-5" />
+                <BarChart3 className="w-5 h-5 text-[var(--text-secondary)]" />
               </button>
 
-              {/* Refresh */}
               <button
                 onClick={() => {
                   fetchStats();
@@ -438,32 +436,47 @@ export default function GlobalMediaPage() {
                   if (viewMode === "all") fetchMedia(false);
                 }}
                 disabled={refreshing}
-                className="p-2 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] hover:border-brand-500/50 transition-colors"
                 title="Refresh"
               >
-                <RefreshCw className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-5 h-5 text-[var(--text-secondary)] ${refreshing ? "animate-spin" : ""}`} />
+              </button>
+
+              {/* Upload button */}
+              <button
+                onClick={() => {
+                  if (companyFilter === "all") {
+                    alert("Please select a company first");
+                    return;
+                  }
+                  setShowUploadModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors font-medium"
+              >
+                <Upload className="h-4 w-4" />
+                Upload
               </button>
             </div>
           </div>
 
-          {/* Quick stats */}
+          {/* Stats */}
           {stats && (
             <div className="grid grid-cols-4 gap-4 mt-6">
-              <div className="p-4 rounded-lg bg-muted/50">
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-sm text-muted-foreground">Total Media</p>
+              <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">Total Media</p>
               </div>
               <div className="p-4 rounded-lg bg-green-500/10">
-                <p className="text-2xl font-bold text-green-500">{stats.available}</p>
-                <p className="text-sm text-muted-foreground">Available</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.available}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">Available</p>
               </div>
               <div className="p-4 rounded-lg bg-amber-500/10">
-                <p className="text-2xl font-bold text-amber-500">{stats.expiring}</p>
-                <p className="text-sm text-muted-foreground">Expiring Soon</p>
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.expiring}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">Expiring Soon</p>
               </div>
               <div className="p-4 rounded-lg bg-blue-500/10">
-                <p className="text-2xl font-bold text-blue-500">{stats.used}</p>
-                <p className="text-sm text-muted-foreground">Used</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.used}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">Used</p>
               </div>
             </div>
           )}
@@ -472,26 +485,27 @@ export default function GlobalMediaPage() {
           <div className="flex items-center gap-2 mt-6">
             <button
               onClick={() => setViewMode("companies")}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg transition-colors
-                ${viewMode === "companies"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-                }
-              `}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                viewMode === "companies"
+                  ? "bg-brand-500 text-white"
+                  : "bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]"
+              }`}
             >
               <Building2 className="w-4 h-4" />
               By Company
             </button>
             <button
-              onClick={() => setViewMode("all")}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg transition-colors
-                ${viewMode === "all"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
+              onClick={() => {
+                setViewMode("all");
+                if (!companyFilter || companyFilter === "all") {
+                  if (selectedCompanyId) setCompanyFilter(selectedCompanyId);
                 }
-              `}
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                viewMode === "all"
+                  ? "bg-brand-500 text-white"
+                  : "bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]"
+              }`}
             >
               <Grid3X3 className="w-4 h-4" />
               All Media
@@ -502,7 +516,6 @@ export default function GlobalMediaPage() {
 
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Stats panel (collapsible) */}
         {showStats && (
           <div className="mb-6">
             <MediaStats />
@@ -512,24 +525,22 @@ export default function GlobalMediaPage() {
         {/* Companies view */}
         {viewMode === "companies" && (
           <div className="space-y-6">
-            {/* Global expiring alert */}
             {stats && stats.expiring > 0 && (
               <div className="flex items-center justify-between p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
                   <div>
-                    <p className="font-medium text-amber-500">
+                    <p className="font-medium text-amber-600 dark:text-amber-400">
                       {stats.expiring} media item{stats.expiring !== 1 ? "s" : ""} expiring soon
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Across all companies
-                    </p>
+                    <p className="text-sm text-[var(--text-tertiary)]">Across all companies</p>
                   </div>
                 </div>
                 <button
                   onClick={() => {
                     setViewMode("all");
                     setStatusFilter("expiring");
+                    setCompanyFilter("all");
                   }}
                   className="px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors text-sm"
                 >
@@ -538,16 +549,15 @@ export default function GlobalMediaPage() {
               </div>
             )}
 
-            {/* Company cards */}
             {companies.length === 0 ? (
               <div className="text-center py-12">
-                <FolderOpen className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">No companies found</p>
+                <FolderOpen className="w-12 h-12 mx-auto text-[var(--text-tertiary)] mb-3" />
+                <p className="text-[var(--text-tertiary)]">No companies found</p>
                 <Link
-                  href="/companies/new"
-                  className="mt-4 inline-block px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  href="/companies"
+                  className="mt-4 inline-block px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors"
                 >
-                  Create Company
+                  Go to Companies
                 </Link>
               </div>
             ) : (
@@ -555,12 +565,36 @@ export default function GlobalMediaPage() {
                 {companies.map((company) => {
                   const counts = companyMediaCounts[company.id] || { total: 0, expiring: 0 };
                   return (
-                    <CompanyCard
+                    <Link
                       key={company.id}
-                      company={company}
-                      mediaCount={counts.total || company._count?.media || 0}
-                      expiringCount={counts.expiring}
-                    />
+                      href={`/media?companyId=${company.id}`}
+                      className="group p-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] hover:border-brand-500/50 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        {company.logoUrl ? (
+                          <Image src={company.logoUrl} alt={company.name} width={40} height={40} className="rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                            <Building2 className="w-5 h-5 text-brand-500" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                            {company.name}
+                          </h3>
+                          <p className="text-sm text-[var(--text-tertiary)]">
+                            {counts.total || company._count?.media || 0} media item{counts.total !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-[var(--text-tertiary)] group-hover:text-brand-500 transition-colors" />
+                      </div>
+                      {counts.expiring > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-500 text-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          {counts.expiring} expiring soon
+                        </div>
+                      )}
+                    </Link>
                   );
                 })}
               </div>
@@ -571,35 +605,30 @@ export default function GlobalMediaPage() {
         {/* All media view */}
         {viewMode === "all" && (
           <div className="space-y-6">
-            {/* Filters bar */}
             <div className="flex flex-col md:flex-row md:items-center gap-4">
-              {/* Search */}
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search by filename or tag..."
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
                 />
               </div>
 
-              {/* Status filter tabs */}
-              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+              <div className="flex items-center gap-1 p-1 bg-[var(--bg-secondary)] rounded-lg">
                 {STATUS_OPTIONS.map((option) => {
                   const Icon = option.icon;
                   return (
                     <button
                       key={option.value}
                       onClick={() => setStatusFilter(option.value)}
-                      className={`
-                        flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors
-                        ${statusFilter === option.value
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                        }
-                      `}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        statusFilter === option.value
+                          ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
+                          : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                      }`}
                     >
                       <Icon className="w-4 h-4" />
                       <span className="hidden sm:inline">{option.label}</span>
@@ -608,57 +637,45 @@ export default function GlobalMediaPage() {
                 })}
               </div>
 
-              {/* More filters toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors
-                  ${showFilters ? "bg-primary/10 border-primary" : "border-border hover:border-primary/50"}
-                `}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                  showFilters ? "bg-brand-500/10 border-brand-500" : "border-[var(--border-default)] hover:border-brand-500/50"
+                }`}
               >
-                <Filter className="w-4 h-4" />
+                <Filter className="w-4 h-4 text-[var(--text-secondary)]" />
                 Filters
                 <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? "rotate-180" : ""}`} />
               </button>
             </div>
 
-            {/* Extended filters */}
             {showFilters && (
-              <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg bg-muted/50">
-                {/* Company filter */}
+              <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg bg-[var(--bg-secondary)]">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Company:</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">Company:</span>
                   <select
                     value={companyFilter}
                     onChange={(e) => setCompanyFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)]"
                   >
                     <option value="all">All Companies</option>
                     {companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.name}
-                      </option>
+                      <option key={company.id} value={company.id}>{company.name}</option>
                     ))}
                   </select>
                 </div>
-
-                {/* Type filter */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Type:</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">Type:</span>
                   <select
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)]"
                   >
                     {TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </div>
-
-                {/* Clear filters */}
                 {(typeFilter !== "all" || companyFilter !== "all" || search || statusFilter !== "all") && (
                   <button
                     onClick={() => {
@@ -667,7 +684,7 @@ export default function GlobalMediaPage() {
                       setStatusFilter("all");
                       setSearch("");
                     }}
-                    className="text-sm text-primary hover:underline"
+                    className="text-sm text-brand-600 dark:text-brand-400 hover:underline"
                   >
                     Clear filters
                   </button>
@@ -675,16 +692,15 @@ export default function GlobalMediaPage() {
               </div>
             )}
 
-            {/* Bulk actions bar */}
             {selectedIds.length > 0 && (
-              <div className="flex items-center justify-between p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <span className="text-sm font-medium">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-brand-500/10 border border-brand-500/20">
+                <span className="text-sm font-medium text-[var(--text-primary)]">
                   {selectedIds.length} item{selectedIds.length !== 1 ? "s" : ""} selected
                 </span>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setSelectedIds([])}
-                    className="text-sm text-muted-foreground hover:text-foreground"
+                    className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                   >
                     Clear selection
                   </button>
@@ -693,18 +709,13 @@ export default function GlobalMediaPage() {
                     disabled={isDeleting}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm"
                   >
-                    {isDeleting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
+                    {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     Delete Selected
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Media grid */}
             <MediaGrid
               media={media}
               loading={loading}
@@ -719,7 +730,7 @@ export default function GlobalMediaPage() {
               emptyMessage={
                 search || statusFilter !== "all" || typeFilter !== "all" || companyFilter !== "all"
                   ? "No media matches your filters"
-                  : "No media found across all companies"
+                  : "No media found for this company. Click Upload to add media."
               }
             />
           </div>
@@ -734,10 +745,114 @@ export default function GlobalMediaPage() {
           setSelectedMedia(null);
         }}
         media={selectedMedia}
-        pillars={[]} // Global view doesn't have pillars context
+        pillars={[]}
         onUpdate={handleMediaUpdate}
         onDelete={handleMediaDelete}
       />
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-xl w-full max-w-lg mx-4 border border-[var(--border-default)]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                Upload Media
+              </h2>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {uploading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-12 w-12 animate-spin text-brand-500 mb-4" />
+                  <p className="text-[var(--text-primary)]">Uploading...</p>
+                  <div className="w-64 h-2 bg-[var(--bg-tertiary)] rounded-full mt-4 overflow-hidden">
+                    <div
+                      className="h-full bg-brand-500 transition-all"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    "border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center",
+                    dragActive
+                      ? "border-brand-500 bg-brand-500/10"
+                      : "border-[var(--border-default)] hover:border-[var(--border-hover)]"
+                  )}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime,application/pdf"
+                    onChange={handleFileInput}
+                    className="hidden"
+                    id="global-media-upload-input"
+                  />
+                  <label
+                    htmlFor="global-media-upload-input"
+                    className="flex flex-col items-center cursor-pointer"
+                  >
+                    <div className={cn(
+                      "p-4 rounded-full mb-4 transition-colors",
+                      dragActive ? "bg-brand-500/10" : "bg-[var(--bg-secondary)]"
+                    )}>
+                      <Upload className={cn(
+                        "h-10 w-10 transition-colors",
+                        dragActive ? "text-brand-500" : "text-[var(--text-tertiary)]"
+                      )} />
+                    </div>
+                    <p className="text-lg font-medium text-[var(--text-primary)]">
+                      {dragActive ? "Drop files here" : "Click to upload"}
+                    </p>
+                    <p className="text-sm text-[var(--text-tertiary)] mt-1">
+                      or drag and drop files here
+                    </p>
+                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        JPG, PNG, GIF, WebP
+                      </span>
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        MP4, WebM
+                      </span>
+                      <span className="px-2 py-1 bg-[var(--bg-secondary)] rounded text-xs text-[var(--text-secondary)]">
+                        PDF
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                      Maximum file size: 50MB
+                    </p>
+                  </label>
+                </div>
+              )}
+
+              {uploadError && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span className="flex-1">{uploadError}</span>
+                </div>
+              )}
+              {uploadSuccess && (
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg text-green-700 dark:text-green-300 text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  {uploadSuccess}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -86,10 +86,10 @@ interface MediaDetailModalProps {
 // ============================================
 
 const CONTENT_TYPES = [
-  { id: "educational", label: "ðŸ“š Educational" },
-  { id: "engagement", label: "ðŸ’¬ Engagement" },
-  { id: "social_proof", label: "â­ Social Proof" },
-  { id: "promotional", label: "ðŸ“¢ Promotional" },
+  { id: "educational", label: "📚 Educational" },
+  { id: "engagement", label: "💬 Engagement" },
+  { id: "social_proof", label: "⭐ Social Proof" },
+  { id: "promotional", label: "📣 Promotional" },
 ];
 
 // ============================================
@@ -105,7 +105,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return "â€”";
+  if (!dateString) return "—";
   const date = new Date(dateString);
   return date.toLocaleDateString("en-ZA", {
     day: "numeric",
@@ -248,7 +248,8 @@ export function MediaDetailModal({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update media");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to update media");
       }
 
       const updatedMedia = await response.json();
@@ -256,7 +257,7 @@ export function MediaDetailModal({
       setIsEditing(false);
     } catch (error) {
       console.error("Failed to save:", error);
-      alert("Failed to save changes. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to save changes. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -274,14 +275,15 @@ export function MediaDetailModal({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete media");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to delete media");
       }
 
       onDelete?.(media.id);
       handleClose();
     } catch (error) {
       console.error("Failed to delete:", error);
-      alert("Failed to delete media. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to delete media. Please try again.");
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -302,14 +304,15 @@ export function MediaDetailModal({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to extend expiry");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to extend expiry");
       }
 
       const updatedMedia = await response.json();
       onUpdate?.(updatedMedia);
     } catch (error) {
       console.error("Failed to extend expiry:", error);
-      alert("Failed to extend expiry. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to extend expiry. Please try again.");
     }
   };
 
@@ -327,16 +330,16 @@ export function MediaDetailModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)]">
           <div className="flex items-center gap-3">
             {media.type === "VIDEO" ? (
               <VideoIcon className="w-5 h-5 text-purple-400" />
             ) : (
               <ImageIcon className="w-5 h-5 text-blue-400" />
             )}
-            <h2 className="text-lg font-semibold truncate max-w-md">
+            <h2 className="text-lg font-semibold truncate max-w-md text-[var(--text-primary)]">
               {media.filename}
             </h2>
           </div>
@@ -345,7 +348,7 @@ export function MediaDetailModal({
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-[var(--text-secondary)]"
                 title="Edit"
               >
                 <Edit2 className="w-5 h-5" />
@@ -354,7 +357,7 @@ export function MediaDetailModal({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="p-2 hover:bg-muted rounded-lg transition-colors text-primary"
+                className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-brand-500"
                 title="Save"
               >
                 {isSaving ? (
@@ -366,7 +369,7 @@ export function MediaDetailModal({
             )}
             <button
               onClick={handleClose}
-              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-[var(--text-secondary)]"
             >
               <X className="w-5 h-5" />
             </button>
@@ -379,7 +382,7 @@ export function MediaDetailModal({
             {/* Left: Preview */}
             <div className="space-y-4">
               {/* Media preview */}
-              <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
+              <div className="relative aspect-square bg-[var(--bg-secondary)] rounded-lg overflow-hidden">
                 {media.type === "VIDEO" ? (
                   <video
                     src={media.url}
@@ -388,7 +391,7 @@ export function MediaDetailModal({
                   />
                 ) : imageError ? (
                   <div className="w-full h-full flex items-center justify-center">
-                    <ImageIcon className="w-16 h-16 text-muted-foreground" />
+                    <ImageIcon className="w-16 h-16 text-[var(--text-tertiary)]" />
                   </div>
                 ) : (
                   <Image
@@ -407,7 +410,7 @@ export function MediaDetailModal({
                   href={media.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] hover:bg-[var(--bg-secondary)] transition-colors text-sm text-[var(--text-primary)]"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Open
@@ -415,7 +418,7 @@ export function MediaDetailModal({
                 <a
                   href={media.url}
                   download={media.filename}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] hover:bg-[var(--bg-secondary)] transition-colors text-sm text-[var(--text-primary)]"
                 >
                   <Download className="w-4 h-4" />
                   Download
@@ -430,19 +433,19 @@ export function MediaDetailModal({
 
               {/* File info */}
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-muted-foreground">Size</p>
-                  <p className="font-medium">{formatFileSize(media.size)}</p>
+                <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
+                  <p className="text-[var(--text-tertiary)]">Size</p>
+                  <p className="font-medium text-[var(--text-primary)]">{formatFileSize(media.size)}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-muted-foreground">Type</p>
-                  <p className="font-medium">{media.mimeType || media.type}</p>
+                <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
+                  <p className="text-[var(--text-tertiary)]">Type</p>
+                  <p className="font-medium text-[var(--text-primary)]">{media.mimeType || media.type}</p>
                 </div>
                 {media.width && media.height && (
-                  <div className="p-3 rounded-lg bg-muted/50 col-span-2">
-                    <p className="text-muted-foreground">Dimensions</p>
-                    <p className="font-medium">
-                      {media.width} Ã— {media.height}
+                  <div className="p-3 rounded-lg bg-[var(--bg-secondary)] col-span-2">
+                    <p className="text-[var(--text-tertiary)]">Dimensions</p>
+                    <p className="font-medium text-[var(--text-primary)]">
+                      {media.width} × {media.height}
                     </p>
                   </div>
                 )}
@@ -453,7 +456,7 @@ export function MediaDetailModal({
             <div className="space-y-6">
               {/* Status */}
               <div className="space-y-3">
-                <h3 className="font-medium flex items-center gap-2">
+                <h3 className="font-medium flex items-center gap-2 text-[var(--text-primary)]">
                   <Clock className="w-4 h-4" />
                   Lifecycle Status
                 </h3>
@@ -470,12 +473,12 @@ export function MediaDetailModal({
 
                 {/* Expiry info */}
                 {media.expiresAt && !media.isUsed && (
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)]">
                     <div>
-                      <p className="text-sm text-muted-foreground">Expires</p>
-                      <p className="font-medium">{formatDate(media.expiresAt)}</p>
+                      <p className="text-sm text-[var(--text-tertiary)]">Expires</p>
+                      <p className="font-medium text-[var(--text-primary)]">{formatDate(media.expiresAt)}</p>
                       {daysLeft !== null && daysLeft > 0 && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           {daysLeft} days remaining
                         </p>
                       )}
@@ -483,7 +486,7 @@ export function MediaDetailModal({
                     {daysLeft !== null && daysLeft <= 14 && (
                       <button
                         onClick={handleExtendExpiry}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors text-sm"
                       >
                         <RefreshCw className="w-4 h-4" />
                         +30 days
@@ -494,34 +497,34 @@ export function MediaDetailModal({
 
                 {/* Used info */}
                 {media.isUsed && media.usedAt && (
-                  <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">Used on</p>
-                    <p className="font-medium">{formatDate(media.usedAt)}</p>
+                  <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
+                    <p className="text-sm text-[var(--text-tertiary)]">Used on</p>
+                    <p className="font-medium text-[var(--text-primary)]">{formatDate(media.usedAt)}</p>
                   </div>
                 )}
               </div>
 
               {/* Dates */}
               <div className="space-y-3">
-                <h3 className="font-medium flex items-center gap-2">
+                <h3 className="font-medium flex items-center gap-2 text-[var(--text-primary)]">
                   <Calendar className="w-4 h-4" />
                   Dates
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-muted-foreground">Uploaded</p>
-                    <p className="font-medium">{formatDate(media.createdAt)}</p>
+                  <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
+                    <p className="text-[var(--text-tertiary)]">Uploaded</p>
+                    <p className="font-medium text-[var(--text-primary)]">{formatDate(media.createdAt)}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-muted-foreground">Usage Count</p>
-                    <p className="font-medium">{media.usageCount}</p>
+                  <div className="p-3 rounded-lg bg-[var(--bg-secondary)]">
+                    <p className="text-[var(--text-tertiary)]">Usage Count</p>
+                    <p className="font-medium text-[var(--text-primary)]">{media.usageCount}</p>
                   </div>
                 </div>
               </div>
 
               {/* Content Pillars */}
               <div className="space-y-3">
-                <h3 className="font-medium flex items-center gap-2">
+                <h3 className="font-medium flex items-center gap-2 text-[var(--text-primary)]">
                   <Layers className="w-4 h-4" />
                   Content Pillars
                 </h3>
@@ -535,8 +538,8 @@ export function MediaDetailModal({
                           px-3 py-1.5 rounded-lg border text-sm transition-colors
                           ${
                             editPillarIds.includes(pillar.id)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border hover:border-primary/50"
+                              ? "bg-brand-500 text-white border-brand-500"
+                              : "border-[var(--border-default)] hover:border-brand-500/50 text-[var(--text-primary)]"
                           }
                         `}
                       >
@@ -552,14 +555,14 @@ export function MediaDetailModal({
                         return (
                           <span
                             key={id}
-                            className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm"
+                            className="px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-500 text-sm"
                           >
                             {pillar?.name || id}
                           </span>
                         );
                       })
                     ) : (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-[var(--text-tertiary)]">
                         No pillars assigned
                       </p>
                     )}
@@ -569,7 +572,7 @@ export function MediaDetailModal({
 
               {/* Content Types */}
               <div className="space-y-3">
-                <h3 className="font-medium">Content Types</h3>
+                <h3 className="font-medium text-[var(--text-primary)]">Content Types</h3>
                 {isEditing ? (
                   <div className="flex flex-wrap gap-2">
                     {CONTENT_TYPES.map((type) => (
@@ -580,8 +583,8 @@ export function MediaDetailModal({
                           px-3 py-1.5 rounded-lg border text-sm transition-colors
                           ${
                             editContentTypes.includes(type.id)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border hover:border-primary/50"
+                              ? "bg-brand-500 text-white border-brand-500"
+                              : "border-[var(--border-default)] hover:border-brand-500/50 text-[var(--text-primary)]"
                           }
                         `}
                       >
@@ -597,14 +600,14 @@ export function MediaDetailModal({
                         return (
                           <span
                             key={typeId}
-                            className="px-3 py-1.5 rounded-lg bg-muted text-sm"
+                            className="px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] text-[var(--text-primary)] text-sm"
                           >
                             {type?.label || typeId}
                           </span>
                         );
                       })
                     ) : (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-[var(--text-tertiary)]">
                         No content types assigned
                       </p>
                     )}
@@ -614,7 +617,7 @@ export function MediaDetailModal({
 
               {/* Tags */}
               <div className="space-y-3">
-                <h3 className="font-medium flex items-center gap-2">
+                <h3 className="font-medium flex items-center gap-2 text-[var(--text-primary)]">
                   <Tag className="w-4 h-4" />
                   Tags
                 </h3>
@@ -624,7 +627,7 @@ export function MediaDetailModal({
                     value={editTags}
                     onChange={(e) => setEditTags(e.target.value)}
                     placeholder="Enter tags (comma separated)"
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
                   />
                 ) : (
                   <div className="flex flex-wrap gap-2">
@@ -632,13 +635,13 @@ export function MediaDetailModal({
                       media.tags.map((tag, i) => (
                         <span
                           key={i}
-                          className="px-2 py-1 rounded bg-muted text-sm"
+                          className="px-2 py-1 rounded bg-[var(--bg-secondary)] text-[var(--text-primary)] text-sm"
                         >
                           #{tag}
                         </span>
                       ))
                     ) : (
-                      <p className="text-sm text-muted-foreground">No tags</p>
+                      <p className="text-sm text-[var(--text-tertiary)]">No tags</p>
                     )}
                   </div>
                 )}
@@ -646,17 +649,17 @@ export function MediaDetailModal({
 
               {/* Alt Text */}
               <div className="space-y-3">
-                <h3 className="font-medium">Alt Text</h3>
+                <h3 className="font-medium text-[var(--text-primary)]">Alt Text</h3>
                 {isEditing ? (
                   <textarea
                     value={editAltText}
                     onChange={(e) => setEditAltText(e.target.value)}
                     placeholder="Describe this image for accessibility"
                     rows={2}
-                    className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                    className="w-full px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50 resize-none"
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-[var(--text-tertiary)]">
                     {media.altText || "No alt text"}
                   </p>
                 )}
@@ -664,15 +667,15 @@ export function MediaDetailModal({
 
               {/* Auto-select */}
               {isEditing && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-secondary)]">
                   <input
                     type="checkbox"
                     id="editAutoSelect"
                     checked={editAutoSelect}
                     onChange={(e) => setEditAutoSelect(e.target.checked)}
-                    className="w-4 h-4 rounded border-border"
+                    className="w-4 h-4 rounded border-[var(--border-default)]"
                   />
-                  <label htmlFor="editAutoSelect" className="text-sm cursor-pointer">
+                  <label htmlFor="editAutoSelect" className="text-sm cursor-pointer text-[var(--text-primary)]">
                     Include in auto-selection pool
                   </label>
                 </div>
@@ -681,20 +684,20 @@ export function MediaDetailModal({
               {/* Post usage history */}
               {media.postMedia && media.postMedia.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium">Used in Posts</h3>
+                  <h3 className="font-medium text-[var(--text-primary)]">Used in Posts</h3>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {media.postMedia.map((pm, i) => (
                       <div
                         key={i}
-                        className="p-3 rounded-lg bg-muted/50 text-sm"
+                        className="p-3 rounded-lg bg-[var(--bg-secondary)] text-sm"
                       >
-                        <p className="line-clamp-2">{pm.post.content}</p>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                        <p className="line-clamp-2 text-[var(--text-primary)]">{pm.post.content}</p>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-[var(--text-tertiary)]">
                           <span
                             className={`px-2 py-0.5 rounded ${
                               pm.post.status === "PUBLISHED"
                                 ? "bg-green-500/20 text-green-400"
-                                : "bg-muted"
+                                : "bg-[var(--bg-secondary)] text-[var(--text-tertiary)]"
                             }`}
                           >
                             {pm.post.status}
@@ -715,19 +718,19 @@ export function MediaDetailModal({
         {/* Delete confirmation */}
         {showDeleteConfirm && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-10">
-            <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full space-y-4">
+            <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl p-6 max-w-sm w-full space-y-4">
               <div className="flex items-center gap-3 text-red-500">
                 <AlertTriangle className="w-6 h-6" />
-                <h3 className="font-semibold text-lg">Delete Media?</h3>
+                <h3 className="font-semibold text-lg text-[var(--text-primary)]">Delete Media?</h3>
               </div>
-              <p className="text-muted-foreground">
+              <p className="text-[var(--text-tertiary)]">
                 This will permanently delete "{media.filename}" from storage.
                 This action cannot be undone.
               </p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[var(--border-default)] hover:bg-[var(--bg-secondary)] transition-colors text-[var(--text-primary)]"
                 >
                   Cancel
                 </button>

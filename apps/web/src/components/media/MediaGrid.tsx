@@ -193,9 +193,9 @@ function MediaCard({
   return (
     <div
       className={`
-        group relative bg-card border rounded-lg overflow-hidden
-        transition-all duration-200 hover:border-primary/50 hover:shadow-lg
-        ${selected ? "ring-2 ring-primary border-primary" : "border-border"}
+        group relative bg-[var(--bg-elevated)] border rounded-lg overflow-hidden
+        transition-all duration-200 hover:border-brand-500/50 hover:shadow-lg
+        ${selected ? "ring-2 ring-brand-500 border-brand-500" : "border-[var(--border-default)]"}
       `}
     >
       {/* Selection checkbox */}
@@ -211,7 +211,7 @@ function MediaCard({
               transition-colors
               ${
                 selected
-                  ? "bg-primary border-primary text-primary-foreground"
+                  ? "bg-brand-500 border-brand-500 text-white"
                   : "bg-black/50 border-white/50 hover:border-white"
               }
             `}
@@ -231,16 +231,16 @@ function MediaCard({
 
       {/* Image/Video preview */}
       <div
-        className="aspect-square bg-muted cursor-pointer relative"
+        className="aspect-square bg-[var(--bg-secondary)] cursor-pointer relative"
         onClick={onView}
       >
         {media.type === "VIDEO" ? (
-          <div className="w-full h-full flex items-center justify-center bg-gray-900">
-            <VideoIcon className="w-12 h-12 text-gray-500" />
+          <div className="w-full h-full flex items-center justify-center bg-[var(--bg-secondary)]">
+            <VideoIcon className="w-12 h-12 text-[var(--text-tertiary)]" />
           </div>
         ) : imageError ? (
-          <div className="w-full h-full flex items-center justify-center bg-gray-900">
-            <ImageIcon className="w-12 h-12 text-gray-500" />
+          <div className="w-full h-full flex items-center justify-center bg-[var(--bg-secondary)]">
+            <ImageIcon className="w-12 h-12 text-[var(--text-tertiary)]" />
           </div>
         ) : (
           <Image
@@ -269,13 +269,13 @@ function MediaCard({
       {/* Info section */}
       <div className="p-3 space-y-2">
         {/* Filename */}
-        <p className="text-sm font-medium truncate" title={media.filename}>
+        <p className="text-sm font-medium truncate text-[var(--text-primary)]" title={media.filename}>
           {media.filename}
         </p>
 
         {/* Company (if showing) */}
         {showCompany && media.company && (
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="text-xs text-[var(--text-tertiary)] truncate">
             {media.company.name}
           </p>
         )}
@@ -298,7 +298,7 @@ function MediaCard({
                   : "Available"}
           </span>
 
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-[var(--text-tertiary)]">
             {formatFileSize(media.size)}
           </span>
         </div>
@@ -309,13 +309,13 @@ function MediaCard({
             {pillarNames.slice(0, 2).map((name, i) => (
               <span
                 key={i}
-                className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded"
+                className="px-1.5 py-0.5 bg-brand-500/10 text-brand-500 text-xs rounded"
               >
                 {name}
               </span>
             ))}
             {pillarNames.length > 2 && (
-              <span className="px-1.5 py-0.5 bg-muted text-muted-foreground text-xs rounded">
+              <span className="px-1.5 py-0.5 bg-[var(--bg-secondary)] text-[var(--text-tertiary)] text-xs rounded">
                 +{pillarNames.length - 2}
               </span>
             )}
@@ -328,13 +328,13 @@ function MediaCard({
             {media.tags.slice(0, 3).map((tag, i) => (
               <span
                 key={i}
-                className="px-1.5 py-0.5 bg-muted text-muted-foreground text-xs rounded"
+                className="px-1.5 py-0.5 bg-[var(--bg-secondary)] text-[var(--text-tertiary)] text-xs rounded"
               >
                 #{tag}
               </span>
             ))}
             {media.tags.length > 3 && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-[var(--text-tertiary)]">
                 +{media.tags.length - 3}
               </span>
             )}
@@ -342,8 +342,8 @@ function MediaCard({
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-1 border-t border-border">
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
+        <div className="flex items-center justify-between pt-1 border-t border-[var(--border-default)]">
+          <span className="text-xs text-[var(--text-tertiary)] flex items-center gap-1">
             <Calendar className="w-3 h-3" />
             {formatDate(media.createdAt)}
           </span>
@@ -355,9 +355,9 @@ function MediaCard({
                 e.stopPropagation();
                 setShowMenu(!showMenu);
               }}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              className="p-1 hover:bg-[var(--bg-secondary)] rounded transition-colors"
             >
-              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+              <MoreVertical className="w-4 h-4 text-[var(--text-tertiary)]" />
             </button>
 
             {/* Dropdown menu */}
@@ -367,14 +367,14 @@ function MediaCard({
                   className="fixed inset-0 z-10"
                   onClick={() => setShowMenu(false)}
                 />
-                <div className="absolute right-0 bottom-full mb-1 w-36 bg-popover border border-border rounded-lg shadow-lg z-20 py-1">
+                <div className="absolute right-0 bottom-full mb-1 w-36 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg shadow-lg z-20 py-1">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowMenu(false);
                       onView?.();
                     }}
-                    className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2"
+                    className="w-full px-3 py-2 text-sm text-left hover:bg-[var(--bg-secondary)] flex items-center gap-2 text-[var(--text-primary)]"
                   >
                     <Eye className="w-4 h-4" />
                     View
@@ -385,7 +385,7 @@ function MediaCard({
                       setShowMenu(false);
                       onEdit?.();
                     }}
-                    className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2"
+                    className="w-full px-3 py-2 text-sm text-left hover:bg-[var(--bg-secondary)] flex items-center gap-2 text-[var(--text-primary)]"
                   >
                     <Edit className="w-4 h-4" />
                     Edit
@@ -395,19 +395,19 @@ function MediaCard({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2"
+                    className="w-full px-3 py-2 text-sm text-left hover:bg-[var(--bg-secondary)] flex items-center gap-2 text-[var(--text-primary)]"
                   >
                     <Download className="w-4 h-4" />
                     Download
                   </a>
-                  <hr className="my-1 border-border" />
+                  <hr className="my-1 border-[var(--border-default)]" />
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowMenu(false);
                       onDelete?.();
                     }}
-                    className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 text-red-500"
+                    className="w-full px-3 py-2 text-sm text-left hover:bg-[var(--bg-secondary)] flex items-center gap-2 text-red-500"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
@@ -428,14 +428,14 @@ function MediaCard({
 
 function MediaSkeleton() {
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden animate-pulse">
-      <div className="aspect-square bg-muted" />
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg overflow-hidden animate-pulse">
+      <div className="aspect-square bg-[var(--bg-secondary)]" />
       <div className="p-3 space-y-2">
-        <div className="h-4 bg-muted rounded w-3/4" />
-        <div className="h-3 bg-muted rounded w-1/2" />
+        <div className="h-4 bg-[var(--bg-secondary)] rounded w-3/4" />
+        <div className="h-3 bg-[var(--bg-secondary)] rounded w-1/2" />
         <div className="flex gap-1">
-          <div className="h-5 bg-muted rounded w-16" />
-          <div className="h-5 bg-muted rounded w-12" />
+          <div className="h-5 bg-[var(--bg-secondary)] rounded w-16" />
+          <div className="h-5 bg-[var(--bg-secondary)] rounded w-12" />
         </div>
       </div>
     </div>
@@ -484,10 +484,10 @@ export function MediaGrid({
   if (media.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <ImageIcon className="w-8 h-8 text-muted-foreground" />
+        <div className="w-16 h-16 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center mb-4">
+          <ImageIcon className="w-8 h-8 text-[var(--text-tertiary)]" />
         </div>
-        <p className="text-muted-foreground">{emptyMessage}</p>
+        <p className="text-[var(--text-tertiary)]">{emptyMessage}</p>
       </div>
     );
   }
@@ -499,14 +499,14 @@ export function MediaGrid({
         <div className="flex items-center justify-between py-2 px-1">
           <button
             onClick={handleSelectAll}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-brand-500 hover:underline"
           >
             {selectedIds.length === media.length
               ? "Deselect all"
               : `Select all (${media.length})`}
           </button>
           {selectedIds.length > 0 && (
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-[var(--text-tertiary)]">
               {selectedIds.length} selected
             </span>
           )}

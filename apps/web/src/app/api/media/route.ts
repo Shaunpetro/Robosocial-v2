@@ -20,6 +20,20 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "100");
     const offset = parseInt(searchParams.get("offset") || "0");
 
+    if (isNaN(limit) || limit < 1 || limit > 500) {
+      return NextResponse.json(
+        { error: "Invalid limit parameter (1-500)" },
+        { status: 400 }
+      );
+    }
+
+    if (isNaN(offset) || offset < 0) {
+      return NextResponse.json(
+        { error: "Invalid offset parameter (must be non-negative)" },
+        { status: 400 }
+      );
+    }
+
     // Build where clause with proper Prisma types
     const where: Prisma.MediaWhereInput = {};
 
@@ -68,7 +82,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Fetch media
+    // Fetch media with pagination
     let media = await prisma.media.findMany({
       where,
       include: {
@@ -93,17 +107,13 @@ export async function GET(request: NextRequest) {
       skip: offset,
     });
 
-    // Filter by pillarId (since it's an array field)
+    // In-memory filters for array fields (cannot be done in Prisma directly)
     if (pillarId) {
       media = media.filter((m) => m.pillarIds.includes(pillarId));
     }
-
-    // Filter by contentType (since it's an array field)
     if (contentType) {
       media = media.filter((m) => m.contentTypes.includes(contentType));
     }
-
-    // Filter by tag (since it's an array field)
     if (tag) {
       const tagLower = tag.toLowerCase();
       media = media.filter((m) =>
@@ -111,7 +121,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get total count for pagination
+    // Get total count for pagination (note: array filters are not reflected in total)
     const total = await prisma.media.count({ where });
 
     // Get stats if companyId provided
@@ -130,7 +140,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Failed to fetch media:", error);
     return NextResponse.json(
-      { error: "Failed to fetch media" },
+      { error: "Failed to fetch media", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -169,12 +179,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Parse arrays
-    const pillarIds = pillarIdsJson ? JSON.parse(pillarIdsJson) : [];
-    const contentTypes = contentTypesJson ? JSON.parse(contentTypesJson) : [];
-    const tags = tagsJson 
-      ? JSON.parse(tagsJson).map((t: string) => t.toLowerCase().trim()) 
-      : [];
+    // Validate file size (50MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      return NextResponse.json({ error: "File size exceeds 50MB limit" }, { status: 400 });
+    }
+
+    // Parse arrays (with fallback to empty)
+    let pillarIds: string[] = [];
+    let contentTypes: string[] = [];
+    let tags: string[] = [];
+    try {
+      pillarIds = pillarIdsJson ? JSON.parse(pillarIdsJson) : [];
+      contentTypes = contentTypesJson ? JSON.parse(contentTypesJson) : [];
+      tags = tagsJson
+        ? JSON.parse(tagsJson).map((t: string) => t.toLowerCase().trim())
+        : [];
+    } catch (parseError) {
+      return NextResponse.json({ error: "Invalid JSON for pillarIds, contentTypes, or tags" }, { status: 400 });
+    }
 
     // Parse autoSelect (default true)
     const autoSelect = autoSelectValue !== "false";
@@ -186,6 +208,8 @@ export async function POST(request: NextRequest) {
       mediaType = "VIDEO";
     } else if (mimeType === "image/gif") {
       mediaType = "GIF";
+    } else if (!mimeType.startsWith("image/")) {
+      return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
     }
 
     // Upload to Vercel Blob
@@ -199,10 +223,6 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + 2);
 
-    // Get image dimensions (basic approach - works for most images)
-    const width: number | null = null;
-    const height: number | null = null;
-
     // Create media record with lifecycle fields
     const media = await prisma.media.create({
       data: {
@@ -212,21 +232,18 @@ export async function POST(request: NextRequest) {
         type: mediaType,
         mimeType,
         size: file.size,
-        width,
-        height,
+        width: null,
+        height: null,
         altText,
         pillarIds,
         contentTypes,
         tags,
-        // Lifecycle fields
         isUsed: false,
         usedAt: null,
         usedInPostId: null,
         expiresAt,
-        // Auto-selection fields
         autoSelect,
         priority: 0,
-        // Usage tracking
         usageCount: 0,
         lastUsedAt: null,
       },
@@ -244,7 +261,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to upload media:", error);
     return NextResponse.json(
-      { error: "Failed to upload media" },
+      { error: "Failed to upload media", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -256,7 +273,6 @@ async function getMediaStats(companyId: string) {
   const warningDate = new Date();
   warningDate.setDate(warningDate.getDate() + 7);
 
-  // Build the "available" where clause with proper typing
   const availableWhere: Prisma.MediaWhereInput = {
     companyId,
     isUsed: false,

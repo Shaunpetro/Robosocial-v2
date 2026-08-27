@@ -9,9 +9,7 @@ type BulkAction = "delete" | "move" | "update" | "markUsed" | "markAvailable";
 interface BulkRequestBody {
   action: BulkAction;
   mediaIds: string[];
-  // For move action
   targetCompanyId?: string;
-  // For update action
   updates?: {
     pillarIds?: string[];
     contentTypes?: string[];
@@ -118,7 +116,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to perform bulk operation:", error);
     return NextResponse.json(
-      { 
+      {
         error: "Failed to perform bulk operation",
         details: error instanceof Error ? error.message : "Unknown error",
       },
@@ -195,7 +193,6 @@ async function handleBulkMove(
     where: { id: { in: mediaIds } },
     data: {
       companyId: targetCompanyId,
-      // Clear pillar associations since pillars are company-specific
       pillarIds: [],
     },
   });
@@ -237,28 +234,14 @@ async function handleBulkUpdate(
     priority?: number;
   }
 ): Promise<Record<string, unknown>> {
-  // Build update data
   const updateData: Record<string, unknown> = {};
 
-  if (updates.pillarIds !== undefined) {
-    updateData.pillarIds = updates.pillarIds;
-  }
-
-  if (updates.contentTypes !== undefined) {
-    updateData.contentTypes = updates.contentTypes;
-  }
-
-  if (updates.tags !== undefined) {
+  if (updates.pillarIds !== undefined) updateData.pillarIds = updates.pillarIds;
+  if (updates.contentTypes !== undefined) updateData.contentTypes = updates.contentTypes;
+  if (updates.tags !== undefined)
     updateData.tags = updates.tags.map((t) => t.toLowerCase().trim());
-  }
-
-  if (updates.autoSelect !== undefined) {
-    updateData.autoSelect = updates.autoSelect;
-  }
-
-  if (updates.priority !== undefined) {
-    updateData.priority = updates.priority;
-  }
+  if (updates.autoSelect !== undefined) updateData.autoSelect = updates.autoSelect;
+  if (updates.priority !== undefined) updateData.priority = updates.priority;
 
   const updateResult = await prisma.media.updateMany({
     where: { id: { in: mediaIds } },
@@ -285,7 +268,6 @@ async function handleBulkMarkUsed(
   if (isUsed) {
     updateData.usedAt = now;
   } else {
-    // Reset used fields when marking as available
     updateData.usedAt = null;
     updateData.usedInPostId = null;
   }
@@ -309,7 +291,6 @@ export async function GET(request: NextRequest) {
     const mediaIdsParam = searchParams.get("mediaIds");
 
     if (!mediaIdsParam) {
-      // Return available actions info
       return NextResponse.json({
         availableActions: [
           {
@@ -341,28 +322,13 @@ export async function GET(request: NextRequest) {
           },
         ],
         example: {
-          delete: {
-            action: "delete",
-            mediaIds: ["id1", "id2"],
-          },
-          move: {
-            action: "move",
-            mediaIds: ["id1", "id2"],
-            targetCompanyId: "company123",
-          },
-          update: {
-            action: "update",
-            mediaIds: ["id1", "id2"],
-            updates: {
-              tags: ["new-tag"],
-              autoSelect: true,
-            },
-          },
+          delete: { action: "delete", mediaIds: ["id1", "id2"] },
+          move: { action: "move", mediaIds: ["id1", "id2"], targetCompanyId: "company123" },
+          update: { action: "update", mediaIds: ["id1", "id2"], updates: { tags: ["new-tag"], autoSelect: true } },
         },
       });
     }
 
-    // Validate provided media IDs
     const mediaIds = mediaIdsParam.split(",").filter(Boolean);
 
     const media = await prisma.media.findMany({
@@ -372,35 +338,24 @@ export async function GET(request: NextRequest) {
         filename: true,
         companyId: true,
         isUsed: true,
-        company: {
-          select: { name: true },
-        },
+        company: { select: { name: true } },
       },
     });
 
     const foundIds = media.map((m) => m.id);
     const notFoundIds = mediaIds.filter((id) => !foundIds.includes(id));
 
-    // Group by company
     const byCompany: Record<string, { name: string; count: number; mediaIds: string[] }> = {};
     for (const m of media) {
       if (!byCompany[m.companyId]) {
-        byCompany[m.companyId] = {
-          name: m.company.name,
-          count: 0,
-          mediaIds: [],
-        };
+        byCompany[m.companyId] = { name: m.company.name, count: 0, mediaIds: [] };
       }
       byCompany[m.companyId].count++;
       byCompany[m.companyId].mediaIds.push(m.id);
     }
 
-    // Get available target companies for move
     const companies = await prisma.company.findMany({
-      select: {
-        id: true,
-        name: true,
-      },
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
     });
 
@@ -425,7 +380,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Failed to validate bulk operation:", error);
     return NextResponse.json(
-      { error: "Failed to validate bulk operation" },
+      { error: "Failed to validate bulk operation", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

@@ -14,20 +14,14 @@ export async function GET(request: NextRequest) {
     const warningDate = new Date();
     warningDate.setDate(warningDate.getDate() + 7);
 
-    // Date ranges for trends
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // Build base where clause with proper Prisma types
     const baseWhere: Prisma.MediaWhereInput = {};
-    if (companyId) {
-      baseWhere.companyId = companyId;
-    }
+    if (companyId) baseWhere.companyId = companyId;
 
-    // Build the available where clause with proper null handling
     const availableWhere: Prisma.MediaWhereInput = {
       ...baseWhere,
       isUsed: false,
@@ -37,7 +31,6 @@ export async function GET(request: NextRequest) {
       ] as Prisma.MediaWhereInput[],
     };
 
-    // Get all counts in parallel
     const [
       totalCount,
       availableCount,
@@ -56,112 +49,49 @@ export async function GET(request: NextRequest) {
       topTags,
       companySummaries,
     ] = await Promise.all([
-      // Total media
       prisma.media.count({ where: baseWhere }),
-
-      // Available (not used, not expired)
       prisma.media.count({ where: availableWhere }),
-
-      // Used
-      prisma.media.count({
-        where: { ...baseWhere, isUsed: true },
-      }),
-
-      // Expiring soon (within warning period)
+      prisma.media.count({ where: { ...baseWhere, isUsed: true } }),
       prisma.media.count({
         where: {
           ...baseWhere,
           isUsed: false,
-          expiresAt: {
-            gt: now,
-            lte: warningDate,
-          },
+          expiresAt: { gt: now, lte: warningDate },
         },
       }),
-
-      // Already expired (expiresAt < now, and expiresAt is not null)
-      // Note: { lt: now } naturally excludes null values in SQL
       prisma.media.count({
         where: {
           ...baseWhere,
           expiresAt: { lt: now },
         },
       }),
-
-      // By type: Images
+      prisma.media.count({ where: { ...baseWhere, type: "IMAGE" } }),
+      prisma.media.count({ where: { ...baseWhere, type: "VIDEO" } }),
+      prisma.media.count({ where: { ...baseWhere, type: "GIF" } }),
       prisma.media.count({
-        where: { ...baseWhere, type: "IMAGE" },
+        where: { ...baseWhere, createdAt: { gte: sevenDaysAgo } },
       }),
-
-      // By type: Videos
       prisma.media.count({
-        where: { ...baseWhere, type: "VIDEO" },
+        where: { ...baseWhere, createdAt: { gte: thirtyDaysAgo } },
       }),
-
-      // By type: GIFs
       prisma.media.count({
-        where: { ...baseWhere, type: "GIF" },
+        where: { ...baseWhere, usedAt: { gte: sevenDaysAgo } },
       }),
-
-      // Uploaded in last 7 days
       prisma.media.count({
-        where: {
-          ...baseWhere,
-          createdAt: { gte: sevenDaysAgo },
-        },
+        where: { ...baseWhere, usedAt: { gte: thirtyDaysAgo } },
       }),
-
-      // Uploaded in last 30 days
-      prisma.media.count({
-        where: {
-          ...baseWhere,
-          createdAt: { gte: thirtyDaysAgo },
-        },
-      }),
-
-      // Used in last 7 days
-      prisma.media.count({
-        where: {
-          ...baseWhere,
-          usedAt: { gte: sevenDaysAgo },
-        },
-      }),
-
-      // Used in last 30 days
-      prisma.media.count({
-        where: {
-          ...baseWhere,
-          usedAt: { gte: thirtyDaysAgo },
-        },
-      }),
-
-      // Media grouped by pillar (get all media and count in memory)
       prisma.media.findMany({
         where: baseWhere,
-        select: {
-          pillarIds: true,
-          isUsed: true,
-        },
+        select: { pillarIds: true, isUsed: true },
       }),
-
-      // Media grouped by content type
       prisma.media.findMany({
         where: baseWhere,
-        select: {
-          contentTypes: true,
-          isUsed: true,
-        },
+        select: { contentTypes: true, isUsed: true },
       }),
-
-      // Get all tags for analysis
       prisma.media.findMany({
         where: baseWhere,
-        select: {
-          tags: true,
-        },
+        select: { tags: true },
       }),
-
-      // Company summaries (if no companyId filter)
       companyId
         ? null
         : prisma.company.findMany({
@@ -169,11 +99,7 @@ export async function GET(request: NextRequest) {
               id: true,
               name: true,
               logoUrl: true,
-              _count: {
-                select: {
-                  media: true,
-                },
-              },
+              _count: { select: { media: true } },
             },
           }),
     ]);
@@ -182,15 +108,10 @@ export async function GET(request: NextRequest) {
     const pillarStats: Record<string, { total: number; available: number; used: number }> = {};
     for (const media of mediaByPillar) {
       for (const pillarId of media.pillarIds) {
-        if (!pillarStats[pillarId]) {
-          pillarStats[pillarId] = { total: 0, available: 0, used: 0 };
-        }
+        if (!pillarStats[pillarId]) pillarStats[pillarId] = { total: 0, available: 0, used: 0 };
         pillarStats[pillarId].total++;
-        if (media.isUsed) {
-          pillarStats[pillarId].used++;
-        } else {
-          pillarStats[pillarId].available++;
-        }
+        if (media.isUsed) pillarStats[pillarId].used++;
+        else pillarStats[pillarId].available++;
       }
     }
 
@@ -198,15 +119,10 @@ export async function GET(request: NextRequest) {
     const contentTypeStats: Record<string, { total: number; available: number; used: number }> = {};
     for (const media of mediaByContentType) {
       for (const ct of media.contentTypes) {
-        if (!contentTypeStats[ct]) {
-          contentTypeStats[ct] = { total: 0, available: 0, used: 0 };
-        }
+        if (!contentTypeStats[ct]) contentTypeStats[ct] = { total: 0, available: 0, used: 0 };
         contentTypeStats[ct].total++;
-        if (media.isUsed) {
-          contentTypeStats[ct].used++;
-        } else {
-          contentTypeStats[ct].available++;
-        }
+        if (media.isUsed) contentTypeStats[ct].used++;
+        else contentTypeStats[ct].available++;
       }
     }
 
@@ -226,57 +142,51 @@ export async function GET(request: NextRequest) {
     let pillarNames: Record<string, string> = {};
     if (companyId) {
       const pillars = await prisma.contentPillar.findMany({
-        where: {
-          intelligence: {
-            companyId,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-        },
+        where: { intelligence: { companyId } },
+        select: { id: true, name: true },
       });
       pillarNames = Object.fromEntries(pillars.map((p) => [p.id, p.name]));
     }
 
-    // Enrich pillar stats with names
     const enrichedPillarStats = Object.entries(pillarStats).map(([id, stats]) => ({
       pillarId: id,
       pillarName: pillarNames[id] || "Unknown",
       ...stats,
     }));
 
-    // Calculate usage rate
     const usageRate = totalCount > 0 ? Math.round((usedCount / totalCount) * 100) : 0;
 
     // Calculate average days to use
     const usedMedia = await prisma.media.findMany({
-      where: {
-        ...baseWhere,
-        isUsed: true,
-        usedAt: { not: undefined },
-      },
-      select: {
-        createdAt: true,
-        usedAt: true,
-      },
+      where: { ...baseWhere, isUsed: true, usedAt: { not: undefined } },
+      select: { createdAt: true, usedAt: true },
     });
 
     let avgDaysToUse: number | null = null;
     if (usedMedia.length > 0) {
       const totalDays = usedMedia.reduce((sum, m) => {
         if (m.usedAt) {
-          const days = (m.usedAt.getTime() - m.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-          return sum + days;
+          return sum + (m.usedAt.getTime() - m.createdAt.getTime()) / (1000 * 60 * 60 * 24);
         }
         return sum;
       }, 0);
       avgDaysToUse = Math.round(totalDays / usedMedia.length);
     }
 
-    // Process company summaries
+    // Process company summaries (include expiring count)
     let companyBreakdown = null;
     if (companySummaries) {
+      // For each company, get expiring count
+      const expiringCounts = await prisma.media.groupBy({
+        by: ["companyId"],
+        where: {
+          isUsed: false,
+          expiresAt: { gt: now, lte: warningDate },
+        },
+        _count: { _all: true },
+      });
+      const expiringMap = new Map(expiringCounts.map((e) => [e.companyId, e._count._all]));
+
       companyBreakdown = companySummaries
         .filter((c) => c._count.media > 0)
         .map((c) => ({
@@ -284,6 +194,7 @@ export async function GET(request: NextRequest) {
           name: c.name,
           logoUrl: c.logoUrl,
           mediaCount: c._count.media,
+          expiring: expiringMap.get(c.id) || 0,
         }))
         .sort((a, b) => b.mediaCount - a.mediaCount);
     }
@@ -291,8 +202,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       timestamp: now.toISOString(),
       companyId: companyId || "all",
-
-      // Overview
       overview: {
         total: totalCount,
         available: availableCount,
@@ -302,15 +211,11 @@ export async function GET(request: NextRequest) {
         usageRate: `${usageRate}%`,
         avgDaysToUse,
       },
-
-      // By type
       byType: {
         image: imageCount,
         video: videoCount,
         gif: gifCount,
       },
-
-      // Trends
       trends: {
         uploadedLast7Days,
         uploadedLast30Days,
@@ -319,26 +224,18 @@ export async function GET(request: NextRequest) {
         uploadRate7d: `${Math.round(uploadedLast7Days / 7 * 10) / 10}/day`,
         usageRate7d: `${Math.round(usedLast7Days / 7 * 10) / 10}/day`,
       },
-
-      // By pillar
       byPillar: enrichedPillarStats,
-
-      // By content type
       byContentType: Object.entries(contentTypeStats).map(([type, stats]) => ({
         contentType: type,
         ...stats,
       })),
-
-      // Top tags
       topTags: sortedTags,
-
-      // Company breakdown (only if viewing all companies)
       ...(companyBreakdown && { companyBreakdown }),
     });
   } catch (error) {
     console.error("Failed to get media stats:", error);
     return NextResponse.json(
-      { error: "Failed to get media stats" },
+      { error: "Failed to get media stats", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

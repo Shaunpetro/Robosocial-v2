@@ -115,7 +115,6 @@ export function MediaLibraryView({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
-  // ---- Upload handlers (now using /api/media/upload like the modal) ----
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -221,11 +220,10 @@ export function MediaLibraryView({
 
   return (
     <div className="p-6 h-full flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            ðŸ–¼ï¸ Media Library
+            🖼️ Media Library
           </h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
             {media.length} files
@@ -240,7 +238,6 @@ export function MediaLibraryView({
         </button>
       </div>
 
-      {/* Toolbar */}
       <div className="flex items-center gap-4 mb-6 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
@@ -296,7 +293,6 @@ export function MediaLibraryView({
         </div>
       </div>
 
-      {/* Selection Info */}
       {selectionMode && selectedMedia.length > 0 && (
         <div className="mb-4 px-4 py-2 bg-brand-500/10 border border-brand-500/20 rounded-lg flex items-center justify-between">
           <span className="text-sm text-brand-600 dark:text-brand-400">
@@ -311,7 +307,6 @@ export function MediaLibraryView({
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center h-64">
@@ -448,7 +443,7 @@ export function MediaLibraryView({
                   <p className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {item.filename}
                   </p>
-                  <p className="text-xs text-[var(--text-tertiary)]">{item.type} â€¢ {formatSize(item.size)}</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{item.type} • {formatSize(item.size)}</p>
                 </div>
 
                 {!selectionMode && (
@@ -468,7 +463,6 @@ export function MediaLibraryView({
         )}
       </div>
 
-      {/* Upload Modal (now uses the same drag-and-drop logic) */}
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-[var(--bg-elevated)] rounded-xl shadow-xl w-full max-w-lg mx-4 border border-[var(--border-default)]">
