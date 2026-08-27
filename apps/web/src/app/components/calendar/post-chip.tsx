@@ -135,6 +135,7 @@ export function PostChip({
 
   const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
 
+  // Mini mode – ultra compact with hover quick actions
   if (mini) {
     return (
       <div
@@ -143,7 +144,7 @@ export function PostChip({
         onDragEnd={handleDragEnd}
         onClick={handleClick}
         className={cn(
-          "group relative flex items-center justify-center gap-0.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-0.5 shadow-sm hover:shadow cursor-pointer w-full min-w-0 overflow-hidden",
+          "group relative flex items-center justify-center gap-0.5 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-0.5 shadow-sm hover:shadow cursor-pointer w-full min-w-0 overflow-visible",
           selected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30",
           post.status === "PUBLISHED" && "opacity-60",
           isDraggable && "cursor-grab active:cursor-grabbing"
@@ -157,10 +158,26 @@ export function PostChip({
           <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
         </div>
         <StatusIcon className={cn("h-3 w-3 flex-shrink-0", statusConfig.color)} />
+
+        {/* Quick actions appear on hover */}
+        {!selectionMode && canSelect && (
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Publish">
+              <Send className="h-3 w-3" />
+            </button>
+            <button onClick={handleReschedule} className="p-0.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded" title="Reschedule to this day">
+              <Calendar className="h-3 w-3" />
+            </button>
+            <button onClick={handleQuickDelete} className="p-0.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete">
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
+  // Standard mode
   return (
     <div
       draggable={isDraggable}
