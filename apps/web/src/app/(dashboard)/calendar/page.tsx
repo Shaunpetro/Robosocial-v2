@@ -251,45 +251,45 @@ export default function GlobalCalendarPage() {
   if (companies.length === 0) return <div className="p-8 text-center">No companies found. Create a company first.</div>;
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="flex items-center gap-1.5 text-base font-bold text-gray-900">
+          <h1 className="flex items-center gap-1.5 text-base font-bold text-gray-900 dark:text-white">
             <CalendarIcon className="h-4 w-4 text-blue-500" /> Content Calendar
           </h1>
           <div className="hidden md:flex items-center gap-2">
-            <span className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+            <span className="flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> {stats.scheduled} scheduled
             </span>
-            <span className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+            <span className="flex items-center gap-1 rounded-md bg-green-50 dark:bg-green-900/30 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:text-green-300">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> {stats.published} published
             </span>
-            <span className="flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+            <span className="flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:text-gray-400">
               <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> {stats.draft} drafts
             </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setSelectionMode(s => !s)} className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${selectionMode ? "bg-purple-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+          <button onClick={() => setSelectionMode(s => !s)} className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${selectionMode ? "bg-purple-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>
             <CheckSquare className="h-3.5 w-3.5" /> {selectionMode ? "Done" : "Select"}
           </button>
-          <button onClick={() => fetchPosts()} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100" title="Refresh">
+          <button onClick={() => fetchPosts()} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" title="Refresh">
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
-          <button onClick={goToday} className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50">
+          <button onClick={goToday} className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30">
             {viewMode === "week" ? "This week" : "Back to today"}
           </button>
-          <div className="flex items-center gap-0.5 rounded-md border border-gray-200 p-0.5">
-            <button onClick={goPrev} className="rounded p-1 hover:bg-gray-100"><ChevronLeft className="h-3.5 w-3.5 text-gray-500" /></button>
-            <span className="min-w-[120px] px-1 text-center text-xs font-semibold text-gray-800">{headerLabel}</span>
-            <button onClick={goNext} className="rounded p-1 hover:bg-gray-100"><ChevronRight className="h-3.5 w-3.5 text-gray-500" /></button>
+          <div className="flex items-center gap-0.5 rounded-md border border-gray-200 dark:border-gray-700 p-0.5">
+            <button onClick={goPrev} className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"><ChevronLeft className="h-3.5 w-3.5 text-gray-500" /></button>
+            <span className="min-w-[120px] px-1 text-center text-xs font-semibold text-gray-800 dark:text-gray-200">{headerLabel}</span>
+            <button onClick={goNext} className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"><ChevronRight className="h-3.5 w-3.5 text-gray-500" /></button>
           </div>
-          <div className="flex items-center gap-0.5 rounded-md bg-gray-100 p-0.5">
-            <button onClick={() => setViewMode("week")} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "week" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+          <div className="flex items-center gap-0.5 rounded-md bg-gray-100 dark:bg-gray-800 p-0.5">
+            <button onClick={() => setViewMode("week")} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "week" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400"}`}>
               <Rows3 className="h-3 w-3" /> Week
             </button>
-            <button onClick={() => { setViewMode("rolling"); setWeekRowCount(ROWS_DEFAULT); }} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "rolling" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+            <button onClick={() => { setViewMode("rolling"); setWeekRowCount(ROWS_DEFAULT); }} className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${viewMode === "rolling" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400"}`}>
               <LayoutGrid className="h-3 w-3" /> Weeks
             </button>
           </div>
@@ -297,18 +297,18 @@ export default function GlobalCalendarPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
-        <span className="flex items-center gap-1 text-xs text-gray-400"><Filter className="h-3 w-3" /> Filters:</span>
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2">
+        <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500"><Filter className="h-3 w-3" /> Filters:</span>
         <div className="relative">
-          <button onClick={() => { setShowPlatformDropdown(s => !s); setShowStatusDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedPlatforms.length ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+          <button onClick={() => { setShowPlatformDropdown(s => !s); setShowStatusDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedPlatforms.length ? "border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"}`}>
             Platform {selectedPlatforms.length > 0 && `(${selectedPlatforms.length})`} <ChevronDown className="h-3 w-3" />
           </button>
           {showPlatformDropdown && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowPlatformDropdown(false)} />
-              <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg">
                 {["linkedin","instagram","twitter","facebook","wordpress"].map(key => (
-                  <button key={key} onClick={() => setSelectedPlatforms(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  <button key={key} onClick={() => setSelectedPlatforms(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
                     <div className={`h-4 w-4 rounded ${key === "linkedin" ? "bg-blue-600" : key === "instagram" ? "bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500" : key === "twitter" ? "bg-black" : key === "facebook" ? "bg-blue-700" : "bg-slate-600"}`}></div>
                     <span className="flex-1 text-left capitalize">{key}</span>
                     {selectedPlatforms.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
@@ -319,15 +319,15 @@ export default function GlobalCalendarPage() {
           )}
         </div>
         <div className="relative">
-          <button onClick={() => { setShowStatusDropdown(s => !s); setShowPlatformDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedStatuses.length ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}>
+          <button onClick={() => { setShowStatusDropdown(s => !s); setShowPlatformDropdown(false); }} className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selectedStatuses.length ? "border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"}`}>
             Status {selectedStatuses.length > 0 && `(${selectedStatuses.length})`} <ChevronDown className="h-3 w-3" />
           </button>
           {showStatusDropdown && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowStatusDropdown(false)} />
-              <div className="absolute left-0 top-full z-20 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              <div className="absolute left-0 top-full z-20 mt-1 w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg">
                 {Object.entries({ DRAFT: "Draft", SCHEDULED: "Scheduled", PUBLISHING: "Publishing", PUBLISHED: "Published", FAILED: "Failed" }).map(([key,label]) => (
-                  <button key={key} onClick={() => setSelectedStatuses(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  <button key={key} onClick={() => setSelectedStatuses(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
                     <span className={`h-2 w-2 rounded-full ${key === "DRAFT" ? "bg-gray-400" : key === "SCHEDULED" ? "bg-blue-500" : key === "PUBLISHING" ? "bg-yellow-500" : key === "PUBLISHED" ? "bg-green-500" : "bg-red-500"}`} />
                     <span className="flex-1 text-left">{label}</span>
                     {selectedStatuses.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
@@ -338,7 +338,7 @@ export default function GlobalCalendarPage() {
           )}
         </div>
         {(selectedPlatforms.length > 0 || selectedStatuses.length > 0) && (
-          <button onClick={() => { setSelectedPlatforms([]); setSelectedStatuses([]); }} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"><X className="h-3 w-3" /> Clear</button>
+          <button onClick={() => { setSelectedPlatforms([]); setSelectedStatuses([]); }} className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"><X className="h-3 w-3" /> Clear</button>
         )}
       </div>
 
@@ -359,28 +359,32 @@ export default function GlobalCalendarPage() {
           />
         ) : (
           <div>
-            <div className="grid grid-cols-7 border-b border-gray-100 sticky top-0 bg-white z-10">
-              {DAYS_SHORT.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold uppercase text-gray-400">{d}</div>)}
+            <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              {DAYS_SHORT.map(d => <div key={d} className="py-1.5 text-center text-[10px] font-semibold uppercase text-gray-400 dark:text-gray-500">{d}</div>)}
             </div>
             {rollingWeeks.map((row) => (
               <div key={row.key}>
-                {row.label && <div className="bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-500 border-b border-gray-100">{row.label}</div>}
+                {row.label && <div className="bg-gray-50 dark:bg-gray-800/50 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">{row.label}</div>}
                 <div className="grid grid-cols-7">
                   {row.days.map((day, i) => (
-                    <div key={i} onDragOver={onCellDragOver(`r-${row.key}-${i}`)} onDrop={onCellDrop(day.date)} className={`flex h-24 flex-col overflow-hidden border-b border-r border-gray-100 p-1 ${day.isToday ? "bg-blue-50/40" : ""} ${dragOverKey === `r-${row.key}-${i}` ? "ring-2 ring-blue-400 ring-inset" : ""}`}>
-                      <span className={`mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${day.isToday ? "bg-blue-600 text-white" : "text-gray-700"}`}>{day.date.getDate()}</span>
-                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
-                        {day.posts.slice(0,3).map(post => (
-                          <PostChip key={post.id} post={post as PostChipPost} compact selectionMode={selectionMode} selected={selectedIds.includes(post.id)} onSelect={toggleSelect} onQuickStatusChange={setStatus} onQuickDelete={removePost} onReschedule={(id,newDate)=>reschedule(id,newDate)} onPostClick={(p) => setActivePost(p as unknown as Post)} />
+                    <div key={i} onDragOver={onCellDragOver(`r-${row.key}-${i}`)} onDrop={onCellDrop(day.date)} className={`flex h-24 flex-col overflow-hidden border-b border-r border-gray-100 dark:border-gray-800 p-1 ${day.isToday ? "bg-blue-50/40 dark:bg-blue-900/20" : ""} ${dragOverKey === `r-${row.key}-${i}` ? "ring-2 ring-blue-400 ring-inset" : ""}`}>
+                      <span className={`mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${day.isToday ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300"}`}>{day.date.getDate()}</span>
+                      <div className="grid grid-cols-2 gap-1 overflow-hidden">
+                        {day.posts.slice(0,6).map(post => (
+                          <PostChip key={post.id} post={post} mini selectionMode={selectionMode} selected={selectedIds.includes(post.id)} onSelect={toggleSelect} onQuickStatusChange={setStatus} onQuickDelete={removePost} onReschedule={(id,newDate)=>reschedule(id,newDate)} onPostClick={(p) => setActivePost(p as unknown as Post)} />
                         ))}
-                        {day.posts.length > 3 && <span className="px-1 text-[10px] font-medium text-blue-600">+{day.posts.length-3} more</span>}
+                        {day.posts.length > 6 && (
+                          <button onClick={() => setActivePost(day.posts[6] as unknown as Post)} className="col-span-2 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            +{day.posts.length - 6} more
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
-            <div ref={sentinelRef} className="flex items-center justify-center py-3 text-[11px] text-gray-300">
+            <div ref={sentinelRef} className="flex items-center justify-center py-3 text-[11px] text-gray-300 dark:text-gray-600">
               {weekRowCount >= ROWS_MAX ? "That's as far as we go" : "Loading more weeks..."}
             </div>
           </div>

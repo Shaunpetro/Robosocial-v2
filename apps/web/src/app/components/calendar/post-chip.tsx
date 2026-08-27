@@ -20,13 +20,14 @@ export interface PostChipPost {
 interface PostChipProps {
   post: PostChipPost;
   compact?: boolean;
+  mini?: boolean; // ultra compact for rolling week cells
   selectionMode?: boolean;
   selected?: boolean;
   onSelect?: (postId: string) => void;
   onQuickStatusChange?: (postId: string, status: string) => void;
   onQuickDelete?: (postId: string) => void;
   onReschedule?: (postId: string, newDate: Date) => void;
-  onPostClick?: (post: any) => void;   // widened to satisfy all page types
+  onPostClick?: (post: any) => void;
   date?: Date;
 }
 
@@ -77,6 +78,7 @@ function formatTime(dateString: string): string {
 export function PostChip({
   post,
   compact = false,
+  mini = false,
   selectionMode = false,
   selected = false,
   onSelect,
@@ -116,43 +118,68 @@ export function PostChip({
   const topicBorder = post.topic && TOPIC_BORDER[post.topic] ? TOPIC_BORDER[post.topic] : "border-l-transparent";
   const statusDot = STATUS_DOT[post.status] || "bg-gray-400";
 
+  // Mini mode: ultra compact – platform icon, status dot, drag handle only.
+  // Designed for 2-column grid in rolling week cells.
+  if (mini) {
+    return (
+      <div
+        draggable={isDraggable}
+        onClick={handleClick}
+        className={cn(
+          "group relative flex items-center gap-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1 py-0.5 shadow-sm hover:shadow cursor-pointer",
+          selected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30",
+          post.status === "PUBLISHED" && "opacity-60",
+          isDraggable && "cursor-grab active:cursor-grabbing",
+          "w-full"
+        )}
+      >
+        {!selectionMode && isDraggable && <GripVertical className="h-3 w-3 flex-shrink-0 text-gray-300 dark:text-gray-600" />}
+        <div className={cn("flex h-4 w-4 flex-shrink-0 items-center justify-center rounded", config.chip)}>
+          <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
+        </div>
+        <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", statusDot)} />
+        {/* no text */}
+      </div>
+    );
+  }
+
   return (
     <div
       draggable={isDraggable}
       onClick={handleClick}
       className={cn(
-        "group relative flex items-center gap-1.5 rounded-md border-l-4 border border-gray-200 bg-white px-1.5 py-1 text-left shadow-sm hover:shadow transition-shadow cursor-pointer",
+        "group relative flex items-center gap-1.5 rounded-md border-l-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1.5 py-1 text-left shadow-sm hover:shadow transition-shadow cursor-pointer",
         topicBorder,
-        selected && "ring-2 ring-purple-500 bg-purple-50",
+        selected && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30",
         post.status === "PUBLISHED" && "opacity-60",
         isDraggable && "cursor-grab active:cursor-grabbing",
         compact ? "w-full" : ""
       )}
     >
       {selectionMode && canSelect && (
-        <div className={cn("flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border", selected ? "border-purple-500 bg-purple-500 text-white" : "border-gray-300 bg-white")}>
+        <div className={cn("flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border", selected ? "border-purple-500 bg-purple-500 text-white" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800")}>
           {selected && <Check className="h-2.5 w-2.5" />}
         </div>
       )}
-      {!selectionMode && isDraggable && <GripVertical className="h-3 w-3 flex-shrink-0 text-gray-300" />}
+      {!selectionMode && isDraggable && <GripVertical className="h-3 w-3 flex-shrink-0 text-gray-300 dark:text-gray-600" />}
       <div className={cn("flex items-center justify-center rounded", config.chip, "h-4 w-4 flex-shrink-0")}>
         <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
       </div>
       <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", statusDot)} />
-      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700 dark:text-gray-300">
         {compact ? post.content : post.scheduledFor ? formatTime(post.scheduledFor) : "—"}
       </span>
 
       {!selectionMode && canSelect && (
         <>
           <div className="hidden sm:group-hover:flex items-center gap-0.5 flex-shrink-0">
-            <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 rounded" title="Publish">
+            <button onClick={handleQuickPublish} className="p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Publish">
               <Send className="h-3 w-3" />
             </button>
-            <button onClick={handleReschedule} className="p-0.5 text-brand-600 hover:bg-brand-50 rounded" title="Reschedule to this day">
+            <button onClick={handleReschedule} className="p-0.5 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded" title="Reschedule to this day">
               <Calendar className="h-3 w-3" />
             </button>
-            <button onClick={handleQuickDelete} className="p-0.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+            <button onClick={handleQuickDelete} className="p-0.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Delete">
               <Trash2 className="h-3 w-3" />
             </button>
           </div>
