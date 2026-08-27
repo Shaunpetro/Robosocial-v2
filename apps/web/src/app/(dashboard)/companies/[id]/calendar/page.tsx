@@ -32,10 +32,10 @@ interface Post {
 
 interface PlatformConnection {
   id: string;
-  type: string;
+  platform: string;      // e.g., "facebook"
   name: string;
-  username: string | null;
-  isConnected: boolean;
+  status: string;
+  isConnected?: boolean;
 }
 
 function startOfWeek(date: Date): Date {
@@ -67,6 +67,7 @@ const PLATFORM_CONFIG: Record<string, { icon: any; color: string; label: string 
   facebook: { icon: Facebook, color: "bg-blue-700", label: "Facebook" },
   instagram: { icon: Instagram, color: "bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500", label: "Instagram" },
   twitter: { icon: Twitter, color: "bg-black", label: "X (Twitter)" },
+  x: { icon: Twitter, color: "bg-black", label: "X (Twitter)" },
   wordpress: { icon: Globe, color: "bg-slate-600", label: "WordPress" },
 };
 
@@ -101,7 +102,10 @@ export default function CompanyCalendarPage() {
         const res = await fetch(`/api/platforms?companyId=${companyId}`);
         if (res.ok) {
           const data = await res.json();
-          setConnectedPlatforms(data.filter((p: any) => p.isConnected));
+          const connected = data.filter((p: any) => p.status === "connected" || p.isConnected);
+          setConnectedPlatforms(connected);
+        } else {
+          console.error("Failed to fetch platforms:", res.status);
         }
       } catch (e) { console.error(e); }
     };
@@ -125,7 +129,7 @@ export default function CompanyCalendarPage() {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
-  // Scroll listener for infinite loading
+  // Infinite scroll via scroll event
   useEffect(() => {
     const container = scrollRef.current;
     if (!container || viewMode !== "rolling") return;
@@ -319,13 +323,20 @@ export default function CompanyCalendarPage() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowPlatformDropdown(false)} />
               <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg">
-                {connectedPlatforms.map(p => (
-                  <button key={p.id} onClick={() => setSelectedPlatforms(prev => prev.includes(p.type) ? prev.filter(t => t !== p.type) : [...prev, p.type])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <div className={`h-4 w-4 rounded ${PLATFORM_CONFIG[p.type]?.color || "bg-gray-400"}`}></div>
-                    <span className="flex-1 text-left">{PLATFORM_CONFIG[p.type]?.label || p.name}</span>
-                    {selectedPlatforms.includes(p.type) && <Check className="h-3 w-3 text-blue-500" />}
-                  </button>
-                ))}
+                {connectedPlatforms.map(p => {
+                  const key = p.platform.toLowerCase();
+                  const conf = PLATFORM_CONFIG[key] || PLATFORM_CONFIG.wordpress;
+                  const Icon = conf.icon;
+                  return (
+                    <button key={p.id} onClick={() => setSelectedPlatforms(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <span className={cn("flex h-4 w-4 items-center justify-center rounded", conf.color)}>
+                        <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
+                      </span>
+                      <span className="flex-1 text-left">{conf.label}</span>
+                      {selectedPlatforms.includes(key) && <Check className="h-3 w-3 text-blue-500" />}
+                    </button>
+                  );
+                })}
               </div>
             </>
           )}
@@ -396,7 +407,6 @@ export default function CompanyCalendarPage() {
                 </div>
               </div>
             ))}
-            {/* Removed old sentinel; scroll listener handles load */}
           </div>
         )}
       </div>
@@ -404,20 +414,23 @@ export default function CompanyCalendarPage() {
       {/* Connected platforms at bottom */}
       <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 flex items-center gap-2 flex-wrap">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Connected:</span>
-        {connectedPlatforms.map(p => {
-          const conf = PLATFORM_CONFIG[p.type];
-          if (!conf) return null;
-          const Icon = conf.icon;
-          return (
-            <span key={p.id} className="flex items-center gap-1.5 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
-              <span className={cn("flex h-4 w-4 items-center justify-center rounded", conf.color)}>
-                <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
+        {connectedPlatforms.length === 0 ? (
+          <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+        ) : (
+          connectedPlatforms.map(p => {
+            const key = p.platform.toLowerCase();
+            const conf = PLATFORM_CONFIG[key] || PLATFORM_CONFIG.wordpress;
+            const Icon = conf.icon;
+            return (
+              <span key={p.id} className="flex items-center gap-1.5 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                <span className={cn("flex h-4 w-4 items-center justify-center rounded", conf.color)}>
+                  <Icon className="h-3 w-3 text-white" strokeWidth={2.5} />
+                </span>
+                {conf.label}
               </span>
-              {conf.label}
-            </span>
-          );
-        })}
-        {connectedPlatforms.length === 0 && <span className="text-xs text-gray-400 dark:text-gray-500">None</span>}
+            );
+          })
+        )}
       </div>
 
       {/* Bulk action bar */}

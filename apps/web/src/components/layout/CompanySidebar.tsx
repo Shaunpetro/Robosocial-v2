@@ -4,6 +4,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
+import { Linkedin, Facebook, Instagram, Twitter, Globe, Sparkles } from 'lucide-react'
 
 interface Platform {
   id: string
@@ -27,6 +28,14 @@ interface Company {
 
 interface CompanySidebarProps {
   company: Company
+}
+
+const platformIcons: Record<string, { icon: any; color: string }> = {
+  LINKEDIN: { icon: Linkedin, color: 'bg-[#0A66C2]' },
+  FACEBOOK: { icon: Facebook, color: 'bg-[#1877F2]' },
+  TWITTER: { icon: Twitter, color: 'bg-black' },
+  INSTAGRAM: { icon: Instagram, color: 'bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500' },
+  WORDPRESS: { icon: Globe, color: 'bg-[#21759B]' },
 }
 
 const navItems = [
@@ -121,7 +130,6 @@ const navItems = [
   },
 ]
 
-// Items to show in mobile "More" menu
 const moreMenuItems = navItems.filter(item => !item.showOnMobile)
 
 export default function CompanySidebar({ company }: CompanySidebarProps) {
@@ -137,7 +145,6 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
     .join('')
     .toUpperCase()
 
-  // Mobile navigation items (filtered to show only key items + More)
   const mobileNavItems = navItems.filter(item => item.showOnMobile)
 
   return (
@@ -189,7 +196,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               className="block p-3 bg-gradient-to-r from-brand-500/10 to-purple-500/10 border border-brand-500/20 rounded-xl hover:from-brand-500/20 hover:to-purple-500/20 transition-all duration-200 group"
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">âœ¨</span>
+                <Sparkles className="h-4 w-4 text-brand-600 dark:text-brand-400" />
                 <div>
                   <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Complete Setup</p>
                   <p className="text-xs text-[var(--text-tertiary)]">5 min to unlock AI features</p>
@@ -235,21 +242,22 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
             <p className="text-xs text-[var(--text-tertiary)] px-3">No platforms yet</p>
           ) : (
             <div className="space-y-1">
-              {company.platforms.map((platform) => (
-                <div
-                  key={platform.id}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
-                >
-                  <span className="text-base">
-                    {platform.type === 'LINKEDIN' ? 'ðŸ’¼' :
-                     platform.type === 'FACEBOOK' ? 'ðŸ“˜' :
-                     platform.type === 'INSTAGRAM' ? 'ðŸ“¸' :
-                     platform.type === 'TWITTER' ? 'ðŸ¦' : 'ðŸ“±'}
-                  </span>
-                  <span className="truncate flex-1">{platform.platformName}</span>
-                  <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 shadow-sm shadow-green-500/50" />
-                </div>
-              ))}
+              {company.platforms.map((platform) => {
+                const platformInfo = platformIcons[platform.type] || { icon: Globe, color: 'bg-gray-500' };
+                const Icon = platformInfo.icon;
+                return (
+                  <div
+                    key={platform.id}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
+                  >
+                    <span className={`w-6 h-6 rounded flex items-center justify-center ${platformInfo.color}`}>
+                      <Icon className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                    </span>
+                    <span className="truncate flex-1">{platform.platformName}</span>
+                    <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 shadow-sm shadow-green-500/50" />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -287,7 +295,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               href={`${baseUrl}/onboarding`}
               className="px-2 py-1 text-xs font-medium bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg"
             >
-              Setup âœ¨
+              Setup
             </Link>
           )}
         </div>
@@ -324,7 +332,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               </Link>
             )
           })}
-          
+
           {/* More Menu Button */}
           <div className="relative group">
             <button
