@@ -1,4 +1,5 @@
 ﻿// apps/web/src/app/(dashboard)/companies/[id]/special-dates/page.tsx
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -14,6 +15,11 @@ import {
   Settings,
   Wand2,
   AlertCircle,
+  Globe,
+  Mail,
+  Phone,
+  Share2,
+  Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +35,22 @@ interface Config {
   logoUrl?: string | null;
   generatedMediaId?: string | null;
   generatedMediaUrl?: string | null;
+  templateId?: string | null;
 }
+
+interface CompanyBrandInfo {
+  website?: string | null;
+  socialLinks?: Record<string, string> | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  brandColors?: Record<string, string> | null;
+}
+
+const TEMPLATES = [
+  { id: "clean-corporate", label: "Clean Corporate", description: "White background, subtle shadows, centered logo" },
+  { id: "bold-gradient", label: "Bold Gradient", description: "Vibrant gradient background, large text overlay" },
+  { id: "minimalist-dark", label: "Minimalist Dark", description: "Dark background, white text, minimal decor" },
+];
 
 export default function CompanySpecialDatesPage() {
   const { id: companyId } = useParams<{ id: string }>();
@@ -38,16 +59,19 @@ export default function CompanySpecialDatesPage() {
     holidaySets: [],
   });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
+  const [brandInfo, setBrandInfo] = useState<CompanyBrandInfo>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"configuration" | "generation">("configuration");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch config
+  // Fetch config and brand info
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -56,6 +80,7 @@ export default function CompanySpecialDatesPage() {
           const data = await res.json();
           setConfig(data.config);
           setAvailableSets(data.availableSets);
+          setBrandInfo(data.company || {});
           if (data.config.logoMediaId) {
             try {
               const mediaRes = await fetch(`/api/media/${data.config.logoMediaId}`);
@@ -143,13 +168,46 @@ export default function CompanySpecialDatesPage() {
       if (res.ok) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        // Move to generation tab after saving
-        setActiveTab("generation");
       }
     } catch (error) {
       console.error("Failed to save:", error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleScrapeWebsite = async () => {
+    if (!brandInfo.website) {
+      alert("Please enter your website URL first.");
+      return;
+    }
+    setScraping(true);
+    setScrapeError(null);
+    try {
+      const res = await fetch(`/api/companies/${companyId}/scrape-website`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ websiteUrl: brandInfo.website }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBrandInfo((prev) => ({
+          ...prev,
+          socialLinks: data.socialLinks,
+          contactEmail: data.contactEmail,
+          contactPhone: data.contactPhone,
+          brandColors: data.brandColors,
+        }));
+        alert("Brand information scraped successfully!");
+      } else {
+        const err = await res.json();
+        setScrapeError(err.error || "Scraping failed");
+      }
+    } catch (error) {
+      console.error("Scraping failed:", error);
+      setScrapeError("Network error while scraping website");
+    } finally {
+      setScraping(false);
     }
   };
 
@@ -195,7 +253,7 @@ export default function CompanySpecialDatesPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <CalendarDays className="h-6 w-6 text-brand-500" />
@@ -237,7 +295,7 @@ export default function CompanySpecialDatesPage() {
 
       {/* Configuration Tab */}
       {activeTab === "configuration" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Enable toggle */}
           <div className="flex items-center justify-between p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-subtle)]">
             <div>
@@ -260,6 +318,100 @@ export default function CompanySpecialDatesPage() {
                 )}
               />
             </button>
+          </div>
+
+          {/* Brand Kit Section */}
+          <div className="space-y-4">
+            <h3 className="text-base font-semibold flex items-center gap-2 text-[var(--text-primary)]">
+              <Palette className="h-5 w-5" />
+              Brand Kit
+            </h3>
+            <p className="text-sm text-[var(--text-tertiary)]">
+              We'll use this information to create consistent branded images for your special date posts.
+            </p>
+
+            {/* Website input + scrape */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="block text-sm text-[var(--text-secondary)] mb-1">Website URL</label>
+                <input
+                  type="text"
+                  value={brandInfo.website || ""}
+                  onChange={(e) => setBrandInfo((prev) => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://yourcompany.com"
+                  className="w-full px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleScrapeWebsite}
+                  disabled={scraping}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50"
+                >
+                  {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                  Scrape Website
+                </button>
+              </div>
+            </div>
+            {scrapeError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                {scrapeError}
+              </div>
+            )}
+
+            {/* Detected info */}
+            {(brandInfo.socialLinks || brandInfo.contactEmail || brandInfo.contactPhone) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {brandInfo.socialLinks && Object.keys(brandInfo.socialLinks).length > 0 && (
+                  <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
+                    <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">
+                      <Share2 className="h-4 w-4" /> Social Links
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {Object.entries(brandInfo.socialLinks).map(([platform, url]) => (
+                        <li key={platform} className="truncate text-[var(--text-secondary)]">
+                          <span className="font-medium">{platform}:</span> {url}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(brandInfo.contactEmail || brandInfo.contactPhone) && (
+                  <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
+                    <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">
+                      <Mail className="h-4 w-4" /> Contact
+                    </p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {brandInfo.contactEmail && (
+                        <p className="text-[var(--text-secondary)]">Email: {brandInfo.contactEmail}</p>
+                      )}
+                      {brandInfo.contactPhone && (
+                        <p className="text-[var(--text-secondary)]">Phone: {brandInfo.contactPhone}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {brandInfo.brandColors && (
+                  <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
+                    <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">
+                      <Palette className="h-4 w-4" /> Brand Colors
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      {Object.entries(brandInfo.brandColors).map(([key, value]) => (
+                        <div key={key} className="flex items-center gap-1">
+                          <span
+                            className="w-4 h-4 rounded-full border"
+                            style={{ backgroundColor: value }}
+                          />
+                          <span className="text-xs text-[var(--text-tertiary)]">{key}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Logo Upload */}
@@ -349,6 +501,38 @@ export default function CompanySpecialDatesPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Template Selection */}
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+              Template Style
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => setConfig((prev) => ({ ...prev, templateId: tpl.id }))}
+                  className={cn(
+                    "p-3 rounded-lg border text-left transition-all",
+                    config.templateId === tpl.id
+                      ? "border-brand-500 bg-brand-500/10"
+                      : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-full h-16 rounded-md mb-2",
+                      tpl.id === "clean-corporate" && "bg-white border border-gray-200",
+                      tpl.id === "bold-gradient" && "bg-gradient-to-r from-purple-500 to-pink-500",
+                      tpl.id === "minimalist-dark" && "bg-gray-900"
+                    )}
+                  />
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{tpl.label}</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{tpl.description}</p>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Save Button */}

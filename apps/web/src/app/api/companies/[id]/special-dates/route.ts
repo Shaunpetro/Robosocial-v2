@@ -14,9 +14,21 @@ export async function GET(
     where: { companyId },
   });
 
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: {
+      website: true,
+      socialLinks: true,
+      contactEmail: true,
+      contactPhone: true,
+      brandColors: true,
+    },
+  });
+
   return NextResponse.json({
     config: config || { enabled: false, holidaySets: [] },
-    availableSets: HOLIDAY_SETS.map(s => ({ id: s.id, label: s.label })),
+    availableSets: HOLIDAY_SETS.map((s) => ({ id: s.id, label: s.label })),
+    company,
   });
 }
 
@@ -32,11 +44,17 @@ export async function PUT(
     update: {
       enabled: Boolean(body.enabled),
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
+      logoMediaId: body.logoMediaId ?? null,
+      generatedMediaId: body.generatedMediaId ?? null,
+      templateId: body.templateId ?? null,
     },
     create: {
       companyId,
       enabled: Boolean(body.enabled),
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
+      logoMediaId: body.logoMediaId ?? null,
+      generatedMediaId: body.generatedMediaId ?? null,
+      templateId: body.templateId ?? null,
     },
   });
 
