@@ -3,13 +3,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processScheduledPosts } from '@/lib/scheduler';
 
-/**
- * Cron job endpoint for processing scheduled posts
- * Called externally by cron-job.org every minute
- */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  
+
   console.log('[Cron] ========================================');
   console.log('[Cron] Starting scheduled post processing...');
   console.log('[Cron] Time:', new Date().toISOString());
@@ -43,7 +39,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Support POST as well
 export async function POST(request: NextRequest) {
   return GET(request);
 }
