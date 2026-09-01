@@ -75,6 +75,11 @@ model Company {
   ownerId     String?
   owner       User?    @relation(fields: [ownerId], references: [id])
 
+  socialLinks  Json?
+  contactEmail String?
+  contactPhone String?
+  brandColors  Json?
+
   platforms          Platform[]
   contentSettings    ContentSettings?
   generatedPosts     GeneratedPost[]
@@ -326,6 +331,7 @@ model CompanySpecialDatesConfig {
   logoMedia        Media?   @relation(name: "LogoMedia", fields: [logoMediaId], references: [id], onDelete: SetNull)
   generatedMediaId String?  @unique
   generatedMedia   Media?   @relation(name: "GeneratedMedia", fields: [generatedMediaId], references: [id], onDelete: SetNull)
+  templateId       String?
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
