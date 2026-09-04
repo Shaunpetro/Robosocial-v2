@@ -1,21 +1,62 @@
 // apps/web/src/app/api/companies/[id]/scrape-website/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { lookup } from "dns/promises";
+
+export const runtime = "nodejs";
+
+async function isPrivateIp(hostname: string): Promise<boolean> {
+  try {
+    const addresses = await lookup(hostname, { all: true });
+    return addresses.some((addr) => {
+      const ip = addr.address;
+      return (
+        ip.startsWith("10.") ||
+        ip.startsWith("192.168.") ||
+        ip.startsWith("127.") ||
+        (ip.startsWith("172.") &&
+          parseInt(ip.split(".")[1], 10) >= 16 &&
+          parseInt(ip.split(".")[1], 10) <= 31) ||
+        ip === "::1" ||
+        ip === "0.0.0.0"
+      );
+    });
+  } catch {
+    return true; // fail closed on DNS resolution errors
+  }
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: companyId } = await params;
+
+  // Auth check
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    include: { license: true, companies: { where: { id: companyId } } },
+  });
+
+  if (!user || !user.license || user.license.status !== "ACTIVE") {
+    return NextResponse.json({ error: "No active license" }, { status: 402 });
+  }
+  if (user.companies.length === 0) {
+    return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
+  }
+
   const body = await request.json();
   const websiteUrl = body.websiteUrl as string | undefined;
 
   if (!websiteUrl) {
-    return NextResponse.json(
-      { error: "Website URL is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Website URL is required" }, { status: 400 });
   }
 
   // Normalize URL
@@ -24,9 +65,24 @@ export async function POST(
     normalizedUrl = `https://${normalizedUrl}`;
   }
 
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(normalizedUrl);
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      throw new Error("Invalid protocol");
+    }
+  } catch {
+    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+  }
+
+  // SSRF protection: reject private IPs
+  if (await isPrivateIp(parsedUrl.hostname)) {
+    return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
+  }
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
 
     const response = await fetch(normalizedUrl, {
       signal: controller.signal,
@@ -83,15 +139,16 @@ export async function POST(
     const primaryColor = themeColorMatch ? themeColorMatch[1] : null;
 
     const brandColors = {
-      primary: primaryColor || "#0A66C2", // default LinkedIn blue
+      primary: primaryColor || "#0A66C2",
       secondary: "#000000",
       accent: "#FFFFFF",
     };
 
-    // Update company record
+    // Update company record, including normalized website
     await prisma.company.update({
       where: { id: companyId },
       data: {
+        website: normalizedUrl,
         socialLinks,
         contactEmail,
         contactPhone,

@@ -71,7 +71,6 @@ export default function CompanySpecialDatesPage() {
   const [activeTab, setActiveTab] = useState<"configuration" | "generation">("configuration");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch config and brand info
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -160,14 +159,28 @@ export default function CompanySpecialDatesPage() {
     setSaving(true);
     setSaved(false);
     try {
+      // Send both config and brandInfo
+      const payload = {
+        ...config,
+        brandInfo: {
+          website: brandInfo.website,
+          socialLinks: brandInfo.socialLinks,
+          contactEmail: brandInfo.contactEmail,
+          contactPhone: brandInfo.contactPhone,
+          brandColors: brandInfo.brandColors,
+        },
+      };
       const res = await fetch(`/api/companies/${companyId}/special-dates`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to save");
       }
     } catch (error) {
       console.error("Failed to save:", error);
@@ -193,6 +206,7 @@ export default function CompanySpecialDatesPage() {
         const data = await res.json();
         setBrandInfo((prev) => ({
           ...prev,
+          website: data.website || prev.website,
           socialLinks: data.socialLinks,
           contactEmail: data.contactEmail,
           contactPhone: data.contactPhone,
@@ -361,7 +375,7 @@ export default function CompanySpecialDatesPage() {
             )}
 
             {/* Detected info */}
-            {(brandInfo.socialLinks || brandInfo.contactEmail || brandInfo.contactPhone) && (
+            {(brandInfo.socialLinks || brandInfo.contactEmail || brandInfo.contactPhone || brandInfo.brandColors) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {brandInfo.socialLinks && Object.keys(brandInfo.socialLinks).length > 0 && (
                   <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
