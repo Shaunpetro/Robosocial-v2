@@ -24,7 +24,8 @@ export async function GET(
   if (!user || !user.license || user.license.status !== "ACTIVE") {
     return NextResponse.json({ error: "No active license" }, { status: 402 });
   }
-  if (user.companies.length === 0) {
+
+  if (user.role !== "ADMIN" && user.companies.length === 0) {
     return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
   }
 
@@ -71,7 +72,8 @@ export async function PUT(
   if (!user || !user.license || user.license.status !== "ACTIVE") {
     return NextResponse.json({ error: "No active license" }, { status: 402 });
   }
-  if (user.companies.length === 0) {
+
+  if (user.role !== "ADMIN" && user.companies.length === 0) {
     return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
   }
 

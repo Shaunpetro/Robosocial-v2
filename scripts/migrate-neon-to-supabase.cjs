@@ -19,28 +19,21 @@ const tables = [
   'CompanySpecialDatesConfig',
 ];
 
-function formatValue(val) {
-  if (val === null || val === undefined) return null;
-  if (Array.isArray(val)) {
-    // Let pg handle arrays natively
-    return val;
+async function getColumnTypes(client, table) {
+  const res = await client.query(
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1`,
+    [table]
+  );
+  const map = {};
+  for (const row of res.rows) {
+    map[row.column_name] = row.data_type;
   }
-  if (typeof val === 'object') {
-    // Convert objects (json/jsonb) to JSON string
-    return JSON.stringify(val);
-  }
-  return val;
+  return map;
 }
 
 async function migrate() {
-  const neon = new Client({
-    connectionString: neonUrl,
-    ssl: { rejectUnauthorized: false },
-  });
-  const supabase = new Client({
-    connectionString: supabaseUrl,
-    ssl: { rejectUnauthorized: false },
-  });
+  const neon = new Client({ connectionString: neonUrl, ssl: { rejectUnauthorized: false } });
+  const supabase = new Client({ connectionString: supabaseUrl, ssl: { rejectUnauthorized: false } });
 
   await neon.connect();
   await supabase.connect();
@@ -49,27 +42,36 @@ async function migrate() {
   for (const table of tables) {
     console.log(`\n=== Migrating ${table} ===`);
     const { rows } = await neon.query(`SELECT * FROM "${table}"`);
-    console.log(`Found ${rows.length} rows in Neon.`);
+    console.log(`Found ${rows.length} rows.`);
     if (rows.length === 0) continue;
 
-    const columns = Object.keys(rows[0]);
-    const insertCols = columns.map((c) => `"${c}"`).join(', ');
-    const valuePlaceholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-    const updateCols = columns
-      .filter((c) => c !== 'id')
-      .map((c) => `"${c}" = EXCLUDED."${c}"`)
-      .join(', ');
-
-    const upsertSQL = `
-      INSERT INTO "${table}" (${insertCols})
-      VALUES (${valuePlaceholders})
-      ON CONFLICT ("id") DO UPDATE SET ${updateCols};
-    `;
+    const columnTypes = await getColumnTypes(neon, table);
 
     for (const row of rows) {
-      const values = columns.map((c) => formatValue(row[c]));
+      const columns = Object.keys(row);
+      const values = columns.map(col => {
+        const val = row[col];
+        const type = columnTypes[col];
+        if (val === null || val === undefined) return null;
+        if (type === 'json' || type === 'jsonb') {
+          // Let pg serialize JS object/array to JSON
+          return val;
+        }
+        if (type === 'ARRAY' || type.endsWith('[]')) {
+          // Let pg serialize JS array to PostgreSQL array
+          return val;
+        }
+        // For other types, return as is
+        return val;
+      });
+
+      const insertCols = columns.map(c => `"${c}"`).join(', ');
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+      const updateCols = columns.filter(c => c !== 'id').map(c => `"${c}" = EXCLUDED."${c}"`).join(', ');
+      const sql = `INSERT INTO "${table}" (${insertCols}) VALUES (${placeholders}) ON CONFLICT ("id") DO UPDATE SET ${updateCols}`;
+
       try {
-        await supabase.query(upsertSQL, values);
+        await supabase.query(sql, values);
         process.stdout.write('.');
       } catch (err) {
         console.error(`\nError inserting ${table} id=${row.id}:`, err.message);

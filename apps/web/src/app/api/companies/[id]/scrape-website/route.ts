@@ -48,7 +48,9 @@ export async function POST(
   if (!user || !user.license || user.license.status !== "ACTIVE") {
     return NextResponse.json({ error: "No active license" }, { status: 402 });
   }
-  if (user.companies.length === 0) {
+
+  // Allow admin access or company ownership
+  if (user.role !== "ADMIN" && user.companies.length === 0) {
     return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
   }
 
