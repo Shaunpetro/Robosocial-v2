@@ -4,7 +4,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
-import { Linkedin, Facebook, Instagram, Twitter, Globe, Sparkles } from 'lucide-react'
+import { Linkedin, Facebook, Instagram, Twitter, Globe, Sparkles, Star } from 'lucide-react'
 
 interface Platform {
   id: string
@@ -135,6 +135,7 @@ const moreMenuItems = navItems.filter(item => !item.showOnMobile)
 export default function CompanySidebar({ company }: CompanySidebarProps) {
   const pathname = usePathname()
   const baseUrl = `/companies/${company.id}`
+  const specialDatesHref = `/special-dates?companyId=${company.id}`
 
   const needsOnboarding = !company.intelligence?.onboardingCompleted
 
@@ -231,6 +232,21 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               </Link>
             )
           })}
+
+          {/* Special Dates Link (desktop) */}
+          <Link
+            href={specialDatesHref}
+            className={`
+              flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+              ${pathname.startsWith('/special-dates')
+                ? 'bg-[var(--brand-primary)] text-white shadow-lg shadow-brand-500/25'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+              }
+            `}
+          >
+            <Star className="w-5 h-5" />
+            Special Dates
+          </Link>
         </nav>
 
         {/* Connected Platforms */}
@@ -332,6 +348,26 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               </Link>
             )
           })}
+
+          {/* Special Dates Link (mobile) */}
+          <Link
+            href={specialDatesHref}
+            className={`
+              flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[56px] transition-all duration-200
+              ${pathname.startsWith('/special-dates')
+                ? 'text-[var(--brand-primary)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+              }
+            `}
+          >
+            <div className={`
+              p-1.5 rounded-lg transition-colors
+              ${pathname.startsWith('/special-dates') ? 'bg-brand-500/10' : ''}
+            `}>
+              <Star className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-medium">Dates</span>
+          </Link>
 
           {/* More Menu Button */}
           <div className="relative group">
