@@ -1,10 +1,7 @@
 // apps/web/src/lib/logo-processing.ts
 import sharp from 'sharp';
 import { removeBackground } from '@imgly/background-removal';
-import * as VibrantModule from 'node-vibrant';
-
-// node-vibrant v4 may not expose named export properly; use fallback
-const Vibrant = (VibrantModule as any).Vibrant || (VibrantModule as any).default;
+import { Vibrant } from 'node-vibrant/node';
 
 export interface ProcessedLogo {
   buffer: Buffer;
@@ -16,12 +13,10 @@ export async function processLogo(fileBuffer: Buffer, contentType: string): Prom
   let imageBuffer = fileBuffer;
   let hasTransparency = false;
 
-  // Analyze original image
   const metadata = await sharp(fileBuffer).metadata();
   const isPngWithAlpha = metadata.format === 'png' && metadata.hasAlpha;
 
   if (!isPngWithAlpha) {
-    // Remove background using imgly
     const blob = await removeBackground(fileBuffer);
     imageBuffer = Buffer.from(await blob.arrayBuffer());
     const newMetadata = await sharp(imageBuffer).metadata();
@@ -30,7 +25,6 @@ export async function processLogo(fileBuffer: Buffer, contentType: string): Prom
     hasTransparency = true;
   }
 
-  // Extract dominant colors using node-vibrant
   const palette = await Vibrant.from(imageBuffer).getPalette();
   const colors = [
     palette.Vibrant?.hex,
