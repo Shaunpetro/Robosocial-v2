@@ -442,15 +442,7 @@ export default function SpecialDatesHubPage() {
                   {scrapeError}
                 </div>
               )}
-
-              {/* Alternative sources hint */}
-              {!brandInfo.website && !scraping && (
-                <p className="mt-3 text-sm text-[var(--text-tertiary)]">
-                  No website? You can also{" "}
-                  <span className="text-brand-600 dark:text-brand-400">upload a company profile PDF</span> or{" "}
-                  <span className="text-brand-600 dark:text-brand-400">paste social media links</span>.
-                </p>
-              )}
+              
             </div>
 
             {/* Detected Info */}
