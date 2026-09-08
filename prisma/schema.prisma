@@ -356,6 +356,14 @@ model CompanySpecialDatesConfig {
   generatedMedia   Media?   @relation(name: "GeneratedMedia", fields: [generatedMediaId], references: [id], onDelete: SetNull)
   templateId       String?
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // New fields
+  fontStyle         String  @default("Arial")
+  logoPosition      String  @default("top")
+  showWebsite       Boolean @default(true)
+  showHandles       Boolean @default(true)
+  logoHasTransparency Boolean @default(false)
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
