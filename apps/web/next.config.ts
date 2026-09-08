@@ -6,7 +6,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '../../'),
   },
-  
+
+  // External packages that should not be bundled by Next.js (native binaries, etc.)
+  serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
+
   // Image optimization configuration
   images: {
     remotePatterns: [
