@@ -1,9 +1,9 @@
 // apps/web/src/app/api/companies/[id]/scrape-website/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { lookup } from "dns/promises";
+import { checkCompanyAccess } from "@/lib/access";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,7 @@ async function isPrivateIp(hostname: string): Promise<boolean> {
       );
     });
   } catch {
-    return true; // fail closed on DNS resolution errors
+    return true;
   }
 }
 
@@ -34,24 +34,9 @@ export async function POST(
 ) {
   const { id: companyId } = await params;
 
-  // Auth check
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    include: { license: true, companies: { where: { id: companyId } } },
-  });
-
-  if (!user || !user.license || user.license.status !== "ACTIVE") {
-    return NextResponse.json({ error: "No active license" }, { status: 402 });
-  }
-
-  // Allow admin access or company ownership
-  if (user.role !== "ADMIN" && user.companies.length === 0) {
-    return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
+  const access = await checkCompanyAccess(companyId);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
   const body = await request.json();
@@ -61,7 +46,6 @@ export async function POST(
     return NextResponse.json({ error: "Website URL is required" }, { status: 400 });
   }
 
-  // Normalize URL
   let normalizedUrl = websiteUrl.trim();
   if (!/^https?:\/\//i.test(normalizedUrl)) {
     normalizedUrl = `https://${normalizedUrl}`;
@@ -77,14 +61,13 @@ export async function POST(
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
-  // SSRF protection: reject private IPs
   if (await isPrivateIp(parsedUrl.hostname)) {
     return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
   }
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(normalizedUrl, {
       signal: controller.signal,
@@ -105,7 +88,6 @@ export async function POST(
 
     const html = await response.text();
 
-    // Extract social links
     const socialLinks: Record<string, string> = {};
     const socialPatterns: Record<string, RegExp> = {
       linkedin: /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[^"'<>\s]+/gi,
@@ -122,19 +104,16 @@ export async function POST(
       }
     }
 
-    // Extract email
     const emailMatch = html.match(
       /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
     );
     const contactEmail = emailMatch ? emailMatch[0] : null;
 
-    // Extract phone (basic)
     const phoneMatch = html.match(
       /(?:\+?\d{1,3}[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}/
     );
     const contactPhone = phoneMatch ? phoneMatch[0] : null;
 
-    // Extract brand colors from meta tags
     const themeColorMatch = html.match(
       /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i
     );
@@ -146,7 +125,6 @@ export async function POST(
       accent: "#FFFFFF",
     };
 
-    // Update company record, including normalized website
     await prisma.company.update({
       where: { id: companyId },
       data: {
