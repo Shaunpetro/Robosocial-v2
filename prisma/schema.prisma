@@ -26,8 +26,9 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  companies Company[]
-  suspended Boolean @default(false)
+  companies  Company[]
+  memberships CompanyMember[]
+  suspended  Boolean @default(false)
 }
 
 enum UserRole {
@@ -88,9 +89,31 @@ model Company {
   contentQueueItems  ContentQueueItem[]
   documents          CompanyDocument[]
   specialDatesConfig CompanySpecialDatesConfig?
+  members            CompanyMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CompanyMember {
+  id        String     @id @default(cuid())
+  companyId String
+  userId    String
+  role      MemberRole @default(STANDARD)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, userId])
+  @@index([userId])
+}
+
+enum MemberRole {
+  ADMIN
+  STANDARD
 }
 
 model Platform {
