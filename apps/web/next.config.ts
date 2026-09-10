@@ -7,13 +7,28 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname, '../../'),
   },
 
-  // Packages with native binaries that must not be bundled by Next.js
+  // Packages with native binaries or runtime assets that must not be bundled.
   serverExternalPackages: [
     '@resvg/resvg-js',
     'sharp',
+    'satori',
     '@imgly/background-removal-node',
     'onnxruntime-node',
   ],
+
+  // Prevent onnxruntime-web from being bundled on the server (peer dep of
+  // @imgly/background-removal-node). Not needed for text shaping but
+  // harmless to keep as a safety net.
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        'onnxruntime-web': path.resolve(__dirname, 'src/lib/empty-module.ts'),
+      };
+    }
+    return config;
+  },
 
   // Image optimization configuration
   images: {
