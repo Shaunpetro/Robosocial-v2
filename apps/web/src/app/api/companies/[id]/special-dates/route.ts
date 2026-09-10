@@ -1,9 +1,8 @@
 ﻿// apps/web/src/app/api/companies/[id]/special-dates/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { HOLIDAY_SETS } from "@/lib/special-dates";
+import { HOLIDAY_SETS, getUpcomingSpecialDates } from "@/lib/special-dates";
+import { checkCompanyAccess } from "@/lib/access";
 
 export async function GET(
   request: NextRequest,
@@ -11,22 +10,9 @@ export async function GET(
 ) {
   const { id: companyId } = await params;
 
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    include: { license: true, companies: { where: { id: companyId } } },
-  });
-
-  if (!user || !user.license || user.license.status !== "ACTIVE") {
-    return NextResponse.json({ error: "No active license" }, { status: 402 });
-  }
-
-  if (user.role !== "ADMIN" && user.companies.length === 0) {
-    return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
+  const access = await checkCompanyAccess(companyId);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
   const config = await prisma.companySpecialDatesConfig.findUnique({
@@ -46,10 +32,24 @@ export async function GET(
     },
   });
 
+  // Compute upcoming holidays for the next 90 days from the selected sets
+  const upcomingRaw = getUpcomingSpecialDates(config?.holidaySets || [], 90);
+
+  const upcomingHolidays = upcomingRaw.map(({ entry, date }) => ({
+    name: entry.name,
+    date: date.toLocaleDateString("en-ZA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }),
+    description: entry.description,
+  }));
+
   return NextResponse.json({
     config: config || { enabled: false, holidaySets: [] },
     availableSets: HOLIDAY_SETS.map((s) => ({ id: s.id, label: s.label })),
     company,
+    upcomingHolidays,
   });
 }
 
@@ -59,22 +59,9 @@ export async function PUT(
 ) {
   const { id: companyId } = await params;
 
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    include: { license: true, companies: { where: { id: companyId } } },
-  });
-
-  if (!user || !user.license || user.license.status !== "ACTIVE") {
-    return NextResponse.json({ error: "No active license" }, { status: 402 });
-  }
-
-  if (user.role !== "ADMIN" && user.companies.length === 0) {
-    return NextResponse.json({ error: "Company not found or access denied" }, { status: 403 });
+  const access = await checkCompanyAccess(companyId);
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
   const body = await request.json();
@@ -87,6 +74,9 @@ export async function PUT(
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,
+      logoPosition: body.logoPosition ?? "top",
+      showWebsite: body.showWebsite ?? true,
+      showHandles: body.showHandles ?? true,
     },
     create: {
       companyId,
@@ -95,6 +85,9 @@ export async function PUT(
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,
+      logoPosition: body.logoPosition ?? "top",
+      showWebsite: body.showWebsite ?? true,
+      showHandles: body.showHandles ?? true,
     },
   });
 

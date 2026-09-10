@@ -9,7 +9,6 @@ export interface BrandedImageRecipe {
   logoUrl: string;
   website?: string;
   socialLinks?: string[];
-  brandColors?: Record<string, string>;
   logoPosition?: 'top' | 'center' | 'bottom';
   showWebsite?: boolean;
   showHandles?: boolean;
@@ -28,6 +27,8 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
   const template = getTemplate(recipe.templateId);
   const showWebsite = recipe.showWebsite ?? template.showWebsite;
   const showHandles = recipe.showHandles ?? template.showHandles;
+  const logoPosition = recipe.logoPosition || 'top';
+  const hasHoliday = !!recipe.holidayName;
 
   const backgroundStyle: React.CSSProperties =
     template.background.type === 'gradient'
@@ -40,82 +41,87 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           color: template.textColor,
         };
 
-  const element = (
-    <div
-      style={{
-        width: 1200,
-        height: 630,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 60,
-        fontFamily: recipe.fontName,
-        ...backgroundStyle,
-      }}
-    >
+  // -------- Logo block --------
+  const LogoBlock = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
       {recipe.logoUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={recipe.logoUrl}
           alt="Logo"
-          style={{
-            width: 180,
-            height: 180,
-            objectFit: 'contain',
-            marginBottom: 30,
-          }}
+          style={{ width: 100, height: 100, objectFit: 'contain' }}
         />
       )}
-
-      <h1
+      <div
         style={{
-          fontSize: template.companyNameSize,
+          fontSize: 34,
           fontWeight: 'bold',
-          margin: 0,
-          textAlign: 'center',
+          letterSpacing: 1,
         }}
       >
         {recipe.companyName}
-      </h1>
+      </div>
+    </div>
+  );
 
-      {recipe.holidayName && (
-        <div style={{ fontSize: 32, marginTop: 10, textAlign: 'center' }}>
-          {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
-          {recipe.holidayDate && (
-            <span style={{ fontSize: 24, opacity: 0.8, display: 'block', marginTop: 5 }}>
-              {recipe.holidayDate}
-            </span>
-          )}
+  // -------- Holiday block --------
+  const HolidayBlock = hasHoliday ? (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 24,
+        flex: 1,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 88,
+          fontFamily: recipe.fontName,
+          textAlign: 'center',
+          lineHeight: 1.1,
+          maxWidth: 1000,
+        }}
+      >
+        {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
+      </div>
+      {recipe.holidayDate && (
+        <div style={{ fontSize: 32, opacity: 0.85, letterSpacing: 2 }}>
+          {recipe.holidayDate}
         </div>
       )}
+    </div>
+  ) : (
+    <div style={{ flex: 1 }} />
+  );
 
+  // -------- Footer block --------
+  const FooterBlock = (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
+      }}
+    >
       {showWebsite && recipe.website && (
-        <p
-          style={{
-            fontSize: template.websiteSize,
-            margin: '15px 0 0',
-            opacity: 0.9,
-            textAlign: 'center',
-          }}
-        >
-          {recipe.website}
-        </p>
+        <div style={{ fontSize: 22, opacity: 0.9 }}>{recipe.website}</div>
       )}
-
       {showHandles && recipe.socialLinks && recipe.socialLinks.length > 0 && (
         <div
           style={{
             display: 'flex',
-            gap: 16,
-            marginTop: 15,
+            gap: 20,
             flexWrap: 'wrap',
             justifyContent: 'center',
             maxWidth: 1000,
           }}
         >
           {recipe.socialLinks.map((handle, i) => (
-            <span key={i} style={{ fontSize: 20, opacity: 0.85 }}>
+            <span key={i} style={{ fontSize: 16, opacity: 0.75 }}>
               {handle}
             </span>
           ))}
@@ -124,9 +130,110 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     </div>
   );
 
+  // -------- Compose layout by logoPosition --------
+  let children: React.ReactNode;
+
+  if (logoPosition === 'center') {
+    // Centered hero layout (best without holiday: logo becomes the star)
+    children = (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          height: '100%',
+          padding: 60,
+          ...backgroundStyle,
+        }}
+      >
+        <div style={{ display: 'flex', flex: 1 }} />
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 30,
+          }}
+        >
+          {recipe.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={recipe.logoUrl}
+              alt="Logo"
+              style={{ width: 200, height: 200, objectFit: 'contain' }}
+            />
+          )}
+          <div style={{ fontSize: 42, fontWeight: 'bold' }}>{recipe.companyName}</div>
+          {hasHoliday && (
+            <div
+              style={{
+                fontSize: 54,
+                fontFamily: recipe.fontName,
+                textAlign: 'center',
+                marginTop: 20,
+              }}
+            >
+              {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flex: 1 }} />
+        {FooterBlock}
+      </div>
+    );
+  } else if (logoPosition === 'bottom') {
+    children = (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          width: '100%',
+          height: '100%',
+          padding: 60,
+          ...backgroundStyle,
+        }}
+      >
+        {HolidayBlock}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16,
+          }}
+        >
+          {LogoBlock}
+          {FooterBlock}
+        </div>
+      </div>
+    );
+  } else {
+    // Default: top
+    children = (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          width: '100%',
+          height: '100%',
+          padding: 60,
+          ...backgroundStyle,
+        }}
+      >
+        {LogoBlock}
+        {HolidayBlock}
+        {FooterBlock}
+      </div>
+    );
+  }
+
   const { default: satori } = await import('satori');
 
-  const svg = await satori(element, {
+  const svg = await satori(children, {
     width: 1200,
     height: 630,
     fonts: [

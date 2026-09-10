@@ -15,12 +15,13 @@ import {
   AlertCircle,
   Globe,
   Mail,
-  Phone,
   Share2,
   Palette,
   Building2,
   CheckCircle2,
   ChevronDown,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,12 @@ interface HolidaySet {
   label: string;
 }
 
+interface UpcomingHoliday {
+  name: string;
+  date: string;
+  description: string;
+}
+
 interface Config {
   enabled: boolean;
   holidaySets: string[];
@@ -44,6 +51,9 @@ interface Config {
   generatedMediaId?: string | null;
   generatedMediaUrl?: string | null;
   templateId?: string | null;
+  logoPosition?: 'top' | 'center' | 'bottom';
+  showWebsite?: boolean;
+  showHandles?: boolean;
 }
 
 interface BrandInfo {
@@ -58,7 +68,18 @@ const TEMPLATES = [
   { id: "clean-corporate", label: "Clean", bg: "bg-white border border-gray-200" },
   { id: "bold-gradient", label: "Gradient", bg: "bg-gradient-to-r from-purple-500 to-pink-500" },
   { id: "minimalist-dark", label: "Dark", bg: "bg-gray-900" },
+  { id: "professional-blue", label: "Blue", bg: "bg-[#0A66C2]" },
+  { id: "earthy-sa", label: "Earthy", bg: "bg-gradient-to-r from-amber-700 to-amber-900" },
+  { id: "modern-split", label: "Split", bg: "bg-gradient-to-r from-slate-800 to-slate-600" },
+  { id: "tech-grid", label: "Tech", bg: "bg-slate-900 border border-cyan-500/40" },
+  { id: "playful", label: "Playful", bg: "bg-gradient-to-r from-pink-400 to-orange-400" },
 ];
+
+const LOGO_POSITIONS = [
+  { id: "top", label: "Top" },
+  { id: "center", label: "Center" },
+  { id: "bottom", label: "Bottom" },
+] as const;
 
 export default function SpecialDatesHubPage() {
   const router = useRouter();
@@ -72,6 +93,8 @@ export default function SpecialDatesHubPage() {
 
   const [config, setConfig] = useState<Config>({ enabled: false, holidaySets: [] });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
+  const [upcomingHolidays, setUpcomingHolidays] = useState<UpcomingHoliday[]>([]);
+  const [selectedHoliday, setSelectedHoliday] = useState<UpcomingHoliday | null>(null);
   const [brandInfo, setBrandInfo] = useState<BrandInfo>({});
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [generatedMediaUrl, setGeneratedMediaUrl] = useState<string | null>(null);
@@ -86,6 +109,7 @@ export default function SpecialDatesHubPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch companies
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
@@ -106,6 +130,7 @@ export default function SpecialDatesHubPage() {
     fetchCompanies();
   }, []);
 
+  // Fetch config + upcoming holidays when company changes
   useEffect(() => {
     if (!selectedCompanyId) return;
     setLoadingConfig(true);
@@ -118,6 +143,8 @@ export default function SpecialDatesHubPage() {
           setAvailableSets(data.availableSets || []);
           setBrandInfo(data.company || {});
           setGeneratedMediaUrl(data.config?.generatedMediaUrl || null);
+          setUpcomingHolidays(data.upcomingHolidays || []);
+          setSelectedHoliday(null);
           if (data.config?.logoMediaId) {
             try {
               const mediaRes = await fetch(`/api/media/${data.config.logoMediaId}`);
@@ -155,23 +182,22 @@ export default function SpecialDatesHubPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== "image/png") {
-      alert("Only PNG images are accepted for the logo.");
+    if (file.type !== "image/png" && file.type !== "image/jpeg") {
+      alert("Only PNG or JPG images are accepted for the logo.");
       return;
     }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("companyId", selectedCompanyId);
-      const res = await fetch("/api/media/upload", {
+      const res = await fetch(`/api/companies/${selectedCompanyId}/logo`, {
         method: "POST",
         body: formData,
       });
       if (res.ok) {
-        const media = await res.json();
-        setConfig((prev) => ({ ...prev, logoMediaId: media.id }));
-        setLogoPreview(media.url);
+        const data = await res.json();
+        setConfig((prev) => ({ ...prev, logoMediaId: data.mediaId }));
+        setLogoPreview(data.url);
       } else {
         const err = await res.json();
         alert(err.error || "Upload failed");
@@ -250,7 +276,6 @@ export default function SpecialDatesHubPage() {
         }));
         setScrapeStep("Saved!");
         setTimeout(() => setScrapeStep(""), 1500);
-        alert("Brand information scraped successfully!");
       } else {
         const err = await res.json();
         setScrapeError(err.error || "Scraping failed");
@@ -274,16 +299,24 @@ export default function SpecialDatesHubPage() {
     try {
       const res = await fetch(
         `/api/companies/${selectedCompanyId}/special-dates/generate-media`,
-        { method: "POST" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            holidayName: selectedHoliday?.name,
+            holidayDate: selectedHoliday?.date,
+            holidayMessage: selectedHoliday
+              ? `Happy ${selectedHoliday.name}!`
+              : undefined,
+          }),
+        }
       );
       if (res.ok) {
         const data = await res.json();
-        setConfig((prev) => ({
-          ...prev,
-          generatedMediaId: data.mediaId,
-        }));
         setGeneratedMediaUrl(data.url);
-        alert("Media image generated successfully!");
+        if (!selectedHoliday) {
+          setConfig((prev) => ({ ...prev, generatedMediaId: data.mediaId }));
+        }
       } else {
         const err = await res.json();
         alert(err.error || "Generation failed");
@@ -309,7 +342,9 @@ export default function SpecialDatesHubPage() {
       <div className="max-w-4xl mx-auto p-6 text-center">
         <Building2 className="h-12 w-12 mx-auto text-[var(--text-tertiary)] mb-4" />
         <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">No companies found</h1>
-        <p className="text-[var(--text-tertiary)] mb-6">You need to create a company before setting up Special Dates.</p>
+        <p className="text-[var(--text-tertiary)] mb-6">
+          You need to create a company before setting up Special Dates.
+        </p>
         <a
           href="/companies"
           className="inline-block px-6 py-2.5 bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600"
@@ -321,7 +356,7 @@ export default function SpecialDatesHubPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-5xl mx-auto p-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <CalendarDays className="h-6 w-6 text-brand-500" />
@@ -360,20 +395,25 @@ export default function SpecialDatesHubPage() {
         </div>
       ) : (
         <>
-          {/* Brand Kit Section */}
+          {/* Brand Kit */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
               <Palette className="h-5 w-5" />
               Brand Kit
             </h2>
 
-            {/* Logo Upload */}
+            {/* Logo */}
             <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Company Logo (PNG)</p>
+              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Company Logo</p>
               <div className="flex items-start gap-4">
                 <div className="w-24 h-24 rounded-xl border border-[var(--border-default)] flex items-center justify-center bg-[var(--bg-secondary)] overflow-hidden">
                   {logoPreview ? (
-                    <img src={logoPreview} alt="Logo preview" className="w-full h-full object-contain" />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoPreview}
+                      alt="Logo preview"
+                      className="w-full h-full object-contain"
+                    />
                   ) : (
                     <CalendarDays className="h-8 w-8 text-[var(--text-tertiary)]" />
                   )}
@@ -382,7 +422,7 @@ export default function SpecialDatesHubPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/png"
+                    accept="image/png,image/jpeg"
                     onChange={handleLogoUpload}
                     className="hidden"
                     id="logo-upload-hub"
@@ -392,7 +432,7 @@ export default function SpecialDatesHubPage() {
                     className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-brand-600 transition-colors"
                   >
                     <Upload className="h-4 w-4" />
-                    {uploading ? "Uploading..." : "Upload Logo"}
+                    {uploading ? "Processing..." : "Upload Logo"}
                   </label>
                   {logoPreview && (
                     <button
@@ -403,30 +443,37 @@ export default function SpecialDatesHubPage() {
                       Remove
                     </button>
                   )}
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    PNG with transparent background recommended.
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Website & Scrape */}
+            {/* Website */}
             <div className="mb-6">
               <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Website</p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={brandInfo.website || ""}
-                    onChange={(e) => setBrandInfo((prev) => ({ ...prev, website: e.target.value }))}
-                    placeholder="https://yourcompany.com"
-                    className="w-full px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={brandInfo.website || ""}
+                  onChange={(e) =>
+                    setBrandInfo((prev) => ({ ...prev, website: e.target.value }))
+                  }
+                  placeholder="https://yourcompany.com"
+                  className="flex-1 px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                />
                 <button
                   onClick={handleScrapeWebsite}
                   disabled={scraping}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50 whitespace-nowrap"
                 >
-                  {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
-                  {scraping ? scrapeStep || "Scraping..." : "Scrape Website"}
+                  {scraping ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Globe className="h-4 w-4" />
+                  )}
+                  {scraping ? scrapeStep || "Scraping..." : "Scrape"}
                 </button>
               </div>
               {scrapeError && (
@@ -435,19 +482,10 @@ export default function SpecialDatesHubPage() {
                   {scrapeError}
                 </div>
               )}
-
-              {/* Alternative sources hint */}
-              {!brandInfo.website && !scraping && (
-                <p className="mt-3 text-sm text-[var(--text-tertiary)]">
-                  No website? You can also{" "}
-                  <span className="text-brand-600 dark:text-brand-400">upload a company profile PDF</span> or{" "}
-                  <span className="text-brand-600 dark:text-brand-400">paste social media links</span>.
-                </p>
-              )}
             </div>
 
-            {/* Detected Info */}
-            {(brandInfo.socialLinks || brandInfo.contactEmail || brandInfo.contactPhone || brandInfo.brandColors) && (
+            {/* Detected info */}
+            {(brandInfo.socialLinks || brandInfo.contactEmail || brandInfo.contactPhone) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {brandInfo.socialLinks && Object.keys(brandInfo.socialLinks).length > 0 && (
                   <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
@@ -470,29 +508,11 @@ export default function SpecialDatesHubPage() {
                     </p>
                     <div className="mt-2 space-y-1 text-sm">
                       {brandInfo.contactEmail && (
-                        <p className="text-[var(--text-secondary)]">Email: {brandInfo.contactEmail}</p>
+                        <p className="text-[var(--text-secondary)]">{brandInfo.contactEmail}</p>
                       )}
                       {brandInfo.contactPhone && (
-                        <p className="text-[var(--text-secondary)]">Phone: {brandInfo.contactPhone}</p>
+                        <p className="text-[var(--text-secondary)]">{brandInfo.contactPhone}</p>
                       )}
-                    </div>
-                  </div>
-                )}
-                {brandInfo.brandColors && (
-                  <div className="p-3 bg-[var(--bg-secondary)] rounded-lg">
-                    <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">
-                      <Palette className="h-4 w-4" /> Brand Colors
-                    </p>
-                    <div className="mt-2 flex gap-2">
-                      {Object.entries(brandInfo.brandColors).map(([key, value]) => (
-                        <div key={key} className="flex items-center gap-1">
-                          <span
-                            className="w-4 h-4 rounded-full border"
-                            style={{ backgroundColor: value }}
-                          />
-                          <span className="text-xs text-[var(--text-tertiary)]">{key}</span>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}
@@ -533,61 +553,169 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* Template Selection */}
+          {/* Templates */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Template Style</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {TEMPLATES.map((tpl) => (
                 <button
                   key={tpl.id}
                   onClick={() => setConfig((prev) => ({ ...prev, templateId: tpl.id }))}
                   className={cn(
-                    "p-3 rounded-xl border text-left transition-all",
+                    "p-2 rounded-xl border text-left transition-all",
                     config.templateId === tpl.id
                       ? "border-brand-500 bg-brand-500/10"
                       : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
                   )}
                 >
-                  <div className={cn("w-full h-16 rounded-md mb-2", tpl.bg)} />
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{tpl.label}</p>
+                  <div className={cn("w-full h-14 rounded-md mb-2", tpl.bg)} />
+                  <p className="text-xs font-medium text-[var(--text-primary)]">{tpl.label}</p>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Generate Media */}
+          {/* Layout options */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Branded Media Image</h2>
-            <div className="flex items-start gap-4">
-              <div className="w-48 h-24 rounded-xl border border-[var(--border-default)] flex items-center justify-center bg-[var(--bg-secondary)] overflow-hidden">
-                {generatedMediaUrl ? (
-                  <img
-                    src={generatedMediaUrl}
-                    alt="Generated media"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <ImageIcon className="h-8 w-8 text-[var(--text-tertiary)]" />
-                )}
-              </div>
-              <button
-                onClick={handleGenerateMedia}
-                disabled={generating || !config.logoMediaId}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
-              >
-                {generating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : generatedMediaUrl ? (
-                  <RefreshCw className="h-4 w-4" />
-                ) : (
-                  <Wand2 className="h-4 w-4" />
-                )}
-                {generatedMediaUrl ? "Regenerate" : "Generate Media Image"}
-              </button>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Layout</h2>
+            <div className="flex flex-wrap gap-3 mb-4">
+              {LOGO_POSITIONS.map((pos) => (
+                <button
+                  key={pos.id}
+                  onClick={() => setConfig((prev) => ({ ...prev, logoPosition: pos.id }))}
+                  className={cn(
+                    "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
+                    config.logoPosition === pos.id
+                      ? "border-brand-500 bg-brand-500/10"
+                      : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
+                  )}
+                >
+                  {pos.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={config.showWebsite ?? true}
+                  onChange={(e) =>
+                    setConfig((prev) => ({ ...prev, showWebsite: e.target.checked }))
+                  }
+                />
+                Show website
+              </label>
+              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={config.showHandles ?? true}
+                  onChange={(e) =>
+                    setConfig((prev) => ({ ...prev, showHandles: e.target.checked }))
+                  }
+                />
+                Show social handles
+              </label>
             </div>
           </div>
 
-          {/* Save Button */}
+          {/* Holiday Preview Picker */}
+          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-brand-500" />
+              Generate for a Specific Holiday
+            </h2>
+            <p className="text-sm text-[var(--text-tertiary)] mb-4">
+              Pick an upcoming holiday to preview the branded image with its custom font and
+              overlay. Leave unselected to generate the base branded image.
+            </p>
+
+            {upcomingHolidays.length === 0 ? (
+              <div className="p-4 bg-[var(--bg-secondary)] rounded-lg text-sm text-[var(--text-tertiary)]">
+                No upcoming holidays selected. Enable holiday sets above and save to see them here.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  onClick={() => setSelectedHoliday(null)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg border text-sm transition-all",
+                    selectedHoliday === null
+                      ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                      : "border-[var(--border-default)] bg-[var(--bg-primary)]"
+                  )}
+                >
+                  Base image
+                </button>
+                {upcomingHolidays.map((h) => (
+                  <button
+                    key={h.name}
+                    onClick={() => setSelectedHoliday(h)}
+                    className={cn(
+                      "px-3 py-2 rounded-lg border text-sm transition-all",
+                      selectedHoliday?.name === h.name
+                        ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                        : "border-[var(--border-default)] bg-[var(--bg-primary)]"
+                    )}
+                  >
+                    {h.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Preview */}
+          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+              Preview {selectedHoliday ? `— ${selectedHoliday.name}` : "— Base Image"}
+            </h2>
+            <div className="w-full aspect-[1200/630] max-w-2xl mx-auto bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] overflow-hidden flex items-center justify-center">
+              {generatedMediaUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={generatedMediaUrl}
+                  alt="Generated branded image"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="text-center p-6">
+                  <ImageIcon className="h-12 w-12 mx-auto text-[var(--text-tertiary)] mb-2" />
+                  <p className="text-sm text-[var(--text-tertiary)]">No image generated yet</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <button
+                onClick={handleGenerateMedia}
+                disabled={generating || !config.logoMediaId}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4" />
+                )}
+                {generating
+                  ? "Generating..."
+                  : selectedHoliday
+                  ? `Generate for ${selectedHoliday.name}`
+                  : "Generate Base Image"}
+              </button>
+              {generatedMediaUrl && (
+                <a
+                  href={generatedMediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--border-default)] rounded-xl text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View full size
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Save */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleSave}

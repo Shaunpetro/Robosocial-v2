@@ -10,6 +10,10 @@ const utapi = new UTApi();
 
 export const runtime = 'nodejs';
 
+function slugify(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,6 +27,8 @@ export async function POST(
 
   const body = await request.json().catch(() => ({}));
   const holidayName: string | undefined = body.holidayName;
+  const holidayDate: string | undefined = body.holidayDate;
+  const holidayMessage: string | undefined = body.holidayMessage;
 
   try {
     const config = await prisma.companySpecialDatesConfig.findUnique({
@@ -49,26 +55,28 @@ export async function POST(
 
     const { fontData, fontName } = getFontForHoliday(holidayName);
 
-    const recipe = {
+    const imageBuffer = await renderBrandedImage({
       templateId: config.templateId || 'clean-corporate',
       companyName: company.name,
       logoUrl: config.logoMedia.url,
       website: company.website || '',
       socialLinks,
-      brandColors: (company.brandColors as Record<string, string>) || {},
       logoPosition: (config.logoPosition as 'top' | 'center' | 'bottom') || 'top',
       showWebsite: config.showWebsite,
       showHandles: config.showHandles,
       holidayName,
-      holidayMessage: holidayName ? `Happy ${holidayName}!` : undefined,
+      holidayDate,
+      holidayMessage,
       fontData,
       fontName,
-    };
+    });
 
-    const imageBuffer = await renderBrandedImage(recipe);
+    // Filename reflects whether this is the base image or a holiday-specific one
+    const baseFilename = holidayName
+      ? `special-dates-${slugify(holidayName)}-${companyId}.png`
+      : `special-dates-base-${companyId}.png`;
 
-    const filename = `special-dates-${companyId}.png`;
-    const fileEsque = new File([new Uint8Array(imageBuffer)], filename, {
+    const fileEsque = new File([new Uint8Array(imageBuffer)], baseFilename, {
       type: 'image/png',
     });
     const uploadResult = await utapi.uploadFiles(fileEsque);
@@ -78,8 +86,17 @@ export async function POST(
 
     const imageUrl = uploadResult.data.ufsUrl || uploadResult.data.url;
 
+    // Determine tag(s) for the media record
+    const tags = holidayName
+      ? ['special-dates', 'holiday', `holiday:${slugify(holidayName)}`]
+      : ['special-dates', 'base'];
+
+    // Find existing record for this specific image
     const existing = await prisma.media.findFirst({
-      where: { companyId, tags: { has: 'special-dates' } },
+      where: {
+        companyId,
+        tags: { has: holidayName ? `holiday:${slugify(holidayName)}` : 'base' },
+      },
     });
 
     let mediaId: string;
@@ -88,10 +105,10 @@ export async function POST(
         where: { id: existing.id },
         data: {
           url: imageUrl,
-          filename,
+          filename: baseFilename,
           mimeType: 'image/png',
           size: imageBuffer.length,
-          tags: ['special-dates', 'permanent'],
+          tags,
           expiresAt: new Date('2099-01-01T00:00:00.000Z'),
         },
       });
@@ -100,24 +117,27 @@ export async function POST(
       const media = await prisma.media.create({
         data: {
           companyId,
-          filename,
+          filename: baseFilename,
           url: imageUrl,
           type: 'IMAGE',
           mimeType: 'image/png',
           size: imageBuffer.length,
-          tags: ['special-dates', 'permanent'],
+          tags,
           expiresAt: new Date('2099-01-01T00:00:00.000Z'),
         },
       });
       mediaId = media.id;
     }
 
-    await prisma.companySpecialDatesConfig.update({
-      where: { companyId },
-      data: { generatedMediaId: mediaId },
-    });
+    // Only update config.generatedMediaId for the base image (no holiday)
+    if (!holidayName) {
+      await prisma.companySpecialDatesConfig.update({
+        where: { companyId },
+        data: { generatedMediaId: mediaId },
+      });
+    }
 
-    return NextResponse.json({ mediaId, url: imageUrl, fontName });
+    return NextResponse.json({ mediaId, url: imageUrl, fontName, holidayName });
   } catch (error) {
     console.error('Media generation failed:', error);
     return NextResponse.json(
