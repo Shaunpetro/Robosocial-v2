@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname, '../../'),
   },
 
-  // Packages with native binaries or runtime assets that must not be bundled.
+  // Packages with native binaries that must not be bundled by Next.js
   serverExternalPackages: [
     '@resvg/resvg-js',
     'sharp',
@@ -16,9 +16,23 @@ const nextConfig: NextConfig = {
     'onnxruntime-node',
   ],
 
+  // Trace from the monorepo root so node_modules at the repo root is included
+  outputFileTracingRoot: path.join(__dirname, '../../'),
+
+  // Explicitly include WASM files used by Satori (harfbuzzjs) and other
+  // native runtime assets in the serverless bundle. Without this, Vercel's
+  // file tracing omits the .wasm binaries and the function crashes with
+  // ENOENT at runtime.
+  outputFileTracingIncludes: {
+    '/api/companies/[id]/special-dates/generate-media': [
+      '../../node_modules/.pnpm/harfbuzzjs@*/node_modules/harfbuzzjs/*.wasm',
+      '../../node_modules/.pnpm/satori@*/node_modules/satori/**/*.wasm',
+      '../../node_modules/.pnpm/@resvg+resvg-js@*/node_modules/@resvg/resvg-js/**/*.node',
+    ],
+  },
+
   // Prevent onnxruntime-web from being bundled on the server (peer dep of
-  // @imgly/background-removal-node). Not needed for text shaping but
-  // harmless to keep as a safety net.
+  // @imgly/background-removal-node). Harmless if unused.
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.resolve = config.resolve || {};
