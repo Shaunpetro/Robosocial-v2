@@ -1,9 +1,6 @@
 // apps/web/src/lib/logo-processing.ts
 import sharp from 'sharp';
 import { removeBackground } from '@imgly/background-removal-node';
-import * as VibrantModule from 'node-vibrant';
-
-const Vibrant = (VibrantModule as any).Vibrant || (VibrantModule as any).default;
 
 export interface ProcessedLogo {
   buffer: Buffer;
@@ -19,25 +16,39 @@ export async function processLogo(fileBuffer: Buffer): Promise<ProcessedLogo> {
   const isPngWithAlpha = metadata.format === 'png' && metadata.hasAlpha;
 
   if (!isPngWithAlpha) {
-    const inputBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'image/png' });
-    const outputBlob = await removeBackground(inputBlob);
-    imageBuffer = Buffer.from(await outputBlob.arrayBuffer());
-    const newMetadata = await sharp(imageBuffer).metadata();
-    hasTransparency = newMetadata.hasAlpha || false;
+    try {
+      const inputBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'image/png' });
+      const outputBlob = await removeBackground(inputBlob);
+      imageBuffer = Buffer.from(await outputBlob.arrayBuffer());
+      const newMetadata = await sharp(imageBuffer).metadata();
+      hasTransparency = newMetadata.hasAlpha || false;
+    } catch (error) {
+      console.error('Background removal failed, using original:', error);
+    }
   } else {
     hasTransparency = true;
   }
 
-  const palette = await Vibrant.from(imageBuffer).getPalette();
-  const colors = [
-    palette.Vibrant?.hex,
-    palette.Muted?.hex,
-    palette.DarkMuted?.hex,
-  ].filter(Boolean) as string[];
+  // Simple dominant color extraction using sharp's stats
+  const dominantColors: string[] = [];
+  try {
+    const stats = await sharp(imageBuffer).stats();
+    const channels = stats.channels.slice(0, 3);
+    if (channels.length === 3) {
+      const hex =
+        '#' +
+        channels
+          .map((c) => Math.round(c.mean).toString(16).padStart(2, '0'))
+          .join('');
+      dominantColors.push(hex);
+    }
+  } catch (error) {
+    console.error('Color extraction failed:', error);
+  }
 
   return {
     buffer: imageBuffer,
     hasTransparency,
-    dominantColors: colors,
+    dominantColors,
   };
 }
