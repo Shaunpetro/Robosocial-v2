@@ -8,7 +8,12 @@ const nextConfig: NextConfig = {
   },
 
   // External packages that should not be bundled by Next.js (native binaries, etc.)
-  serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
+  serverExternalPackages: [
+    '@resvg/resvg-js',
+    'sharp',
+    '@imgly/background-removal-node',
+    'onnxruntime-node',
+  ],
 
   // Image optimization configuration
   images: {

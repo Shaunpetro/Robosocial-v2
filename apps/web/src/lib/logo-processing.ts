@@ -1,7 +1,9 @@
 // apps/web/src/lib/logo-processing.ts
 import sharp from 'sharp';
-import { removeBackground } from '@imgly/background-removal';
-import { Vibrant } from 'node-vibrant/node';
+import { removeBackground } from '@imgly/background-removal-node';
+import * as VibrantModule from 'node-vibrant';
+
+const Vibrant = (VibrantModule as any).Vibrant || (VibrantModule as any).default;
 
 export interface ProcessedLogo {
   buffer: Buffer;
@@ -9,7 +11,7 @@ export interface ProcessedLogo {
   dominantColors: string[];
 }
 
-export async function processLogo(fileBuffer: Buffer, contentType: string): Promise<ProcessedLogo> {
+export async function processLogo(fileBuffer: Buffer): Promise<ProcessedLogo> {
   let imageBuffer = fileBuffer;
   let hasTransparency = false;
 
@@ -17,8 +19,9 @@ export async function processLogo(fileBuffer: Buffer, contentType: string): Prom
   const isPngWithAlpha = metadata.format === 'png' && metadata.hasAlpha;
 
   if (!isPngWithAlpha) {
-    const blob = await removeBackground(fileBuffer);
-    imageBuffer = Buffer.from(await blob.arrayBuffer());
+    const inputBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'image/png' });
+    const outputBlob = await removeBackground(inputBlob);
+    imageBuffer = Buffer.from(await outputBlob.arrayBuffer());
     const newMetadata = await sharp(imageBuffer).metadata();
     hasTransparency = newMetadata.hasAlpha || false;
   } else {

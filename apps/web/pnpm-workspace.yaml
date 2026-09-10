@@ -2,6 +2,7 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   msgpackr-extract: true
+  onnxruntime-node: true
   prisma: true
   protobufjs: true
   sharp: true

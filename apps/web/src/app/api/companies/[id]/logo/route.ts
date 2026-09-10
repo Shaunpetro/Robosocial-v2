@@ -5,7 +5,6 @@ import { checkCompanyAccess } from '@/lib/access';
 import { prisma } from '@/lib/db';
 import { processLogo } from '@/lib/logo-processing';
 import { UTApi } from 'uploadthing/server';
-import { clear } from 'console';
 
 const utapi = new UTApi();
 
@@ -33,19 +32,17 @@ export async function POST(
   const buffer = Buffer.from(await file.arrayBuffer());
   let processed: { buffer: Buffer; hasTransparency: boolean; dominantColors: string[] };
   try {
-    // For SVG, convert to PNG first because sharp can't process SVG without extra deps
     if (file.type === 'image/svg+xml') {
       const pngBuffer = await sharp(buffer).png().toBuffer();
-      processed = await processLogo(pngBuffer, 'image/png');
+      processed = await processLogo(pngBuffer);
     } else {
-      processed = await processLogo(buffer, file.type);
+      processed = await processLogo(buffer);
     }
   } catch (error) {
     console.error('Logo processing failed:', error);
     return NextResponse.json({ error: 'Logo processing failed' }, { status: 500 });
   }
 
-  // Upload processed logo to Uploadthing
   const filename = `logo-${companyId}.png`;
   const fileEsque = new File([new Uint8Array(processed.buffer)], filename, { type: 'image/png' });
   const uploadResult = await utapi.uploadFiles(fileEsque);
@@ -55,7 +52,6 @@ export async function POST(
 
   const logoUrl = uploadResult.data.ufsUrl || uploadResult.data.url;
 
-  // Create or update Media record
   const existingLogoMedia = await prisma.media.findFirst({
     where: { companyId, tags: { has: 'logo' } },
   });
@@ -90,7 +86,6 @@ export async function POST(
     mediaId = media.id;
   }
 
-  // Update special dates config with logo info
   await prisma.companySpecialDatesConfig.upsert({
     where: { companyId },
     update: {
@@ -104,7 +99,6 @@ export async function POST(
     },
   });
 
-  // Update company brand colors with extracted colors
   if (processed.dominantColors.length > 0) {
     await prisma.company.update({
       where: { id: companyId },
