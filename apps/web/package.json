@@ -17,7 +17,6 @@
   "dependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@google/generative-ai": "^0.24.1",
-    "@imgly/background-removal": "^1.7.0",
     "@imgly/background-removal-node": "^1.4.5",
     "@lucia-auth/adapter-prisma": "^4.0.1",
     "@prisma/client": "6.1.0",

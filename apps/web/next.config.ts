@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname, '../../'),
   },
 
-  // External packages that should not be bundled by Next.js (native binaries, etc.)
+  // Packages with native binaries that must not be bundled by Next.js
   serverExternalPackages: [
     '@resvg/resvg-js',
     'sharp',
@@ -18,47 +18,15 @@ const nextConfig: NextConfig = {
   // Image optimization configuration
   images: {
     remotePatterns: [
-      // Vercel Blob Storage
-      {
-        protocol: 'https',
-        hostname: '*.public.blob.vercel-storage.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.blob.vercel-storage.com',
-      },
-      // Fallback for direct blob URLs
-      {
-        protocol: 'https',
-        hostname: 'blob.vercel-storage.com',
-      },
-      // LinkedIn profile images
-      {
-        protocol: 'https',
-        hostname: 'media.licdn.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.licdn.com',
-      },
-      // Facebook/Meta images
-      {
-        protocol: 'https',
-        hostname: '*.fbcdn.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'platform-lookaside.fbsbx.com',
-      },
-      // Generic placeholder/avatar services
-      {
-        protocol: 'https',
-        hostname: 'ui-avatars.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'avatars.githubusercontent.com',
-      },
+      { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
+      { protocol: 'https', hostname: '*.blob.vercel-storage.com' },
+      { protocol: 'https', hostname: 'blob.vercel-storage.com' },
+      { protocol: 'https', hostname: 'media.licdn.com' },
+      { protocol: 'https', hostname: '*.licdn.com' },
+      { protocol: 'https', hostname: '*.fbcdn.net' },
+      { protocol: 'https', hostname: 'platform-lookaside.fbsbx.com' },
+      { protocol: 'https', hostname: 'ui-avatars.com' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
     ],
   },
 };
