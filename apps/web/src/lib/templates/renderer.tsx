@@ -10,13 +10,14 @@ export interface BrandedImageRecipe {
   website?: string;
   socialLinks?: string[];
   brandColors?: Record<string, string>;
-  fontStyle?: string;
   logoPosition?: 'top' | 'center' | 'bottom';
   showWebsite?: boolean;
   showHandles?: boolean;
   holidayName?: string;
   holidayDate?: string;
   holidayMessage?: string;
+  fontData: ArrayBuffer;
+  fontName: string;
 }
 
 function getTemplate(templateId: string): TemplateDefinition {
@@ -49,6 +50,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
         justifyContent: 'center',
         alignItems: 'center',
         padding: 60,
+        fontFamily: recipe.fontName,
         ...backgroundStyle,
       }}
     >
@@ -122,19 +124,24 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     </div>
   );
 
-  // Dynamic import so satori is loaded at runtime from node_modules
   const { default: satori } = await import('satori');
 
   const svg = await satori(element, {
     width: 1200,
     height: 630,
-    fonts: [],
+    fonts: [
+      {
+        name: recipe.fontName,
+        data: recipe.fontData,
+        weight: 400,
+        style: 'normal',
+      },
+    ],
   });
 
   const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } });
   const pngData = resvg.render();
   const pngBuffer = pngData.asPng();
 
-  const finalBuffer = await sharp(pngBuffer).resize(1200, 630).png().toBuffer();
-  return finalBuffer;
+  return await sharp(pngBuffer).resize(1200, 630).png().toBuffer();
 }

@@ -2,12 +2,21 @@
 import type { NextConfig } from 'next';
 import path from 'path';
 
+const fontTraces = [
+  '../../node_modules/.pnpm/@fontsource+inter@*/node_modules/@fontsource/inter/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+poppins@*/node_modules/@fontsource/poppins/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+playfair-display@*/node_modules/@fontsource/playfair-display/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+mountains-of-christmas@*/node_modules/@fontsource/mountains-of-christmas/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+festive@*/node_modules/@fontsource/festive/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+handlee@*/node_modules/@fontsource/handlee/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+dawning-of-a-new-day@*/node_modules/@fontsource/dawning-of-a-new-day/files/*.woff',
+];
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '../../'),
   },
 
-  // Packages with native binaries that must not be bundled by Next.js
   serverExternalPackages: [
     '@resvg/resvg-js',
     'sharp',
@@ -16,23 +25,17 @@ const nextConfig: NextConfig = {
     'onnxruntime-node',
   ],
 
-  // Trace from the monorepo root so node_modules at the repo root is included
   outputFileTracingRoot: path.join(__dirname, '../../'),
 
-  // Explicitly include WASM files used by Satori (harfbuzzjs) and other
-  // native runtime assets in the serverless bundle. Without this, Vercel's
-  // file tracing omits the .wasm binaries and the function crashes with
-  // ENOENT at runtime.
   outputFileTracingIncludes: {
     '/api/companies/[id]/special-dates/generate-media': [
       '../../node_modules/.pnpm/harfbuzzjs@*/node_modules/harfbuzzjs/*.wasm',
       '../../node_modules/.pnpm/satori@*/node_modules/satori/**/*.wasm',
       '../../node_modules/.pnpm/@resvg+resvg-js@*/node_modules/@resvg/resvg-js/**/*.node',
+      ...fontTraces,
     ],
   },
 
-  // Prevent onnxruntime-web from being bundled on the server (peer dep of
-  // @imgly/background-removal-node). Harmless if unused.
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.resolve = config.resolve || {};
@@ -44,7 +47,6 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Image optimization configuration
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkCompanyAccess } from '@/lib/access';
 import { prisma } from '@/lib/db';
 import { renderBrandedImage } from '@/lib/templates/renderer';
+import { getFontForHoliday } from '@/lib/templates/fonts';
 import { UTApi } from 'uploadthing/server';
 
 const utapi = new UTApi();
@@ -19,6 +20,9 @@ export async function POST(
   if (!access.allowed) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
+
+  const body = await request.json().catch(() => ({}));
+  const holidayName: string | undefined = body.holidayName;
 
   try {
     const config = await prisma.companySpecialDatesConfig.findUnique({
@@ -39,8 +43,11 @@ export async function POST(
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    const socialLinks = company.platforms.map(p => `${p.type}: @${p.username || p.name}`);
-    const brandColors = (company.brandColors as Record<string, string>) || {};
+    const socialLinks = company.platforms.map(
+      (p) => `${p.type}: @${p.username || p.name}`
+    );
+
+    const { fontData, fontName } = getFontForHoliday(holidayName);
 
     const recipe = {
       templateId: config.templateId || 'clean-corporate',
@@ -48,19 +55,22 @@ export async function POST(
       logoUrl: config.logoMedia.url,
       website: company.website || '',
       socialLinks,
-      brandColors,
-      fontStyle: config.fontStyle || 'Arial',
+      brandColors: (company.brandColors as Record<string, string>) || {},
       logoPosition: (config.logoPosition as 'top' | 'center' | 'bottom') || 'top',
       showWebsite: config.showWebsite,
       showHandles: config.showHandles,
+      holidayName,
+      holidayMessage: holidayName ? `Happy ${holidayName}!` : undefined,
+      fontData,
+      fontName,
     };
 
-    // Render the image
     const imageBuffer = await renderBrandedImage(recipe);
 
-    // Upload to Uploadthing
     const filename = `special-dates-${companyId}.png`;
-    const fileEsque = new File([new Uint8Array(imageBuffer)], filename, { type: 'image/png' });
+    const fileEsque = new File([new Uint8Array(imageBuffer)], filename, {
+      type: 'image/png',
+    });
     const uploadResult = await utapi.uploadFiles(fileEsque);
     if (!uploadResult.data) {
       return NextResponse.json({ error: 'Image upload failed' }, { status: 500 });
@@ -68,7 +78,6 @@ export async function POST(
 
     const imageUrl = uploadResult.data.ufsUrl || uploadResult.data.url;
 
-    // Create/update Media record
     const existing = await prisma.media.findFirst({
       where: { companyId, tags: { has: 'special-dates' } },
     });
@@ -108,7 +117,7 @@ export async function POST(
       data: { generatedMediaId: mediaId },
     });
 
-    return NextResponse.json({ mediaId, url: imageUrl });
+    return NextResponse.json({ mediaId, url: imageUrl, fontName });
   } catch (error) {
     console.error('Media generation failed:', error);
     return NextResponse.json(

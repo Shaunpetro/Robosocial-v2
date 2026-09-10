@@ -11,6 +11,27 @@ importers:
       '@eslint/eslintrc':
         specifier: ^3.2.0
         version: 3.3.5(supports-color@8.1.1)
+      '@fontsource/dawning-of-a-new-day':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/festive':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/handlee':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/mountains-of-christmas':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/playfair-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/poppins':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1
@@ -216,6 +237,27 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fontsource/dawning-of-a-new-day@5.3.0':
+    resolution: {integrity: sha512-G8r51s723zK2BenoOXuzXlvXdwgtVWXPdZotaP0NVTDIoE8JCdy5+EcK2X3vvXwGbVjDK15u/0TwnfRv/Z2R2g==}
+
+  '@fontsource/festive@5.3.0':
+    resolution: {integrity: sha512-o0qvgCTJfferXqVuKXblf669m7UkDdL21umr5s3NRkesb8xqw4nyDWiLXRBIyldP9AtKMdfo/iCTr+VMhg4VMQ==}
+
+  '@fontsource/handlee@5.3.0':
+    resolution: {integrity: sha512-bginDzMq4WhtYCcCR5O/WUh6mjXgZ17miwY4mSCR6+Z5iXaUGc71GuFHdFKsZBTO+9CZqRRfXaGtTSz4IIf29Q==}
+
+  '@fontsource/inter@5.3.0':
+    resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
+
+  '@fontsource/mountains-of-christmas@5.3.0':
+    resolution: {integrity: sha512-1MGTUv2jVnkKTFjWqxV1khJZkeN7ozFQJKUynJDbnrciXufx6ffy7sGDAmAvSwlzVn5rVjezkFpage5RQMS82A==}
+
+  '@fontsource/playfair-display@5.3.0':
+    resolution: {integrity: sha512-uJSABalvdWc10fEPppQjQocamT21LEyRfzzWfRfqbkPz+sRv+kKpYDKyluBUskvJREkJTos9epj1WjQROGu99Q==}
+
+  '@fontsource/poppins@5.3.0':
+    resolution: {integrity: sha512-cms1nM7U6SN8epIV1WMVOV8VsA645aSm3wHfzIQnkk188U341ThbJGSl2Sv54V29gnDbT2arMPfLzvVIIVCceQ==}
 
   '@google/generative-ai@0.24.1':
     resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
@@ -3305,6 +3347,20 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@fontsource/dawning-of-a-new-day@5.3.0': {}
+
+  '@fontsource/festive@5.3.0': {}
+
+  '@fontsource/handlee@5.3.0': {}
+
+  '@fontsource/inter@5.3.0': {}
+
+  '@fontsource/mountains-of-christmas@5.3.0': {}
+
+  '@fontsource/playfair-display@5.3.0': {}
+
+  '@fontsource/poppins@5.3.0': {}
 
   '@google/generative-ai@0.24.1': {}
 
