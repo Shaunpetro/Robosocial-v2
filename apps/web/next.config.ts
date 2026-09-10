@@ -3,6 +3,10 @@ import type { NextConfig } from 'next';
 import path from 'path';
 
 const fontTraces = [
+  // Hoisted safety net
+  '../../node_modules/@fontsource/*/files/*.woff',
+
+  // pnpm store — one pattern per installed Fontsource package
   '../../node_modules/.pnpm/@fontsource+inter@*/node_modules/@fontsource/inter/files/*.woff',
   '../../node_modules/.pnpm/@fontsource+poppins@*/node_modules/@fontsource/poppins/files/*.woff',
   '../../node_modules/.pnpm/@fontsource+playfair-display@*/node_modules/@fontsource/playfair-display/files/*.woff',
@@ -10,6 +14,13 @@ const fontTraces = [
   '../../node_modules/.pnpm/@fontsource+festive@*/node_modules/@fontsource/festive/files/*.woff',
   '../../node_modules/.pnpm/@fontsource+handlee@*/node_modules/@fontsource/handlee/files/*.woff',
   '../../node_modules/.pnpm/@fontsource+dawning-of-a-new-day@*/node_modules/@fontsource/dawning-of-a-new-day/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+great-vibes@*/node_modules/@fontsource/great-vibes/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+creepster@*/node_modules/@fontsource/creepster/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+dancing-script@*/node_modules/@fontsource/dancing-script/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+cinzel@*/node_modules/@fontsource/cinzel/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+cormorant-garamond@*/node_modules/@fontsource/cormorant-garamond/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+eb-garamond@*/node_modules/@fontsource/eb-garamond/files/*.woff',
+  '../../node_modules/.pnpm/@fontsource+oswald@*/node_modules/@fontsource/oswald/files/*.woff',
 ];
 
 const nextConfig: NextConfig = {
