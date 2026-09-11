@@ -2,7 +2,12 @@
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { TEMPLATES, TemplateDefinition } from './index';
-import { PLATFORMS, CONTACT, parseHandleEntry } from './icons';
+import { PLATFORMS, CONTACT } from './icons';
+
+export interface SocialItem {
+  platform: string;
+  handle: string;
+}
 
 export interface BrandedImageRecipe {
   templateId: string;
@@ -10,7 +15,7 @@ export interface BrandedImageRecipe {
   logoUrl: string;
   logoHasTransparency?: boolean;
   website?: string;
-  socialLinks?: string[];
+  socialItems?: SocialItem[];
   contactEmail?: string | null;
   contactPhone?: string | null;
   contactWhatsapp?: string | null;
@@ -160,7 +165,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     <div style={{ flex: 1 }} />
   );
 
-  // ---- Build footer badges ----
   const contactBadges: Badge[] = [];
   if (showWebsite && recipe.website) {
     contactBadges.push({
@@ -192,16 +196,14 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
   }
 
   const socialBadges: Badge[] = [];
-  if (showHandles && recipe.socialLinks) {
-    for (const entry of recipe.socialLinks) {
-      const parsed = parseHandleEntry(entry);
-      if (!parsed) continue;
-      const platform = PLATFORMS[parsed.platform];
+  if (showHandles && recipe.socialItems) {
+    for (const item of recipe.socialItems) {
+      const platform = PLATFORMS[item.platform];
       if (!platform) continue;
       socialBadges.push({
         iconUri: platform.uri,
         color: platform.color,
-        text: parsed.handle,
+        text: item.handle,
       });
     }
   }

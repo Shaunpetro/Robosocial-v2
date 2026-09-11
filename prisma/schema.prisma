@@ -77,6 +77,7 @@ model Company {
   owner       User?    @relation(fields: [ownerId], references: [id])
 
   socialLinks  Json?
+  socialHandles Json?
   contactEmail String?
   contactPhone String?
   brandColors  Json?

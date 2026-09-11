@@ -24,6 +24,7 @@ export async function GET(
     select: {
       website: true,
       socialLinks: true,
+      socialHandles: true,
       contactEmail: true,
       contactPhone: true,
       brandColors: true,
@@ -32,9 +33,7 @@ export async function GET(
     },
   });
 
-  // Compute upcoming holidays for the next 90 days from the selected sets
   const upcomingRaw = getUpcomingSpecialDates(config?.holidaySets || [], 90);
-
   const upcomingHolidays = upcomingRaw.map(({ entry, date }) => ({
     name: entry.name,
     date: date.toLocaleDateString("en-ZA", {
@@ -98,6 +97,7 @@ export async function PUT(
       data: {
         website: brandInfo.website !== undefined ? brandInfo.website : undefined,
         socialLinks: brandInfo.socialLinks !== undefined ? brandInfo.socialLinks : undefined,
+        socialHandles: brandInfo.socialHandles !== undefined ? brandInfo.socialHandles : undefined,
         contactEmail: brandInfo.contactEmail !== undefined ? brandInfo.contactEmail : undefined,
         contactPhone: brandInfo.contactPhone !== undefined ? brandInfo.contactPhone : undefined,
         brandColors: brandInfo.brandColors !== undefined ? brandInfo.brandColors : undefined,

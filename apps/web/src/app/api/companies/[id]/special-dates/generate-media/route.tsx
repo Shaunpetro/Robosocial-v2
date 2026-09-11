@@ -4,6 +4,7 @@ import { checkCompanyAccess } from '@/lib/access';
 import { prisma } from '@/lib/db';
 import { renderBrandedImage } from '@/lib/templates/renderer';
 import { getFontForHoliday } from '@/lib/templates/fonts';
+import { buildHandleMap } from '@/lib/social-handles';
 import { UTApi } from 'uploadthing/server';
 
 const utapi = new UTApi();
@@ -42,18 +43,22 @@ export async function POST(
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      include: { platforms: { where: { isConnected: true } } },
     });
 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    const socialLinks = company.platforms.map(
-      (p) => `${p.type}: @${p.username || p.name}`
+    const handleMap = buildHandleMap(
+      company.socialLinks as Record<string, string> | null,
+      company.socialHandles as Record<string, string> | null
     );
 
-    // WhatsApp from socialLinks data if it was scraped
+    const socialItems = Object.entries(handleMap).map(([platform, handle]) => ({
+      platform,
+      handle,
+    }));
+
     const socialJson = (company.socialLinks as Record<string, string> | null) || {};
     const contactWhatsapp = socialJson.whatsapp
       ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
@@ -67,7 +72,7 @@ export async function POST(
       logoUrl: config.logoMedia.url,
       logoHasTransparency: config.logoHasTransparency ?? true,
       website: company.website || '',
-      socialLinks,
+      socialItems,
       contactEmail: company.contactEmail,
       contactPhone: company.contactPhone,
       contactWhatsapp,

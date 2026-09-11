@@ -15,6 +15,7 @@ export interface FontDefinition {
  *   Tier 1 — Major holidays: dedicated themed display fonts
  *   Tier 2 — Commemorative/emotional days: fonts that convey specific meaning
  *   Tier 3 — Awareness days: clean sans (Inter) or geometric (Poppins)
+ *   Cultural — Interfaith/diaspora celebrations: fonts matched to each tradition's mood
  */
 export const HOLIDAY_FONTS: Record<string, FontDefinition> = {
   // ================================================================
@@ -23,6 +24,7 @@ export const HOLIDAY_FONTS: Record<string, FontDefinition> = {
   "New Year's Day":           { name: 'Dawning of a New Day',    packageName: '@fontsource/dawning-of-a-new-day' },
   "Valentine's Day":          { name: 'Great Vibes',             packageName: '@fontsource/great-vibes' },
   'Good Friday':              { name: 'Dancing Script',          packageName: '@fontsource/dancing-script' },
+  'Easter Sunday':            { name: 'Dancing Script',          packageName: '@fontsource/dancing-script' },
   'Family Day':               { name: 'Dancing Script',          packageName: '@fontsource/dancing-script' },
   "Mother's Day":             { name: 'Great Vibes',             packageName: '@fontsource/great-vibes' },
   "Father's Day":             { name: 'Great Vibes',             packageName: '@fontsource/great-vibes' },
@@ -35,28 +37,28 @@ export const HOLIDAY_FONTS: Record<string, FontDefinition> = {
   // TIER 2 — COMMEMORATIVE / EMOTIONAL DAYS
   // ================================================================
 
-  // -- Dignity & empowerment (Cinzel — engraved Roman capitals) --
+  // Dignity & empowerment (Cinzel)
   'Human Rights Day':          { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
   'Freedom Day':               { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
   "International Women's Day": { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
   "National Women's Day":      { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
 
-  // -- Compassion & reflection (EB Garamond — soft literary serif) --
+  // Compassion & reflection (EB Garamond)
   'World Cancer Day':          { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
   'World Mental Health Day':   { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
   'World AIDS Day':            { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
   'Day of Reconciliation':     { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
 
-  // -- Labour & solidarity (Oswald — bold condensed industrial) --
+  // Labour & solidarity (Oswald)
   "Workers' Day":              { name: 'Oswald',                packageName: '@fontsource/oswald' },
 
-  // -- Youth & forward momentum (Poppins — modern geometric) --
+  // Youth & momentum (Poppins)
   'Youth Day':                 { name: 'Poppins',               packageName: '@fontsource/poppins' },
 
-  // -- Legacy & service (Playfair Display — dignified literary) --
+  // Legacy & service (Playfair Display)
   'Mandela Day':               { name: 'Playfair Display',      packageName: '@fontsource/playfair-display' },
 
-  // -- Culture & heritage (Cormorant Garamond — warm elegant serif) --
+  // Culture & heritage (Cormorant Garamond)
   'Heritage Day':              { name: 'Cormorant Garamond',    packageName: '@fontsource/cormorant-garamond' },
 
   // ================================================================
@@ -68,6 +70,32 @@ export const HOLIDAY_FONTS: Record<string, FontDefinition> = {
   'World Food Day':            { name: 'Inter',                 packageName: '@fontsource/inter' },
   'Earth Day':                 { name: 'Poppins',               packageName: '@fontsource/poppins' },
   'Spring Day':                { name: 'Poppins',               packageName: '@fontsource/poppins' },
+
+  // ================================================================
+  // CULTURAL & INTERFAITH CELEBRATIONS
+  // ================================================================
+
+  // Chinese / East Asian — clean geometric, works with red/gold accents
+  'Chinese New Year':          { name: 'Poppins',               packageName: '@fontsource/poppins' },
+  'Mid-Autumn Festival':       { name: 'Cormorant Garamond',    packageName: '@fontsource/cormorant-garamond' },
+
+  // Hindu — warm and celebratory
+  'Diwali':                    { name: 'Cormorant Garamond',    packageName: '@fontsource/cormorant-garamond' },
+  'Holi':                      { name: 'Dancing Script',        packageName: '@fontsource/dancing-script' },
+  'Vaisakhi':                  { name: 'Oswald',                packageName: '@fontsource/oswald' },
+
+  // Islamic — dignified and reflective
+  'Ramadan (Begins)':          { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
+  'Eid al-Fitr':               { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
+  'Eid al-Adha':               { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
+
+  // Jewish — reflective and dignified
+  'Rosh Hashanah':             { name: 'Cinzel',                packageName: '@fontsource/cinzel' },
+  'Yom Kippur':                { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
+  'Hanukkah':                  { name: 'Oswald',                packageName: '@fontsource/oswald' },
+
+  // Buddhist — peaceful reflection
+  'Vesak':                     { name: 'EB Garamond',           packageName: '@fontsource/eb-garamond' },
 };
 
 const DEFAULT_FONT: FontDefinition = {
