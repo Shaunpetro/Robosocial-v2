@@ -28,6 +28,65 @@ async function isPrivateIp(hostname: string): Promise<boolean> {
   }
 }
 
+function cleanPhone(raw: string): string {
+  return raw.trim().replace(/[^\d+]/g, "");
+}
+
+function isValidPhone(cleaned: string): boolean {
+  const digits = cleaned.replace(/^\+/, "");
+  if (digits.length < 7 || digits.length > 15) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  if (/^(0123456789|1234567890|9876543210)/.test(digits)) return false;
+  if (digits.length === 10 && digits.startsWith("1")) return false;
+  if (digits.length === 13 && digits.startsWith("1")) return false;
+  if (/^0\d{9}$/.test(digits)) return true;
+  if (/^27\d{9}$/.test(digits)) return true;
+  if (digits.length >= 9 && digits.length <= 15) return true;
+  return false;
+}
+
+function extractPhone(html: string): string | null {
+  const telPattern = /href=["']tel:([^"']+)["']/gi;
+  for (const match of html.matchAll(telPattern)) {
+    const cleaned = cleanPhone(match[1]);
+    if (isValidPhone(cleaned)) return cleaned;
+  }
+
+  const ldPattern = /"telephone"\s*:\s*"([^"]+)"/gi;
+  for (const match of html.matchAll(ldPattern)) {
+    const cleaned = cleanPhone(match[1]);
+    if (isValidPhone(cleaned)) return cleaned;
+  }
+
+  const contextPattern =
+    /(?:tel|phone|call|contact|mobile|cell)[^a-z0-9]{0,30}((?:\+?\d[\d\s().-]{6,}\d))/gi;
+  for (const match of html.matchAll(contextPattern)) {
+    const cleaned = cleanPhone(match[1]);
+    if (isValidPhone(cleaned)) return cleaned;
+  }
+
+  const saPattern = /(?:\+27[\s-]?|0)(\d{2})[\s-]?(\d{3})[\s-]?(\d{4})/g;
+  for (const match of html.matchAll(saPattern)) {
+    const cleaned = cleanPhone(match[0]);
+    if (isValidPhone(cleaned)) return cleaned;
+  }
+
+  return null;
+}
+
+function extractWhatsapp(html: string): string | null {
+  const patterns = [
+    /https?:\/\/(?:www\.)?wa\.me\/(\d+)/i,
+    /https?:\/\/(?:api\.)?whatsapp\.com\/send\?phone=(\d+)/i,
+    /https?:\/\/(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -88,15 +147,18 @@ export async function POST(
 
     const html = await response.text();
 
+    // ---- Social links (extended) ----
     const socialLinks: Record<string, string> = {};
     const socialPatterns: Record<string, RegExp> = {
-      linkedin: /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[^"'<>\s]+/gi,
-      facebook: /https?:\/\/(?:www\.)?facebook\.com\/[^"'<>\s]+/gi,
-      twitter: /https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^"'<>\s]+/gi,
+      linkedin:  /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[^"'<>\s]+/gi,
+      facebook:  /https?:\/\/(?:www\.)?facebook\.com\/[^"'<>\s]+/gi,
+      twitter:   /https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^"'<>\s]+/gi,
       instagram: /https?:\/\/(?:www\.)?instagram\.com\/[^"'<>\s]+/gi,
-      youtube: /https?:\/\/(?:www\.)?youtube\.com\/(?:channel|user|c)\/[^"'<>\s]+/gi,
+      youtube:   /https?:\/\/(?:www\.)?youtube\.com\/(?:channel|user|c|@)\/[^"'<>\s]+/gi,
+      tiktok:    /https?:\/\/(?:www\.)?tiktok\.com\/@[^"'<>\s]+/gi,
+      pinterest: /https?:\/\/(?:www\.)?pinterest\.(?:com|co\.za)\/[^"'<>\s]+/gi,
+      threads:   /https?:\/\/(?:www\.)?threads\.net\/@[^"'<>\s]+/gi,
     };
-
     for (const [platform, pattern] of Object.entries(socialPatterns)) {
       const matches = html.match(pattern);
       if (matches && matches.length > 0) {
@@ -104,16 +166,17 @@ export async function POST(
       }
     }
 
+    // ---- Email ----
     const emailMatch = html.match(
       /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
     );
     const contactEmail = emailMatch ? emailMatch[0] : null;
 
-    const phoneMatch = html.match(
-      /(?:\+?\d{1,3}[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}/
-    );
-    const contactPhone = phoneMatch ? phoneMatch[0] : null;
+    // ---- Phone & WhatsApp ----
+    const contactPhone = extractPhone(html);
+    const contactWhatsapp = extractWhatsapp(html);
 
+    // ---- Brand color ----
     const themeColorMatch = html.match(
       /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i
     );
@@ -129,7 +192,7 @@ export async function POST(
       where: { id: companyId },
       data: {
         website: normalizedUrl,
-        socialLinks,
+        socialLinks: { ...socialLinks, ...(contactWhatsapp ? { whatsapp: `https://wa.me/${contactWhatsapp}` } : {}) },
         contactEmail,
         contactPhone,
         brandColors,
@@ -142,6 +205,7 @@ export async function POST(
       socialLinks,
       contactEmail,
       contactPhone,
+      contactWhatsapp,
       brandColors,
     });
   } catch (error) {

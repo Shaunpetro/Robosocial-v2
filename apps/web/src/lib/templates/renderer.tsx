@@ -2,13 +2,19 @@
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { TEMPLATES, TemplateDefinition } from './index';
+import { PLATFORMS, CONTACT, parseHandleEntry } from './icons';
 
 export interface BrandedImageRecipe {
   templateId: string;
   companyName: string;
   logoUrl: string;
+  logoHasTransparency?: boolean;
   website?: string;
   socialLinks?: string[];
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  contactWhatsapp?: string | null;
+  brandColors?: Record<string, string>;
   logoPosition?: 'top' | 'center' | 'bottom';
   showWebsite?: boolean;
   showHandles?: boolean;
@@ -23,12 +29,81 @@ function getTemplate(templateId: string): TemplateDefinition {
   return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
 }
 
+function LogoElement({
+  logoUrl,
+  hasTransparency,
+  size = 100,
+}: {
+  logoUrl: string;
+  hasTransparency: boolean;
+  size?: number;
+}) {
+  // eslint-disable-next-line @next/next/no-img-element
+  const img = (
+    <img
+      src={logoUrl}
+      alt="Logo"
+      style={{ width: size, height: size, objectFit: 'contain' }}
+    />
+  );
+
+  if (hasTransparency) return img;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size + 32,
+        height: size + 32,
+        background: '#FFFFFF',
+        borderRadius: 24,
+        padding: 16,
+      }}
+    >
+      {img}
+    </div>
+  );
+}
+
+interface Badge {
+  iconUri: string;
+  color: string;
+  text: string;
+}
+
+function ContactBadge({ badge }: { badge: Badge }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: badge.color,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={badge.iconUri} alt="" style={{ width: 15, height: 15 }} />
+      </div>
+      <span style={{ fontSize: 17, opacity: 0.9 }}>{badge.text}</span>
+    </div>
+  );
+}
+
 export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Buffer> {
   const template = getTemplate(recipe.templateId);
   const showWebsite = recipe.showWebsite ?? template.showWebsite;
   const showHandles = recipe.showHandles ?? template.showHandles;
   const logoPosition = recipe.logoPosition || 'top';
   const hasHoliday = !!recipe.holidayName;
+  const hasTransparency = recipe.logoHasTransparency ?? true;
+
+  const accentColor = recipe.brandColors?.primary || template.textColor;
 
   const backgroundStyle: React.CSSProperties =
     template.background.type === 'gradient'
@@ -41,30 +116,18 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           color: template.textColor,
         };
 
-  // -------- Logo block --------
   const LogoBlock = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-      {recipe.logoUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={recipe.logoUrl}
-          alt="Logo"
-          style={{ width: 100, height: 100, objectFit: 'contain' }}
-        />
-      )}
-      <div
-        style={{
-          fontSize: 34,
-          fontWeight: 'bold',
-          letterSpacing: 1,
-        }}
-      >
-        {recipe.companyName}
+      <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={100} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ width: 56, height: 4, background: accentColor, borderRadius: 2 }} />
+        <div style={{ fontSize: 34, fontWeight: 'bold', letterSpacing: 1 }}>
+          {recipe.companyName}
+        </div>
       </div>
     </div>
   );
 
-  // -------- Holiday block --------
   const HolidayBlock = hasHoliday ? (
     <div
       style={{
@@ -97,44 +160,75 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     <div style={{ flex: 1 }} />
   );
 
-  // -------- Footer block --------
-  const FooterBlock = (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 12,
-      }}
-    >
-      {showWebsite && recipe.website && (
-        <div style={{ fontSize: 22, opacity: 0.9 }}>{recipe.website}</div>
-      )}
-      {showHandles && recipe.socialLinks && recipe.socialLinks.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 20,
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            maxWidth: 1000,
-          }}
-        >
-          {recipe.socialLinks.map((handle, i) => (
-            <span key={i} style={{ fontSize: 16, opacity: 0.75 }}>
-              {handle}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // ---- Build footer badges ----
+  const contactBadges: Badge[] = [];
+  if (showWebsite && recipe.website) {
+    contactBadges.push({
+      iconUri: CONTACT.website.uri,
+      color: CONTACT.website.color,
+      text: recipe.website.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+    });
+  }
+  if (recipe.contactEmail) {
+    contactBadges.push({
+      iconUri: CONTACT.email.uri,
+      color: CONTACT.email.color,
+      text: recipe.contactEmail,
+    });
+  }
+  if (recipe.contactPhone) {
+    contactBadges.push({
+      iconUri: CONTACT.phone.uri,
+      color: CONTACT.phone.color,
+      text: recipe.contactPhone,
+    });
+  }
+  if (recipe.contactWhatsapp) {
+    contactBadges.push({
+      iconUri: CONTACT.whatsapp.uri,
+      color: CONTACT.whatsapp.color,
+      text: recipe.contactWhatsapp,
+    });
+  }
 
-  // -------- Compose layout by logoPosition --------
+  const socialBadges: Badge[] = [];
+  if (showHandles && recipe.socialLinks) {
+    for (const entry of recipe.socialLinks) {
+      const parsed = parseHandleEntry(entry);
+      if (!parsed) continue;
+      const platform = PLATFORMS[parsed.platform];
+      if (!platform) continue;
+      socialBadges.push({
+        iconUri: platform.uri,
+        color: platform.color,
+        text: parsed.handle,
+      });
+    }
+  }
+
+  const allBadges = [...contactBadges, ...socialBadges];
+
+  const FooterBlock =
+    allBadges.length > 0 ? (
+      <div
+        style={{
+          display: 'flex',
+          gap: 22,
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'center',
+          maxWidth: 1080,
+        }}
+      >
+        {allBadges.map((badge, i) => (
+          <ContactBadge key={i} badge={badge} />
+        ))}
+      </div>
+    ) : null;
+
   let children: React.ReactNode;
 
   if (logoPosition === 'center') {
-    // Centered hero layout (best without holiday: logo becomes the star)
     children = (
       <div
         style={{
@@ -157,14 +251,8 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             gap: 30,
           }}
         >
-          {recipe.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={recipe.logoUrl}
-              alt="Logo"
-              style={{ width: 200, height: 200, objectFit: 'contain' }}
-            />
-          )}
+          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={180} />
+          <div style={{ width: 80, height: 4, background: accentColor, borderRadius: 2 }} />
           <div style={{ fontSize: 42, fontWeight: 'bold' }}>{recipe.companyName}</div>
           {hasHoliday && (
             <div
@@ -202,7 +290,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 16,
+            gap: 24,
           }}
         >
           {LogoBlock}
@@ -211,7 +299,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       </div>
     );
   } else {
-    // Default: top
     children = (
       <div
         style={{

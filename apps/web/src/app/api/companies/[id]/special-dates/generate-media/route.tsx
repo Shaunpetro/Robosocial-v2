@@ -53,14 +53,25 @@ export async function POST(
       (p) => `${p.type}: @${p.username || p.name}`
     );
 
+    // WhatsApp from socialLinks data if it was scraped
+    const socialJson = (company.socialLinks as Record<string, string> | null) || {};
+    const contactWhatsapp = socialJson.whatsapp
+      ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
+      : null;
+
     const { fontData, fontName } = getFontForHoliday(holidayName);
 
     const imageBuffer = await renderBrandedImage({
       templateId: config.templateId || 'clean-corporate',
       companyName: company.name,
       logoUrl: config.logoMedia.url,
+      logoHasTransparency: config.logoHasTransparency ?? true,
       website: company.website || '',
       socialLinks,
+      contactEmail: company.contactEmail,
+      contactPhone: company.contactPhone,
+      contactWhatsapp,
+      brandColors: (company.brandColors as Record<string, string>) || {},
       logoPosition: (config.logoPosition as 'top' | 'center' | 'bottom') || 'top',
       showWebsite: config.showWebsite,
       showHandles: config.showHandles,
@@ -71,7 +82,6 @@ export async function POST(
       fontName,
     });
 
-    // Filename reflects whether this is the base image or a holiday-specific one
     const baseFilename = holidayName
       ? `special-dates-${slugify(holidayName)}-${companyId}.png`
       : `special-dates-base-${companyId}.png`;
@@ -86,12 +96,10 @@ export async function POST(
 
     const imageUrl = uploadResult.data.ufsUrl || uploadResult.data.url;
 
-    // Determine tag(s) for the media record
     const tags = holidayName
       ? ['special-dates', 'holiday', `holiday:${slugify(holidayName)}`]
       : ['special-dates', 'base'];
 
-    // Find existing record for this specific image
     const existing = await prisma.media.findFirst({
       where: {
         companyId,
@@ -129,7 +137,6 @@ export async function POST(
       mediaId = media.id;
     }
 
-    // Only update config.generatedMediaId for the base image (no holiday)
     if (!holidayName) {
       await prisma.companySpecialDatesConfig.update({
         where: { companyId },
