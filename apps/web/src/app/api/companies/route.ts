@@ -1,10 +1,34 @@
 ﻿// apps/web/src/app/api/companies/route.ts
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
   try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        memberships: { select: { companyId: true } },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Global admins see every company; regular users see only their memberships
+    const whereClause =
+      user.role === "ADMIN"
+        ? {}
+        : { id: { in: user.memberships.map((m) => m.companyId) } };
+
     const companies = await prisma.company.findMany({
+      where: whereClause,
       orderBy: { createdAt: "desc" },
       include: {
         platforms: true,
@@ -30,6 +54,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const { name, website, industry, description } = body;
 
@@ -40,20 +77,45 @@ export async function POST(request: Request) {
       );
     }
 
-    const company = await prisma.company.create({
-      data: {
-        name: name.trim(),
-        website: website?.trim() || null,
-        industry: industry?.trim() || null,
-        description: description?.trim() || null,
-        ownerId: null, // will be linked to the loggedâ€‘in user later
-      },
+    // Create company + membership atomically so the owner never loses access
+    const company = await prisma.$transaction(async (tx) => {
+      const created = await tx.company.create({
+        data: {
+          name: name.trim(),
+          website: website?.trim() || null,
+          industry: industry?.trim() || null,
+          description: description?.trim() || null,
+          ownerId: user.id,
+        },
+      });
+
+      await tx.companyMember.create({
+        data: {
+          companyId: created.id,
+          userId: user.id,
+          role: "ADMIN",
+        },
+      });
+
+      return created;
+    });
+
+    // Return with includes for the UI
+    const fullCompany = await prisma.company.findUnique({
+      where: { id: company.id },
       include: {
         platforms: true,
+        contentSettings: true,
+        _count: {
+          select: {
+            platforms: true,
+            generatedPosts: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json(company, { status: 201 });
+    return NextResponse.json(fullCompany, { status: 201 });
   } catch (error) {
     console.error("Error creating company:", error);
     return NextResponse.json(

@@ -26,6 +26,32 @@ const CONTACT_PATHS = [
   "/about-us",
 ];
 
+/**
+ * Strips blocks that typically contain developer credits, copyright notices,
+ * and third-party agency contact info. Used before phone/handle extraction so
+ * we don't pick up the site developer's phone number.
+ */
+function stripFooterAndCredits(html: string): string {
+  let s = html;
+
+  // 1. <footer>...</footer>
+  s = s.replace(/<footer[\s\S]*?<\/footer>/gi, " ");
+
+  // 2. Anything with class/id containing common credit keywords
+  s = s.replace(
+    /<(div|section|aside|p|span)[^>]+(?:class|id)=["'][^"']*(?:footer|copyright|credits|site-by|developed|powered-by|designed-by|web-design|site-credit)[^"']*["'][^>]*>[\s\S]*?<\/\1>/gi,
+    " "
+  );
+
+  // 3. Anchors whose visible text mentions "developed", "designed", "site by"
+  s = s.replace(
+    /<a[^>]*>(?:(?!<\/a>)[\s\S])*?(?:developed|designed|powered|built)\s+(?:by|with)[\s\S]*?<\/a>/gi,
+    " "
+  );
+
+  return s;
+}
+
 async function isPrivateIp(hostname: string): Promise<boolean> {
   try {
     const addresses = await lookup(hostname, { all: true });
@@ -51,37 +77,22 @@ function cleanPhone(raw: string): string {
   return raw.trim().replace(/[^\d+]/g, "");
 }
 
-/**
- * South African phone validation.
- * Accepts: 0XXXXXXXXX (10 digits) or +27XXXXXXXXX / 27XXXXXXXXX (11 digits total).
- * Rejects all-zeros, sequential, and JS asset IDs (10-digit starting with 1 or 2).
- */
 function isValidSaPhone(cleaned: string): boolean {
   const digits = cleaned.replace(/^\+/, "");
-
-  // Reject obvious non-phones
   if (/^(\d)\1+$/.test(digits)) return false;
   if (/^(0123456789|1234567890|9876543210)/.test(digits)) return false;
-
-  // SA domestic: 0 + 9 digits
   if (/^0\d{9}$/.test(digits)) return true;
-
-  // SA international: 27 + 9 digits
   if (/^27\d{9}$/.test(digits)) return true;
-
   return false;
 }
 
 function extractPhonesFromHtml(html: string): string[] {
   const phones: string[] = [];
 
-  // 1. JSON-LD "telephone"
   for (const m of html.matchAll(/"telephone"\s*:\s*"([^"]+)"/gi)) {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
   }
-
-  // 2. Microdata itemprop="telephone" (content or inner text)
   for (const m of html.matchAll(/<[^>]+itemprop=["']telephone["'][^>]*content=["']([^"']+)["']/gi)) {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
@@ -90,14 +101,10 @@ function extractPhonesFromHtml(html: string): string[] {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
   }
-
-  // 3. tel: links
   for (const m of html.matchAll(/href=["']tel:([^"']+)["']/gi)) {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
   }
-
-  // 4. WhatsApp links
   for (const m of html.matchAll(/(?:wa\.me|whatsapp\.com\/send\?phone=)\/?(\d{10,15})/gi)) {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
@@ -107,23 +114,16 @@ function extractPhonesFromHtml(html: string): string[] {
 }
 
 function extractPhonesFromBodyText(html: string): string[] {
-  // Strip script/style/nav/footer/header to avoid developer credits and menus
   const bodyOnly = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
-    .replace(/<header[\s\S]*?<\/header>/gi, ' ')
-    .replace(/<footer[\s\S]*?<\/footer>/gi, ' ');
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
 
   const phones: string[] = [];
-
-  // Context keyword near number
   const ctx = /(?:tel|phone|call|contact|mobile|cell)[^a-z0-9]{0,40}((?:\+?27|0)[\d\s().-]{8,}\d)/gi;
   for (const m of bodyOnly.matchAll(ctx)) {
     const c = cleanPhone(m[1]);
     if (isValidSaPhone(c)) phones.push(c);
   }
-
   return phones;
 }
 
@@ -184,12 +184,12 @@ export async function POST(
   }
 
   try {
-    const homepageHtml = await fetchHtml(normalizedUrl, 8000);
-    if (!homepageHtml) {
+    const homepageRaw = await fetchHtml(normalizedUrl, 8000);
+    if (!homepageRaw) {
       return NextResponse.json({ error: "Failed to fetch website" }, { status: 502 });
     }
 
-    // ---- Fetch contact pages (sequential-ish, we want the first hit) ----
+    // ---- Fetch contact pages ----
     const origin = parsedUrl.origin;
     const contactPages: { url: string; html: string }[] = [];
     const contactResults = await Promise.allSettled(
@@ -199,56 +199,44 @@ export async function POST(
       })
     );
     for (const r of contactResults) {
-      if (r.status === "fulfilled" && r.value) {
-        contactPages.push(r.value);
-      }
+      if (r.status === "fulfilled" && r.value) contactPages.push(r.value);
     }
 
-    // ---- Phone: contact pages first, then homepage ----
+    // ---- Build stripped versions (footer/credits removed) ----
+    const homepageStripped = stripFooterAndCredits(homepageRaw);
+    const contactStripped = contactPages.map((p) => ({
+      url: p.url,
+      html: stripFooterAndCredits(p.html),
+    }));
+
+    // ---- Phone: contact pages first, then homepage — all from stripped HTML ----
     let contactPhone: string | null = null;
 
-    // 1. Try JSON-LD/microdata/tel from contact pages
-    for (const page of contactPages) {
+    for (const page of contactStripped) {
       const hits = extractPhonesFromHtml(page.html);
-      if (hits.length > 0) {
-        contactPhone = hits[0];
-        break;
-      }
+      if (hits.length > 0) { contactPhone = hits[0]; break; }
     }
-
-    // 2. Try contextual text from contact pages
     if (!contactPhone) {
-      for (const page of contactPages) {
+      for (const page of contactStripped) {
         const hits = extractPhonesFromBodyText(page.html);
-        if (hits.length > 0) {
-          contactPhone = hits[0];
-          break;
-        }
+        if (hits.length > 0) { contactPhone = hits[0]; break; }
       }
     }
-
-    // 3. Fall back to homepage structured data only (no footer scraping)
     if (!contactPhone) {
-      const homeHits = extractPhonesFromHtml(homepageHtml);
-      if (homeHits.length > 0) contactPhone = homeHits[0];
+      const hits = extractPhonesFromHtml(homepageStripped);
+      if (hits.length > 0) contactPhone = hits[0];
+    }
+    if (!contactPhone) {
+      const hits = extractPhonesFromBodyText(homepageStripped);
+      if (hits.length > 0) contactPhone = hits[0];
     }
 
-    // 4. Last resort: homepage body text (which strips footer)
-    if (!contactPhone) {
-      const homeTextHits = extractPhonesFromBodyText(homepageHtml);
-      if (homeTextHits.length > 0) contactPhone = homeTextHits[0];
-    }
+    // ---- Social: strip footer first so we don't pick up dev credits ----
+    const allHtmlStripped = [homepageStripped, ...contactStripped.map((p) => p.html)].join("\n");
 
-    // ---- Social URLs & handles ----
-    const allHtml = [homepageHtml, ...contactPages.map((p) => p.html)].join('\n');
+    const sameAsUrls = extractSameAsFromJsonLd(allHtmlStripped);
+    const microdataUrls = extractSameAsFromMicrodata(allHtmlStripped);
 
-    // 1. JSON-LD sameAs
-    const sameAsUrls = extractSameAsFromJsonLd(allHtml);
-
-    // 2. Microdata sameAs
-    const microdataUrls = extractSameAsFromMicrodata(allHtml);
-
-    // 3. URL pattern scanning
     const urlPatterns: RegExp[] = [
       /https?:\/\/(?:www\.)?facebook\.com\/[^"'\s<>]+/gi,
       /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in|school)\/[^"'\s<>]+/gi,
@@ -262,9 +250,9 @@ export async function POST(
 
     const urlCandidates: string[] = [...sameAsUrls, ...microdataUrls];
     for (const pattern of urlPatterns) {
-      const matches = allHtml.match(pattern);
+      const matches = allHtmlStripped.match(pattern);
       if (matches) {
-        for (const m of matches) urlCandidates.push(m.replace(/[.,;!?]+$/, ''));
+        for (const m of matches) urlCandidates.push(m.replace(/[.,;!?]+$/, ""));
       }
     }
 
@@ -272,8 +260,7 @@ export async function POST(
     const socialHandles: Record<string, string> = {};
 
     for (const url of urlCandidates) {
-      if (!url) continue;
-      if (!/^https?:\/\//.test(url)) continue;
+      if (!url || !/^https?:\/\//.test(url)) continue;
       const platform = detectPlatformFromUrl(url);
       if (!platform) continue;
       if (!socialLinks[platform]) {
@@ -283,23 +270,22 @@ export async function POST(
       }
     }
 
-    // 4. Text-based @handle detection (fills gaps)
-    const textHandles = extractHandlesFromText(allHtml);
+    const textHandles = extractHandlesFromText(allHtmlStripped);
     for (const [platform, handle] of Object.entries(textHandles)) {
       if (!socialHandles[platform]) socialHandles[platform] = handle;
     }
 
     // ---- Email ----
-    const emailMatch = allHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const emailMatch = allHtmlStripped.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
     const contactEmail = emailMatch ? emailMatch[0] : null;
 
     // ---- WhatsApp ----
     let contactWhatsapp: string | null = null;
-    const waMatch = allHtml.match(/(?:wa\.me|whatsapp\.com\/send\?phone=)\/?(\d{10,15})/i);
+    const waMatch = allHtmlStripped.match(/(?:wa\.me|whatsapp\.com\/send\?phone=)\/?(\d{10,15})/i);
     if (waMatch) contactWhatsapp = waMatch[1];
 
-    // ---- Brand color ----
-    const themeColorMatch = homepageHtml.match(
+    // ---- Brand color (from raw homepage — meta tag location doesn't matter) ----
+    const themeColorMatch = homepageRaw.match(
       /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i
     );
     const primaryColor = themeColorMatch ? themeColorMatch[1] : null;

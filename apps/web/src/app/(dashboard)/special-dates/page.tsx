@@ -13,7 +13,6 @@ import {
   Wand2,
   AlertCircle,
   Globe,
-  Mail,
   Share2,
   Palette,
   Building2,
@@ -152,13 +151,13 @@ export default function SpecialDatesHubPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
 
-  // --- Live ref for autosave (fixes stale closure) ---
+  // Live ref for autosave
   const stateRef = useRef({ config, brandInfo, selectedCompanyId });
   useEffect(() => {
     stateRef.current = { config, brandInfo, selectedCompanyId };
   }, [config, brandInfo, selectedCompanyId]);
 
-  // --- Fetch companies ---
+  // Fetch companies
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
@@ -179,7 +178,7 @@ export default function SpecialDatesHubPage() {
     fetchCompanies();
   }, []);
 
-  // --- Fetch config on company change ---
+  // Fetch config on company change
   useEffect(() => {
     if (!selectedCompanyId) return;
     setLoadingConfig(true);
@@ -221,7 +220,7 @@ export default function SpecialDatesHubPage() {
     fetchConfig();
   }, [selectedCompanyId]);
 
-  // --- Autosave (uses live ref, no stale closure) ---
+  // Autosave
   const performSave = useCallback(async () => {
     const { config: c, brandInfo: b, selectedCompanyId: cid } = stateRef.current;
     if (!cid) return;
@@ -261,12 +260,18 @@ export default function SpecialDatesHubPage() {
     }, 700);
   }, [performSave]);
 
-  // Any config or brandInfo change triggers autosave
   useEffect(() => {
     if (isInitialLoadRef.current) return;
     scheduleAutoSave();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.templateId, config.logoPosition, config.showWebsite, config.showHandles, config.holidaySets.join(','), config.excludedHolidays.join(',')]);
+  }, [
+    config.templateId,
+    config.logoPosition,
+    config.showWebsite,
+    config.showHandles,
+    config.holidaySets.join(","),
+    config.excludedHolidays.join(","),
+  ]);
 
   const updateConfig = (updates: Partial<Config>) => {
     setConfig((prev) => ({ ...prev, ...updates }));
@@ -283,7 +288,6 @@ export default function SpecialDatesHubPage() {
     router.push(`/special-dates?companyId=${id}`, { scroll: false });
   };
 
-  // --- Layer 1: calendar sets ---
   const toggleSet = (setId: string) => {
     const next = config.holidaySets.includes(setId)
       ? config.holidaySets.filter((s) => s !== setId)
@@ -291,14 +295,12 @@ export default function SpecialDatesHubPage() {
     updateConfig({ holidaySets: next });
   };
 
-  // --- Layer 2: categories ---
   const toggleCategory = (catId: string) => {
     setEnabledCategories((prev) =>
       prev.includes(catId) ? prev.filter((c) => c !== catId) : [...prev, catId]
     );
   };
 
-  // --- Layer 3: individual holiday exclusion ---
   const toggleHoliday = (holidayName: string) => {
     const isExcluded = config.excludedHolidays.includes(holidayName);
     updateConfig({
@@ -308,7 +310,6 @@ export default function SpecialDatesHubPage() {
     });
   };
 
-  // --- Filtered holidays for the picker ---
   const filteredHolidays = useMemo(() => {
     return allHolidays.filter((h) =>
       h.categories.some((c) => enabledCategories.includes(c))
@@ -322,14 +323,13 @@ export default function SpecialDatesHubPage() {
   const groupedByMonth = useMemo(() => {
     const groups: Record<string, UpcomingHoliday[]> = {};
     for (const h of filteredHolidays) {
-      const monthKey = h.date.split(' ').slice(1).join(' ');
+      const monthKey = h.date.split(" ").slice(1).join(" ");
       if (!groups[monthKey]) groups[monthKey] = [];
       groups[monthKey].push(h);
     }
     return groups;
   }, [filteredHolidays]);
 
-  // --- Handlers ---
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -448,13 +448,10 @@ export default function SpecialDatesHubPage() {
     }
   };
 
+  // FIX: store empty string instead of deleting the key
   const handleHandleChange = (platform: string, value: string) => {
     const nextHandles = { ...(brandInfo.socialHandles || {}) };
-    if (value.trim()) {
-      nextHandles[platform] = value.trim();
-    } else {
-      delete nextHandles[platform];
-    }
+    nextHandles[platform] = value.trim();
     updateBrandInfo({ socialHandles: nextHandles });
   };
 
@@ -485,10 +482,11 @@ export default function SpecialDatesHubPage() {
   }
 
   const detectedPlatforms = ALL_PLATFORMS.filter(
-    (p) => (brandInfo.socialLinks && brandInfo.socialLinks[p]) || (brandInfo.socialHandles && brandInfo.socialHandles[p])
+    (p) =>
+      (brandInfo.socialLinks && brandInfo.socialLinks[p]) ||
+      (brandInfo.socialHandles && brandInfo.socialHandles[p] !== undefined)
   );
 
-  // Always show all platforms in edit mode so users can add missing ones
   const visiblePlatforms = editingHandles ? ALL_PLATFORMS : detectedPlatforms;
 
   return (
@@ -550,7 +548,7 @@ export default function SpecialDatesHubPage() {
         </div>
       ) : (
         <>
-          {/* ====================== LAYER 1: Calendars ====================== */}
+          {/* Layer 1 */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <div className="flex items-center gap-2 mb-1">
               <Layers className="h-5 w-5 text-brand-500" />
@@ -594,7 +592,7 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* ====================== LAYER 2: Categories ====================== */}
+          {/* Layer 2 */}
           {config.holidaySets.length > 0 && (
             <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
               <div className="flex items-center gap-2 mb-1">
@@ -626,7 +624,7 @@ export default function SpecialDatesHubPage() {
             </div>
           )}
 
-          {/* ====================== LAYER 3: Individual holidays ====================== */}
+          {/* Layer 3 */}
           {config.holidaySets.length > 0 && (
             <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
               <div className="flex items-center gap-2 mb-1">
@@ -639,7 +637,6 @@ export default function SpecialDatesHubPage() {
                 Toggle off any dates you don&apos;t want. Toggle back on to include them again.
               </p>
 
-              {/* Quick Picks */}
               {quickPicks.length > 0 && (
                 <div className="mb-6">
                   <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)] mb-2">
@@ -672,13 +669,17 @@ export default function SpecialDatesHubPage() {
                 </div>
               )}
 
-              {/* Full list toggle */}
               <button
                 onClick={() => setShowAllHolidays(!showAllHolidays)}
                 className="text-sm text-brand-600 dark:text-brand-400 flex items-center gap-1 hover:underline"
               >
                 {showAllHolidays ? "Hide" : "Show"} all upcoming dates
-                <ChevronRight className={cn("h-4 w-4 transition-transform", showAllHolidays && "rotate-90")} />
+                <ChevronRight
+                  className={cn(
+                    "h-4 w-4 transition-transform",
+                    showAllHolidays && "rotate-90"
+                  )}
+                />
               </button>
 
               {showAllHolidays && (
@@ -713,17 +714,23 @@ export default function SpecialDatesHubPage() {
                                       : "border-[var(--border-default)]"
                                   )}
                                 >
-                                  {!isExcluded && <CheckCircle2 className="h-4 w-4 text-white" />}
+                                  {!isExcluded && (
+                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                  )}
                                 </div>
                               </button>
                               <button
-                                onClick={() => setSelectedHoliday(isSelected ? null : h)}
+                                onClick={() =>
+                                  setSelectedHoliday(isSelected ? null : h)
+                                }
                                 className="flex-1 text-left"
                               >
                                 <span
                                   className={cn(
                                     "text-sm",
-                                    isExcluded ? "text-[var(--text-tertiary)] line-through" : "text-[var(--text-primary)]"
+                                    isExcluded
+                                      ? "text-[var(--text-tertiary)] line-through"
+                                      : "text-[var(--text-primary)]"
                                   )}
                                 >
                                   {h.name}
@@ -748,14 +755,13 @@ export default function SpecialDatesHubPage() {
             </div>
           )}
 
-          {/* ====================== Brand Kit ====================== */}
+          {/* Brand Kit */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
               <Palette className="h-5 w-5" />
               Brand Kit
             </h2>
 
-            {/* Logo */}
             <div className="mb-6">
               <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Company Logo</p>
               <div className="flex items-start gap-4">
@@ -810,15 +816,13 @@ export default function SpecialDatesHubPage() {
               </div>
             </div>
 
-            {/* Website */}
             <div className="mb-6">
               <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Website</p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
                   value={brandInfo.website || ""}
-                  onChange={(e) => setBrandInfo((prev) => ({ ...prev, website: e.target.value }))}
-                  onBlur={scheduleAutoSave}
+                  onChange={(e) => updateBrandInfo({ website: e.target.value })}
                   placeholder="https://yourcompany.com"
                   className="flex-1 px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
                 />
@@ -827,7 +831,11 @@ export default function SpecialDatesHubPage() {
                   disabled={scraping}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50 whitespace-nowrap"
                 >
-                  {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                  {scraping ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Globe className="h-4 w-4" />
+                  )}
                   {scraping ? scrapeStep || "Scraping..." : "Scrape"}
                 </button>
               </div>
@@ -839,7 +847,7 @@ export default function SpecialDatesHubPage() {
               )}
             </div>
 
-            {/* Contact */}
+            {/* Contact — using updateBrandInfo directly so autosave fires */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div>
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
@@ -847,9 +855,8 @@ export default function SpecialDatesHubPage() {
                 </label>
                 <input
                   type="email"
-                  value={brandInfo.contactEmail || ""}
-                  onChange={(e) => setBrandInfo((prev) => ({ ...prev, contactEmail: e.target.value }))}
-                  onBlur={scheduleAutoSave}
+                  value={brandInfo.contactEmail ?? ""}
+                  onChange={(e) => updateBrandInfo({ contactEmail: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
                 />
               </div>
@@ -859,9 +866,8 @@ export default function SpecialDatesHubPage() {
                 </label>
                 <input
                   type="tel"
-                  value={brandInfo.contactPhone || ""}
-                  onChange={(e) => setBrandInfo((prev) => ({ ...prev, contactPhone: e.target.value }))}
-                  onBlur={scheduleAutoSave}
+                  value={brandInfo.contactPhone ?? ""}
+                  onChange={(e) => updateBrandInfo({ contactPhone: e.target.value })}
                   placeholder="012 345 6789"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
                 />
@@ -872,9 +878,8 @@ export default function SpecialDatesHubPage() {
                 </label>
                 <input
                   type="tel"
-                  value={brandInfo.contactWhatsapp || ""}
-                  onChange={(e) => setBrandInfo((prev) => ({ ...prev, contactWhatsapp: e.target.value }))}
-                  onBlur={scheduleAutoSave}
+                  value={brandInfo.contactWhatsapp ?? ""}
+                  onChange={(e) => updateBrandInfo({ contactWhatsapp: e.target.value })}
                   placeholder="012 345 6789"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
                 />
@@ -903,10 +908,13 @@ export default function SpecialDatesHubPage() {
               ) : (
                 <div className="space-y-2">
                   {visiblePlatforms.map((platform) => {
-                    const handle = (brandInfo.socialHandles || {})[platform] || "";
+                    const handle = (brandInfo.socialHandles || {})[platform] ?? "";
                     const url = (brandInfo.socialLinks || {})[platform] || "";
                     return (
-                      <div key={platform} className="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-secondary)]">
+                      <div
+                        key={platform}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-secondary)]"
+                      >
                         <span className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)] w-20 flex-shrink-0">
                           {platform}
                         </span>
@@ -920,7 +928,7 @@ export default function SpecialDatesHubPage() {
                           />
                         ) : (
                           <span className="text-sm text-[var(--text-primary)] truncate flex-1">
-                            @{handle || "(no handle)"}
+                            {handle ? `@${handle}` : "(no handle)"}
                           </span>
                         )}
                         {!editingHandles && url && (
@@ -941,9 +949,11 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* ====================== Design ====================== */}
+          {/* Templates */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Template Style</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+              Template Style
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               {TEMPLATES.map((tpl) => (
                 <button
@@ -1000,7 +1010,7 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* ====================== Preview ====================== */}
+          {/* Preview trigger */}
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowPreviewModal(true)}
@@ -1008,14 +1018,20 @@ export default function SpecialDatesHubPage() {
               className="flex items-center gap-2 px-6 py-3 bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               <Wand2 className="h-5 w-5" />
-              {selectedHoliday ? `Preview & Generate — ${selectedHoliday.name}` : "Preview & Generate"}
+              {selectedHoliday
+                ? `Preview & Generate — ${selectedHoliday.name}`
+                : "Preview & Generate"}
             </button>
             <button
               onClick={performSave}
               disabled={saveStatus === "saving"}
               className="flex items-center gap-2 px-5 py-3 border border-[var(--border-default)] rounded-xl font-medium hover:bg-[var(--bg-secondary)] transition-colors text-sm"
             >
-              {saveStatus === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {saveStatus === "saving" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               Save Now
             </button>
             {!config.logoMediaId && (
@@ -1033,7 +1049,9 @@ export default function SpecialDatesHubPage() {
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                {selectedHoliday ? `Preview — ${selectedHoliday.name}` : "Preview — Base Image"}
+                {selectedHoliday
+                  ? `Preview — ${selectedHoliday.name}`
+                  : "Preview — Base Image"}
               </h2>
               <button
                 onClick={() => setShowPreviewModal(false)}
@@ -1054,7 +1072,9 @@ export default function SpecialDatesHubPage() {
                 ) : (
                   <div className="text-center p-6">
                     <ImageIcon className="h-12 w-12 mx-auto text-[var(--text-tertiary)] mb-2" />
-                    <p className="text-sm text-[var(--text-tertiary)]">No image generated yet</p>
+                    <p className="text-sm text-[var(--text-tertiary)]">
+                      No image generated yet
+                    </p>
                   </div>
                 )}
               </div>
@@ -1064,7 +1084,11 @@ export default function SpecialDatesHubPage() {
                   disabled={generating || !config.logoMediaId}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
                 >
-                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  {generating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
                   {generating ? "Generating..." : generatedMediaUrl ? "Regenerate" : "Generate"}
                 </button>
                 {generatedMediaUrl && (
