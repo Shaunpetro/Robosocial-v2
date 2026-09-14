@@ -26,8 +26,9 @@ export interface BrandedImageRecipe {
   holidayName?: string;
   holidayDate?: string;
   holidayMessage?: string;
-  fontData: ArrayBuffer;
-  fontName: string;
+  baseFontData: ArrayBuffer;      // Inter — for company/contact/social
+  holidayFontData: ArrayBuffer;   // holiday font — for holiday name/date/message only
+  holidayFontName: string;
 }
 
 function getTemplate(templateId: string): TemplateDefinition {
@@ -121,8 +122,13 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           color: template.textColor,
         };
 
+  // Base text style — Inter for everything except the holiday block
+  const baseTextStyle: React.CSSProperties = {
+    fontFamily: 'Inter',
+  };
+
   const LogoBlock = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, ...baseTextStyle }}>
       <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={100} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ width: 56, height: 4, background: accentColor, borderRadius: 2 }} />
@@ -133,6 +139,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     </div>
   );
 
+  // Holiday block — holiday font ONLY here
   const HolidayBlock = hasHoliday ? (
     <div
       style={{
@@ -147,7 +154,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       <div
         style={{
           fontSize: 88,
-          fontFamily: recipe.fontName,
+          fontFamily: recipe.holidayFontName,
           textAlign: 'center',
           lineHeight: 1.1,
           maxWidth: 1000,
@@ -156,7 +163,14 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
         {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
       </div>
       {recipe.holidayDate && (
-        <div style={{ fontSize: 32, opacity: 0.85, letterSpacing: 2 }}>
+        <div
+          style={{
+            fontSize: 32,
+            opacity: 0.85,
+            letterSpacing: 2,
+            fontFamily: recipe.holidayFontName,
+          }}
+        >
           {recipe.holidayDate}
         </div>
       )}
@@ -220,6 +234,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           justifyContent: 'center',
           alignItems: 'center',
           maxWidth: 1080,
+          ...baseTextStyle,
         }}
       >
         {allBadges.map((badge, i) => (
@@ -251,6 +266,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             flexDirection: 'column',
             alignItems: 'center',
             gap: 30,
+            ...baseTextStyle,
           }}
         >
           <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={180} />
@@ -260,7 +276,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             <div
               style={{
                 fontSize: 54,
-                fontFamily: recipe.fontName,
+                fontFamily: recipe.holidayFontName,
                 textAlign: 'center',
                 marginTop: 20,
               }}
@@ -327,8 +343,14 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     height: 630,
     fonts: [
       {
-        name: recipe.fontName,
-        data: recipe.fontData,
+        name: 'Inter',
+        data: recipe.baseFontData,
+        weight: 400,
+        style: 'normal',
+      },
+      {
+        name: recipe.holidayFontName,
+        data: recipe.holidayFontData,
         weight: 400,
         style: 'normal',
       },

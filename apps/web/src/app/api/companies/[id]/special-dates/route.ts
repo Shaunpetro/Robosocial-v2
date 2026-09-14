@@ -33,20 +33,34 @@ export async function GET(
     },
   });
 
-  const upcomingRaw = getUpcomingSpecialDates(config?.holidaySets || [], 90);
-  const upcomingHolidays = upcomingRaw.map(({ entry, date }) => ({
+  // Full list over 365 days for the picker
+  const pickerRaw = getUpcomingSpecialDates(
+    config?.holidaySets || [],
+    365,
+    new Date(),
+    config?.excludedHolidays || []
+  );
+  const upcomingHolidays = pickerRaw.map(({ entry, date, setId }) => ({
     name: entry.name,
     date: date.toLocaleDateString("en-ZA", {
       day: "numeric",
       month: "long",
       year: "numeric",
     }),
+    isoDate: date.toISOString().slice(0, 10),
     description: entry.description,
+    setId,
+    categories: entry.categories,
+    major: entry.major ?? false,
   }));
 
   return NextResponse.json({
-    config: config || { enabled: false, holidaySets: [] },
-    availableSets: HOLIDAY_SETS.map((s) => ({ id: s.id, label: s.label })),
+    config: config || { enabled: false, holidaySets: [], excludedHolidays: [] },
+    availableSets: HOLIDAY_SETS.map((s) => ({
+      id: s.id,
+      label: s.label,
+      description: s.description,
+    })),
     company,
     upcomingHolidays,
   });
@@ -70,6 +84,7 @@ export async function PUT(
     update: {
       enabled: Boolean(body.enabled),
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
+      excludedHolidays: Array.isArray(body.excludedHolidays) ? body.excludedHolidays : [],
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,
@@ -81,6 +96,7 @@ export async function PUT(
       companyId,
       enabled: Boolean(body.enabled),
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
+      excludedHolidays: Array.isArray(body.excludedHolidays) ? body.excludedHolidays : [],
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,

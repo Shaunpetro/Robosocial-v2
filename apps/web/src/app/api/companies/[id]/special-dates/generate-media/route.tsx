@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkCompanyAccess } from '@/lib/access';
 import { prisma } from '@/lib/db';
 import { renderBrandedImage } from '@/lib/templates/renderer';
-import { getFontForHoliday } from '@/lib/templates/fonts';
+import { getFontForHoliday, getInterFont } from '@/lib/templates/fonts';
 import { buildHandleMap } from '@/lib/social-handles';
 import { UTApi } from 'uploadthing/server';
 
@@ -64,7 +64,9 @@ export async function POST(
       ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
       : null;
 
-    const { fontData, fontName } = getFontForHoliday(holidayName);
+    const { fontData: holidayFontData, fontName: holidayFontName } =
+      getFontForHoliday(holidayName);
+    const baseFontData = getInterFont();
 
     const imageBuffer = await renderBrandedImage({
       templateId: config.templateId || 'clean-corporate',
@@ -83,8 +85,9 @@ export async function POST(
       holidayName,
       holidayDate,
       holidayMessage,
-      fontData,
-      fontName,
+      baseFontData,
+      holidayFontData,
+      holidayFontName,
     });
 
     const baseFilename = holidayName
@@ -149,7 +152,7 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ mediaId, url: imageUrl, fontName, holidayName });
+    return NextResponse.json({ mediaId, url: imageUrl, holidayFontName, holidayName });
   } catch (error) {
     console.error('Media generation failed:', error);
     return NextResponse.json(

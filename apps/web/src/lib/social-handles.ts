@@ -1,94 +1,194 @@
 // apps/web/src/lib/social-handles.ts
 
-/**
- * Extracts a platform handle from a social media URL.
- * Handles WordPress, PHP, static HTML, and web-app URLs alike, since
- * they all expose the handle in the URL path.
- */
+const PLATFORM_HOSTS = [
+  'facebook.com',
+  'fb.com',
+  'linkedin.com',
+  'twitter.com',
+  'x.com',
+  'instagram.com',
+  'youtube.com',
+  'youtu.be',
+  'tiktok.com',
+  'pinterest.com',
+  'pinterest.co.za',
+  'threads.net',
+];
+
+export function detectPlatformFromUrl(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'facebook.com' || host === 'fb.com') return 'facebook';
+    if (host === 'linkedin.com') return 'linkedin';
+    if (host === 'twitter.com' || host === 'x.com') return 'twitter';
+    if (host === 'instagram.com') return 'instagram';
+    if (host === 'youtube.com' || host === 'youtu.be') return 'youtube';
+    if (host === 'tiktok.com') return 'tiktok';
+    if (host.startsWith('pinterest.')) return 'pinterest';
+    if (host === 'threads.net') return 'threads';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function extractHandleFromUrl(platform: string, url: string): string | null {
-    if (!url) return null;
-    const p = platform.toLowerCase();
-  
+  if (!url) return null;
+  const p = platform.toLowerCase();
+
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/^\/+|\/+$/g, '');
+    if (!path) return null;
+    const parts = path.split('/').filter(Boolean);
+
+    switch (p) {
+      case 'facebook': {
+        if (parts[0] === 'pages') return parts[2] || parts[1] || null;
+        if (parts[0] === 'profile.php') return u.searchParams.get('id');
+        if (parts[0] === 'people') return parts[1] || null;
+        return parts[0] || null;
+      }
+      case 'linkedin': {
+        if (['company', 'in', 'school', 'showcase'].includes(parts[0])) {
+          return parts[1] || null;
+        }
+        return parts[0] || null;
+      }
+      case 'twitter':
+        return parts[0] || null;
+      case 'instagram':
+        return parts[0] || null;
+      case 'youtube': {
+        if (parts[0]?.startsWith('@')) return parts[0].slice(1);
+        if (parts[0] === 'c' || parts[0] === 'user') return parts[1] || null;
+        if (parts[0] === 'channel') return parts[1] || null;
+        return parts[0] || null;
+      }
+      case 'tiktok': {
+        const at = parts.find((s) => s.startsWith('@'));
+        return at ? at.slice(1) : parts[0] || null;
+      }
+      case 'pinterest':
+        return parts[0] || null;
+      case 'threads': {
+        const at = parts.find((s) => s.startsWith('@'));
+        return at ? at.slice(1) : parts[0] || null;
+      }
+      default:
+        return parts[0] || null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+export function buildHandleMap(
+  socialLinks: Record<string, string> | null | undefined,
+  socialHandles: Record<string, string> | null | undefined
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const links = socialLinks || {};
+  const handles = socialHandles || {};
+
+  for (const [platform, url] of Object.entries(links)) {
+    if (!url) continue;
+    if (platform === 'whatsapp') continue;
+    const stored = handles[platform];
+    if (stored && stored.trim()) {
+      result[platform] = stored.trim();
+    } else {
+      const parsed = extractHandleFromUrl(platform, url);
+      if (parsed) result[platform] = parsed;
+    }
+  }
+
+  for (const [platform, handle] of Object.entries(handles)) {
+    if (!result[platform] && handle && handle.trim()) {
+      result[platform] = handle.trim();
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Extract social profile URLs from JSON-LD sameAs arrays.
+ * Handles {"sameAs": ["url1", "url2"]} and nested formats.
+ */
+export function extractSameAsFromJsonLd(html: string): string[] {
+  const results: string[] = [];
+  const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of html.matchAll(scriptRegex)) {
+    const content = match[1];
     try {
-      const u = new URL(url);
-      const path = u.pathname.replace(/^\/+|\/+$/g, '');
-      if (!path) return null;
-      const parts = path.split('/').filter(Boolean);
-  
-      switch (p) {
-        case 'facebook': {
-          if (parts[0] === 'pages') {
-            return parts[2] || parts[1] || null;
-          }
-          return parts[0] || null;
-        }
-        case 'linkedin': {
-          if (parts[0] === 'company' || parts[0] === 'in' || parts[0] === 'school') {
-            return parts[1] || null;
-          }
-          return parts[0] || null;
-        }
-        case 'twitter':
-        case 'x':
-          return parts[0] || null;
-        case 'instagram':
-          return parts[0] || null;
-        case 'youtube': {
-          if (parts[0]?.startsWith('@')) return parts[0].slice(1);
-          if (parts[0] === 'c' || parts[0] === 'user') return parts[1] || null;
-          if (parts[0] === 'channel') return parts[1] || null;
-          return parts[0] || null;
-        }
-        case 'tiktok': {
-          const at = parts.find((s) => s.startsWith('@'));
-          return at ? at.slice(1) : parts[0] || null;
-        }
-        case 'pinterest':
-          return parts[0] || null;
-        case 'threads': {
-          const at = parts.find((s) => s.startsWith('@'));
-          return at ? at.slice(1) : parts[0] || null;
-        }
-        case 'snapchat':
-          return parts[0] || null;
-        default:
-          return parts[0] || null;
+      const parsed = JSON.parse(content);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      for (const item of items) {
+        collectSameAs(item, results);
       }
     } catch {
-      return null;
+      // Some sites emit malformed JSON-LD; skip
     }
   }
-  
-  /**
-   * Given stored URLs and stored handles, produce a final handle map.
-   * Stored handles win; if missing, we parse from the URL.
-   */
-  export function buildHandleMap(
-    socialLinks: Record<string, string> | null | undefined,
-    socialHandles: Record<string, string> | null | undefined
-  ): Record<string, string> {
-    const result: Record<string, string> = {};
-    const links = socialLinks || {};
-    const handles = socialHandles || {};
-  
-    for (const [platform, url] of Object.entries(links)) {
-      if (!url) continue;
-      if (platform === 'whatsapp') continue;
-      const stored = handles[platform];
-      if (stored && stored.trim()) {
-        result[platform] = stored.trim();
-      } else {
-        const parsed = extractHandleFromUrl(platform, url);
-        if (parsed) result[platform] = parsed;
-      }
-    }
-  
-    // If user provided handles for platforms without URLs, include them
-    for (const [platform, handle] of Object.entries(handles)) {
-      if (!result[platform] && handle && handle.trim()) {
-        result[platform] = handle.trim();
-      }
-    }
-  
-    return result;
+  return Array.from(new Set(results));
+}
+
+function collectSameAs(node: any, out: string[]): void {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    node.forEach((n) => collectSameAs(n, out));
+    return;
   }
+  if (typeof node.sameAs === 'string') out.push(node.sameAs);
+  if (Array.isArray(node.sameAs)) {
+    node.sameAs.forEach((s: unknown) => {
+      if (typeof s === 'string') out.push(s);
+    });
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'sameAs') continue;
+    collectSameAs(node[key], out);
+  }
+}
+
+/**
+ * Extract microdata itemprop="sameAs" hrefs and content attributes.
+ */
+export function extractSameAsFromMicrodata(html: string): string[] {
+  const results: string[] = [];
+  const hrefRegex = /<[^>]+itemprop=["']sameAs["'][^>]*href=["']([^"']+)["']/gi;
+  for (const m of html.matchAll(hrefRegex)) results.push(m[1]);
+  const contentRegex = /<[^>]+itemprop=["']sameAs["'][^>]*content=["']([^"']+)["']/gi;
+  for (const m of html.matchAll(contentRegex)) results.push(m[1]);
+  return Array.from(new Set(results));
+}
+
+/**
+ * Extract @handles mentioned in body text near platform names.
+ */
+export function extractHandlesFromText(html: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const stripped = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                      .replace(/<[^>]+>/g, ' ');
+
+  const platformKeywords: Record<string, string[]> = {
+    instagram: ['instagram', 'insta'],
+    facebook: ['facebook', 'fb'],
+    twitter: ['twitter', 'x'],
+    tiktok: ['tiktok'],
+    linkedin: ['linkedin'],
+    youtube: ['youtube'],
+  };
+
+  for (const [platform, keywords] of Object.entries(platformKeywords)) {
+    for (const kw of keywords) {
+      const regex = new RegExp(`${kw}[^a-zA-Z0-9@]{0,30}@([a-zA-Z0-9._]{2,30})`, 'gi');
+      for (const m of stripped.matchAll(regex)) {
+        if (!result[platform]) result[platform] = m[1];
+      }
+    }
+  }
+  return result;
+}

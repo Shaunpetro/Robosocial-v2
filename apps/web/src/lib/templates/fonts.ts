@@ -191,3 +191,21 @@ export function getFontForHoliday(holidayName?: string): {
   fontCache.set(def.name, arrayBuffer);
   return { fontData: arrayBuffer, fontName: def.name };
 }
+
+const baseFontCache = { data: null as ArrayBuffer | null };
+
+export function getInterFont(): ArrayBuffer {
+  if (baseFontCache.data) return baseFontCache.data;
+
+  const filesDir = resolveFontFilesDir('@fontsource/inter');
+  const fontPath = findWoffFile(filesDir);
+
+  const buf = fs.readFileSync(fontPath);
+  const arrayBuffer = buf.buffer.slice(
+    buf.byteOffset,
+    buf.byteOffset + buf.byteLength
+  ) as ArrayBuffer;
+
+  baseFontCache.data = arrayBuffer;
+  return arrayBuffer;
+}
