@@ -33,7 +33,6 @@ export async function GET(
     },
   });
 
-  // Full list over 365 days for the picker
   const pickerRaw = getUpcomingSpecialDates(
     config?.holidaySets || [],
     365,
@@ -55,7 +54,13 @@ export async function GET(
   }));
 
   return NextResponse.json({
-    config: config || { enabled: false, holidaySets: [], excludedHolidays: [] },
+    config: config || {
+      enabled: false,
+      holidaySets: [],
+      excludedHolidays: [],
+      tagline: null,
+      dedication: null,
+    },
     availableSets: HOLIDAY_SETS.map((s) => ({
       id: s.id,
       label: s.label,
@@ -91,6 +96,8 @@ export async function PUT(
       logoPosition: body.logoPosition ?? "top",
       showWebsite: body.showWebsite ?? true,
       showHandles: body.showHandles ?? true,
+      tagline: body.tagline ?? null,
+      dedication: body.dedication ?? null,
     },
     create: {
       companyId,
@@ -103,6 +110,8 @@ export async function PUT(
       logoPosition: body.logoPosition ?? "top",
       showWebsite: body.showWebsite ?? true,
       showHandles: body.showHandles ?? true,
+      tagline: body.tagline ?? null,
+      dedication: body.dedication ?? null,
     },
   });
 

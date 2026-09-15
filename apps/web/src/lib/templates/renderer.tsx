@@ -1,7 +1,7 @@
 // apps/web/src/lib/templates/renderer.tsx
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
-import { TEMPLATES, TemplateDefinition } from './index';
+import { TEMPLATES, TemplateDefinition, DecorationType } from './index';
 import { PLATFORMS, CONTACT } from './icons';
 
 export interface SocialItem {
@@ -14,6 +14,8 @@ export interface BrandedImageRecipe {
   companyName: string;
   logoUrl: string;
   logoHasTransparency?: boolean;
+  tagline?: string | null;
+  dedication?: string | null;
   website?: string;
   socialItems?: SocialItem[];
   contactEmail?: string | null;
@@ -26,8 +28,8 @@ export interface BrandedImageRecipe {
   holidayName?: string;
   holidayDate?: string;
   holidayMessage?: string;
-  baseFontData: ArrayBuffer;      // Inter — for company/contact/social
-  holidayFontData: ArrayBuffer;   // holiday font — for holiday name/date/message only
+  baseFontData: ArrayBuffer;
+  holidayFontData: ArrayBuffer;
   holidayFontName: string;
 }
 
@@ -101,6 +103,264 @@ function ContactBadge({ badge }: { badge: Badge }) {
   );
 }
 
+/**
+ * Renders the decorative overlay for a template.
+ * Uses only Satori-supported CSS: absolutely-positioned divs, gradients,
+ * borders, border-radius.
+ */
+function DecorationLayer({
+  type,
+  accent,
+  textColor,
+}: {
+  type: DecorationType;
+  accent: string;
+  textColor: string;
+}) {
+  const W = 1200;
+  const H = 630;
+
+  if (type === 'none') return null;
+
+  if (type === 'top-bar') {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: W,
+          height: 12,
+          background: accent,
+        }}
+      />
+    );
+  }
+
+  if (type === 'corner-circles') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: -160,
+            right: -160,
+            width: 400,
+            height: 400,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.08)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -200,
+            left: -200,
+            width: 500,
+            height: 500,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)',
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'border-frame') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: 20,
+            border: `1px solid rgba(255,255,255,0.15)`,
+            borderRadius: 4,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 6,
+            height: H,
+            background: accent,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'double-divider') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 140,
+            left: 60,
+            right: 60,
+            height: 1,
+            background: 'rgba(255,255,255,0.25)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 140,
+            left: 60,
+            right: 60,
+            height: 1,
+            background: 'rgba(255,255,255,0.25)',
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'corner-triangle') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            width: 0,
+            height: 0,
+            borderTop: `220px solid rgba(255,255,255,0.06)`,
+            borderLeft: `220px solid transparent`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            width: 0,
+            height: 0,
+            borderBottom: `280px solid rgba(0,0,0,0.15)`,
+            borderRight: `280px solid transparent`,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'diagonal-band') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
+            backgroundImage: `linear-gradient(120deg, ${accent}33 0%, ${accent}00 40%, ${accent}00 60%, ${accent}33 100%)`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 80,
+            right: 60,
+            width: 80,
+            height: 4,
+            background: accent,
+            borderRadius: 2,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'dots-grid') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
+            backgroundImage: `radial-gradient(${accent}30 1.5px, transparent 1.5px)`,
+            backgroundSize: '28px 28px',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            left: 40,
+            width: 40,
+            height: 40,
+            borderTop: `2px solid ${accent}`,
+            borderLeft: `2px solid ${accent}`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            right: 40,
+            width: 40,
+            height: 40,
+            borderBottom: `2px solid ${accent}`,
+            borderRight: `2px solid ${accent}`,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (type === 'corner-blobs') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: -120,
+            right: -120,
+            width: 320,
+            height: 320,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.18)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -140,
+            left: -140,
+            width: 360,
+            height: 360,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.12)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 100,
+            left: 60,
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.35)',
+          }}
+        />
+      </>
+    );
+  }
+
+  return null;
+}
+
 export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Buffer> {
   const template = getTemplate(recipe.templateId);
   const showWebsite = recipe.showWebsite ?? template.showWebsite;
@@ -122,7 +382,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           color: template.textColor,
         };
 
-  // Base text style — Inter for everything except the holiday block
   const baseTextStyle: React.CSSProperties = {
     fontFamily: 'Inter',
   };
@@ -132,14 +391,26 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={100} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ width: 56, height: 4, background: accentColor, borderRadius: 2 }} />
-        <div style={{ fontSize: 34, fontWeight: 'bold', letterSpacing: 1 }}>
+        <div style={{ fontSize: template.companyNameSize, fontWeight: 'bold', letterSpacing: 0.5 }}>
           {recipe.companyName}
         </div>
+        {recipe.tagline && (
+          <div
+            style={{
+              fontSize: 18,
+              opacity: 0.75,
+              letterSpacing: 0.5,
+              fontFamily: 'Inter',
+              marginTop: 2,
+            }}
+          >
+            {recipe.tagline}
+          </div>
+        )}
       </div>
     </div>
   );
 
-  // Holiday block — holiday font ONLY here
   const HolidayBlock = hasHoliday ? (
     <div
       style={{
@@ -147,13 +418,13 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 24,
+        gap: 20,
         flex: 1,
       }}
     >
       <div
         style={{
-          fontSize: 88,
+          fontSize: 84,
           fontFamily: recipe.holidayFontName,
           textAlign: 'center',
           lineHeight: 1.1,
@@ -165,13 +436,28 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       {recipe.holidayDate && (
         <div
           style={{
-            fontSize: 32,
+            fontSize: 28,
             opacity: 0.85,
             letterSpacing: 2,
             fontFamily: recipe.holidayFontName,
           }}
         >
           {recipe.holidayDate}
+        </div>
+      )}
+      {recipe.dedication && (
+        <div
+          style={{
+            fontSize: 20,
+            opacity: 0.75,
+            fontFamily: 'Inter',
+            fontStyle: 'italic',
+            marginTop: 10,
+            textAlign: 'center',
+            maxWidth: 900,
+          }}
+        >
+          {recipe.dedication}
         </div>
       )}
     </div>
@@ -243,10 +529,10 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       </div>
     ) : null;
 
-  let children: React.ReactNode;
+  let contentLayout: React.ReactNode;
 
   if (logoPosition === 'center') {
-    children = (
+    contentLayout = (
       <div
         style={{
           display: 'flex',
@@ -256,7 +542,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           width: '100%',
           height: '100%',
           padding: 60,
-          ...backgroundStyle,
+          position: 'relative',
         }}
       >
         <div style={{ display: 'flex', flex: 1 }} />
@@ -265,17 +551,22 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 30,
+            gap: 24,
             ...baseTextStyle,
           }}
         >
-          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={180} />
+          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={160} />
           <div style={{ width: 80, height: 4, background: accentColor, borderRadius: 2 }} />
-          <div style={{ fontSize: 42, fontWeight: 'bold' }}>{recipe.companyName}</div>
+          <div style={{ fontSize: 38, fontWeight: 'bold' }}>{recipe.companyName}</div>
+          {recipe.tagline && (
+            <div style={{ fontSize: 18, opacity: 0.75, marginTop: -8 }}>
+              {recipe.tagline}
+            </div>
+          )}
           {hasHoliday && (
             <div
               style={{
-                fontSize: 54,
+                fontSize: 52,
                 fontFamily: recipe.holidayFontName,
                 textAlign: 'center',
                 marginTop: 20,
@@ -284,13 +575,27 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
               {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
             </div>
           )}
+          {recipe.dedication && (
+            <div
+              style={{
+                fontSize: 20,
+                opacity: 0.75,
+                fontStyle: 'italic',
+                textAlign: 'center',
+                maxWidth: 900,
+                marginTop: 6,
+              }}
+            >
+              {recipe.dedication}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', flex: 1 }} />
         {FooterBlock}
       </div>
     );
   } else if (logoPosition === 'bottom') {
-    children = (
+    contentLayout = (
       <div
         style={{
           display: 'flex',
@@ -299,7 +604,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           width: '100%',
           height: '100%',
           padding: 60,
-          ...backgroundStyle,
+          position: 'relative',
         }}
       >
         {HolidayBlock}
@@ -317,7 +622,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       </div>
     );
   } else {
-    children = (
+    contentLayout = (
       <div
         style={{
           display: 'flex',
@@ -326,7 +631,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           width: '100%',
           height: '100%',
           padding: 60,
-          ...backgroundStyle,
+          position: 'relative',
         }}
       >
         {LogoBlock}
@@ -336,9 +641,39 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     );
   }
 
+  // Compose with decoration layer
+  const composed = (
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        width: 1200,
+        height: 630,
+        ...backgroundStyle,
+      }}
+    >
+      <DecorationLayer
+        type={template.decoration}
+        accent={accentColor}
+        textColor={template.textColor}
+      />
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          zIndex: 1,
+        }}
+      >
+        {contentLayout}
+      </div>
+    </div>
+  );
+
   const { default: satori } = await import('satori');
 
-  const svg = await satori(children, {
+  const svg = await satori(composed, {
     width: 1200,
     height: 630,
     fonts: [

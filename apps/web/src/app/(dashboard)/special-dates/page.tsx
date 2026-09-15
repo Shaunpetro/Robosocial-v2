@@ -24,6 +24,7 @@ import {
   Pencil,
   Layers,
   Star,
+  Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,8 @@ interface Config {
   logoPosition?: "top" | "center" | "bottom";
   showWebsite?: boolean;
   showHandles?: boolean;
+  tagline?: string | null;
+  dedication?: string | null;
 }
 
 interface BrandInfo {
@@ -122,6 +125,8 @@ export default function SpecialDatesHubPage() {
     enabled: false,
     holidaySets: [],
     excludedHolidays: [],
+    tagline: null,
+    dedication: null,
   });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
   const [allHolidays, setAllHolidays] = useState<UpcomingHoliday[]>([]);
@@ -151,13 +156,11 @@ export default function SpecialDatesHubPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
 
-  // Live ref for autosave
   const stateRef = useRef({ config, brandInfo, selectedCompanyId });
   useEffect(() => {
     stateRef.current = { config, brandInfo, selectedCompanyId };
   }, [config, brandInfo, selectedCompanyId]);
 
-  // Fetch companies
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
@@ -178,7 +181,6 @@ export default function SpecialDatesHubPage() {
     fetchCompanies();
   }, []);
 
-  // Fetch config on company change
   useEffect(() => {
     if (!selectedCompanyId) return;
     setLoadingConfig(true);
@@ -188,10 +190,18 @@ export default function SpecialDatesHubPage() {
         const res = await fetch(`/api/companies/${selectedCompanyId}/special-dates`);
         if (res.ok) {
           const data = await res.json();
-          const cfg = data.config || { enabled: false, holidaySets: [], excludedHolidays: [] };
+          const cfg = data.config || {
+            enabled: false,
+            holidaySets: [],
+            excludedHolidays: [],
+            tagline: null,
+            dedication: null,
+          };
           setConfig({
             ...cfg,
             excludedHolidays: cfg.excludedHolidays || [],
+            tagline: cfg.tagline ?? null,
+            dedication: cfg.dedication ?? null,
           });
           setAvailableSets(data.availableSets || []);
           setBrandInfo(data.company || {});
@@ -220,7 +230,6 @@ export default function SpecialDatesHubPage() {
     fetchConfig();
   }, [selectedCompanyId]);
 
-  // Autosave
   const performSave = useCallback(async () => {
     const { config: c, brandInfo: b, selectedCompanyId: cid } = stateRef.current;
     if (!cid) return;
@@ -271,6 +280,8 @@ export default function SpecialDatesHubPage() {
     config.showHandles,
     config.holidaySets.join(","),
     config.excludedHolidays.join(","),
+    config.tagline,
+    config.dedication,
   ]);
 
   const updateConfig = (updates: Partial<Config>) => {
@@ -448,7 +459,6 @@ export default function SpecialDatesHubPage() {
     }
   };
 
-  // FIX: store empty string instead of deleting the key
   const handleHandleChange = (platform: string, value: string) => {
     const nextHandles = { ...(brandInfo.socialHandles || {}) };
     nextHandles[platform] = value.trim();
@@ -491,7 +501,6 @@ export default function SpecialDatesHubPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <CalendarDays className="h-6 w-6 text-brand-500" />
@@ -521,7 +530,6 @@ export default function SpecialDatesHubPage() {
         </div>
       </div>
 
-      {/* Company Selector */}
       <div className="mb-8">
         <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
           Select Organization
@@ -816,6 +824,42 @@ export default function SpecialDatesHubPage() {
               </div>
             </div>
 
+            {/* Tagline + Dedication */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                  Tagline <span className="text-[var(--text-tertiary)]">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={config.tagline ?? ""}
+                  onChange={(e) => updateConfig({ tagline: e.target.value })}
+                  placeholder="e.g., Engineering Excellence Since 2008"
+                  maxLength={80}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
+                />
+                <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                  Appears under the company name
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                  Dedication <span className="text-[var(--text-tertiary)]">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={config.dedication ?? ""}
+                  onChange={(e) => updateConfig({ dedication: e.target.value })}
+                  placeholder="e.g., Dedicated to our team"
+                  maxLength={100}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
+                />
+                <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                  Appears below the holiday message
+                </p>
+              </div>
+            </div>
+
             <div className="mb-6">
               <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Website</p>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -847,7 +891,6 @@ export default function SpecialDatesHubPage() {
               )}
             </div>
 
-            {/* Contact — using updateBrandInfo directly so autosave fires */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div>
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
@@ -886,7 +929,6 @@ export default function SpecialDatesHubPage() {
               </div>
             </div>
 
-            {/* Social handles */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">

@@ -365,6 +365,8 @@ model CompanySpecialDatesConfig {
   showWebsite       Boolean @default(true)
   showHandles       Boolean @default(true)
   logoHasTransparency Boolean @default(false)
+  tagline    String?
+  dedication String?
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

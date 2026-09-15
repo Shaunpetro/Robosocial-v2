@@ -73,6 +73,8 @@ export async function POST(
       companyName: company.name,
       logoUrl: config.logoMedia.url,
       logoHasTransparency: config.logoHasTransparency ?? true,
+      tagline: config.tagline,
+      dedication: config.dedication,
       website: company.website || '',
       socialItems,
       contactEmail: company.contactEmail,
