@@ -376,6 +376,7 @@ model HolidayDedication {
   id          String    @id @default(cuid())
   companyId   String
   holidayName String
+  templateId  String?
   text        String
   generatedAt DateTime  @default(now())
   expiresAt   DateTime?

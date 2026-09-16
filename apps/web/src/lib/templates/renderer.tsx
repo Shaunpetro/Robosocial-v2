@@ -3,7 +3,12 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { TEMPLATES, TemplateDefinition, DecorationType } from './index';
 import { PLATFORMS, CONTACT } from './icons';
-import { pickHolidayColor, ensureAccentContrast, hexToRgb, relativeLuminance } from './colors';
+import {
+  pickHolidayColor,
+  ensureAccentContrast,
+  hexToRgb,
+  relativeLuminance,
+} from './colors';
 
 export interface SocialItem {
   platform: string;
@@ -37,10 +42,6 @@ export interface BrandedImageRecipe {
 
 function getTemplate(templateId: string): TemplateDefinition {
   return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
-}
-
-function backgroundColorsOf(template: TemplateDefinition): string[] {
-  return template.background.colors;
 }
 
 function LogoElement({
@@ -95,14 +96,25 @@ function ContactBadge({ badge }: { badge: Badge }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          background: badge.color,
+          padding: 2,
+          background: '#FFFFFF',
+          borderRadius: 10,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={badge.iconUri} alt="" style={{ width: 15, height: 15 }} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: badge.color,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={badge.iconUri} alt="" style={{ width: 15, height: 15 }} />
+        </div>
       </div>
       <span style={{ fontSize: 16, opacity: 0.9 }}>{badge.text}</span>
     </div>
@@ -121,7 +133,6 @@ function DecorationLayer({
   const W = 1200;
   const H = 630;
 
-  // Compute whether the background is dark or light by averaging luminance
   const avgLum =
     backgroundColors
       .map((c) => {
@@ -131,9 +142,8 @@ function DecorationLayer({
       .reduce((a, b) => a + b, 0) / Math.max(backgroundColors.length, 1);
   const isDarkBg = avgLum < 0.5;
 
-  // Neutral overlay color that works on either background
   const overlayColor = isDarkBg ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const overlayStrong = isDarkBg ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
+  const overlayStrong = isDarkBg ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)';
 
   if (type === 'none') return null;
 
@@ -152,19 +162,43 @@ function DecorationLayer({
     );
   }
 
-  if (type === 'single-circle') {
+  if (type === 'dual-circles') {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          top: -180,
-          right: -180,
-          width: 460,
-          height: 460,
-          borderRadius: '50%',
-          background: overlayColor,
-        }}
-      />
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: -200,
+            right: -200,
+            width: 520,
+            height: 520,
+            borderRadius: '50%',
+            background: overlayColor,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: -80,
+            right: -320,
+            width: 360,
+            height: 360,
+            borderRadius: '50%',
+            background: overlayStrong,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -180,
+            left: -180,
+            width: 440,
+            height: 440,
+            borderRadius: '50%',
+            background: overlayColor,
+          }}
+        />
+      </>
     );
   }
 
@@ -200,7 +234,6 @@ function DecorationLayer({
   }
 
   if (type === 'grain') {
-    // Neutral grain overlay using a low-opacity radial gradient pattern
     return (
       <div
         style={{
@@ -219,17 +252,29 @@ function DecorationLayer({
 
   if (type === 'side-divider') {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 60,
-          right: 40,
-          width: 4,
-          height: H - 120,
-          background: accent,
-          borderRadius: 2,
-        }}
-      />
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            width: 160,
+            height: H,
+            background: overlayColor,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 160,
+            width: 4,
+            height: H,
+            background: accent,
+            opacity: 0.7,
+          }}
+        />
+      </>
     );
   }
 
@@ -255,10 +300,10 @@ function DecorationLayer({
         <div
           style={{
             position: 'absolute',
-            top: -100,
-            right: -100,
-            width: 260,
-            height: 260,
+            top: -180,
+            right: -180,
+            width: 400,
+            height: 400,
             borderRadius: '50%',
             background: overlayColor,
           }}
@@ -266,12 +311,34 @@ function DecorationLayer({
         <div
           style={{
             position: 'absolute',
-            bottom: -120,
-            left: -120,
-            width: 300,
-            height: 300,
+            bottom: -220,
+            left: -220,
+            width: 480,
+            height: 480,
             borderRadius: '50%',
             background: overlayColor,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 120,
+            left: 80,
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background: overlayStrong,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 78,
+            left: 140,
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            background: overlayStrong,
           }}
         />
       </>
@@ -289,13 +356,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   const hasHoliday = !!recipe.holidayName;
   const hasTransparency = recipe.logoHasTransparency ?? true;
 
-  const bgColors = backgroundColorsOf(template);
+  const bgColors = template.background.colors;
 
-  // Accent color: brand primary if it has sufficient contrast, else template text
   const rawAccent = recipe.brandColors?.primary || template.textColor;
   const accentColor = ensureAccentContrast(rawAccent, bgColors, template.textColor);
 
-  // Holiday name color: pick from palette using deterministic seed
   const seed = `${recipe.companyId || 'anon'}-${recipe.holidayName || 'base'}-${new Date().getFullYear()}`;
   const holidayColor =
     pickHolidayColor(recipe.holidayName, bgColors, seed) || template.textColor;

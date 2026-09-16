@@ -48,6 +48,8 @@ interface UpcomingHoliday {
   setId: string;
   categories: string[];
   major: boolean;
+  tone?: string;
+  hashtags?: string[];
 }
 
 interface Config {
@@ -438,7 +440,7 @@ export default function SpecialDatesHubPage() {
             holidayDate: selectedHoliday?.date,
             holidayMessage: selectedHoliday ? `Happy ${selectedHoliday.name}!` : undefined,
             holidayDescription: selectedHoliday?.description,
-            holidayTone: undefined,
+            holidayTone: selectedHoliday?.tone,
           }),
         }
       );
@@ -557,7 +559,6 @@ export default function SpecialDatesHubPage() {
         </div>
       ) : (
         <>
-          {/* Layer 1 */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <div className="flex items-center gap-2 mb-1">
               <Layers className="h-5 w-5 text-brand-500" />
@@ -601,7 +602,6 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* Layer 2 */}
           {config.holidaySets.length > 0 && (
             <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
               <div className="flex items-center gap-2 mb-1">
@@ -633,7 +633,6 @@ export default function SpecialDatesHubPage() {
             </div>
           )}
 
-          {/* Layer 3 */}
           {config.holidaySets.length > 0 && (
             <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
               <div className="flex items-center gap-2 mb-1">
@@ -764,7 +763,6 @@ export default function SpecialDatesHubPage() {
             </div>
           )}
 
-          {/* Brand Kit */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
               <Palette className="h-5 w-5" />
@@ -991,7 +989,6 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* Templates */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
               Template Style
@@ -1052,7 +1049,6 @@ export default function SpecialDatesHubPage() {
             </div>
           </div>
 
-          {/* Preview trigger */}
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowPreviewModal(true)}
@@ -1085,7 +1081,6 @@ export default function SpecialDatesHubPage() {
         </>
       )}
 
-      {/* Preview Modal */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">

@@ -2,7 +2,7 @@
 export type DecorationType =
   | 'none'
   | 'top-bar'
-  | 'single-circle'
+  | 'dual-circles'
   | 'corner-accent'
   | 'thin-rule'
   | 'grain'
@@ -56,7 +56,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'single-circle',
+    decoration: 'dual-circles',
   },
   {
     id: 'minimalist-dark',

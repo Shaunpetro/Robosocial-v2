@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { renderBrandedImage } from '@/lib/templates/renderer';
 import { getFontForHoliday, getInterFont } from '@/lib/templates/fonts';
 import { buildHandleMap } from '@/lib/social-handles';
+import { getTemplateMood } from '@/lib/templates/colors';
 import { getDedicationForHoliday } from '@/lib/ai/dedication';
 import { UTApi } from 'uploadthing/server';
 
@@ -71,7 +72,8 @@ export async function POST(
       ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
       : null;
 
-    // Dedication: use config override if set, else generate per holiday
+    const templateMood = getTemplateMood(config.templateId);
+
     let dedicationText: string | null = null;
     if (holidayName) {
       if (config.dedication && config.dedication.trim().length > 0) {
@@ -85,6 +87,8 @@ export async function POST(
           holidayName,
           holidayDescription: holidayDescription || holidayName,
           holidayTone,
+          templateId: config.templateId,
+          templateMood,
         });
       }
     }

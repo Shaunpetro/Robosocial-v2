@@ -51,6 +51,8 @@ export async function GET(
     setId,
     categories: entry.categories,
     major: entry.major ?? false,
+    tone: entry.tone,
+    hashtags: entry.hashtags,
   }));
 
   return NextResponse.json({
@@ -83,6 +85,20 @@ export async function PUT(
   }
 
   const body = await request.json();
+
+  // If template changed, delete cached dedications so they regenerate
+  const existingConfig = await prisma.companySpecialDatesConfig.findUnique({
+    where: { companyId },
+    select: { templateId: true },
+  });
+  const templateChanged =
+    existingConfig &&
+    body.templateId &&
+    existingConfig.templateId !== body.templateId;
+
+  if (templateChanged) {
+    await prisma.holidayDedication.deleteMany({ where: { companyId } });
+  }
 
   const config = await prisma.companySpecialDatesConfig.upsert({
     where: { companyId },
