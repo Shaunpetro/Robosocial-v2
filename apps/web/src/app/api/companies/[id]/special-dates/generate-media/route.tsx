@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { renderBrandedImage } from '@/lib/templates/renderer';
 import { getFontForHoliday, getInterFont } from '@/lib/templates/fonts';
 import { buildHandleMap } from '@/lib/social-handles';
+import { getDedicationForHoliday } from '@/lib/ai/dedication';
 import { UTApi } from 'uploadthing/server';
 
 const utapi = new UTApi();
@@ -30,6 +31,8 @@ export async function POST(
   const holidayName: string | undefined = body.holidayName;
   const holidayDate: string | undefined = body.holidayDate;
   const holidayMessage: string | undefined = body.holidayMessage;
+  const holidayDescription: string | undefined = body.holidayDescription;
+  const holidayTone: string | undefined = body.holidayTone;
 
   try {
     const config = await prisma.companySpecialDatesConfig.findUnique({
@@ -38,11 +41,15 @@ export async function POST(
     });
 
     if (!config || !config.logoMedia) {
-      return NextResponse.json({ error: 'Please upload a company logo first' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Please upload a company logo first' },
+        { status: 400 }
+      );
     }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
+      include: { intelligence: true },
     });
 
     if (!company) {
@@ -64,17 +71,35 @@ export async function POST(
       ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
       : null;
 
+    // Dedication: use config override if set, else generate per holiday
+    let dedicationText: string | null = null;
+    if (holidayName) {
+      if (config.dedication && config.dedication.trim().length > 0) {
+        dedicationText = config.dedication.trim();
+      } else {
+        dedicationText = await getDedicationForHoliday({
+          companyId,
+          companyName: company.name,
+          industry: company.industry,
+          brandVoice: company.intelligence?.brandVoice || null,
+          holidayName,
+          holidayDescription: holidayDescription || holidayName,
+          holidayTone,
+        });
+      }
+    }
+
     const { fontData: holidayFontData, fontName: holidayFontName } =
       getFontForHoliday(holidayName);
     const baseFontData = getInterFont();
 
-    const imageBuffer = await renderBrandedImage({
+    const base64Image = await renderBrandedImage({
       templateId: config.templateId || 'clean-corporate',
       companyName: company.name,
       logoUrl: config.logoMedia.url,
       logoHasTransparency: config.logoHasTransparency ?? true,
       tagline: config.tagline,
-      dedication: config.dedication,
+      dedication: dedicationText,
       website: company.website || '',
       socialItems,
       contactEmail: company.contactEmail,
@@ -87,10 +112,13 @@ export async function POST(
       holidayName,
       holidayDate,
       holidayMessage,
+      companyId,
       baseFontData,
       holidayFontData,
       holidayFontName,
     });
+
+    const imageBuffer = Buffer.from(base64Image, 'base64');
 
     const baseFilename = holidayName
       ? `special-dates-${slugify(holidayName)}-${companyId}.png`
@@ -154,7 +182,13 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ mediaId, url: imageUrl, holidayFontName, holidayName });
+    return NextResponse.json({
+      mediaId,
+      url: imageUrl,
+      holidayFontName,
+      holidayName,
+      dedication: dedicationText,
+    });
   } catch (error) {
     console.error('Media generation failed:', error);
     return NextResponse.json(

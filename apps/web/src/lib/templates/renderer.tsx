@@ -3,6 +3,7 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { TEMPLATES, TemplateDefinition, DecorationType } from './index';
 import { PLATFORMS, CONTACT } from './icons';
+import { pickHolidayColor, ensureAccentContrast, hexToRgb, relativeLuminance } from './colors';
 
 export interface SocialItem {
   platform: string;
@@ -28,6 +29,7 @@ export interface BrandedImageRecipe {
   holidayName?: string;
   holidayDate?: string;
   holidayMessage?: string;
+  companyId?: string;
   baseFontData: ArrayBuffer;
   holidayFontData: ArrayBuffer;
   holidayFontName: string;
@@ -35,6 +37,10 @@ export interface BrandedImageRecipe {
 
 function getTemplate(templateId: string): TemplateDefinition {
   return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
+}
+
+function backgroundColorsOf(template: TemplateDefinition): string[] {
+  return template.background.colors;
 }
 
 function LogoElement({
@@ -98,27 +104,36 @@ function ContactBadge({ badge }: { badge: Badge }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={badge.iconUri} alt="" style={{ width: 15, height: 15 }} />
       </div>
-      <span style={{ fontSize: 17, opacity: 0.9 }}>{badge.text}</span>
+      <span style={{ fontSize: 16, opacity: 0.9 }}>{badge.text}</span>
     </div>
   );
 }
 
-/**
- * Renders the decorative overlay for a template.
- * Uses only Satori-supported CSS: absolutely-positioned divs, gradients,
- * borders, border-radius.
- */
 function DecorationLayer({
   type,
   accent,
-  textColor,
+  backgroundColors,
 }: {
   type: DecorationType;
   accent: string;
-  textColor: string;
+  backgroundColors: string[];
 }) {
   const W = 1200;
   const H = 630;
+
+  // Compute whether the background is dark or light by averaging luminance
+  const avgLum =
+    backgroundColors
+      .map((c) => {
+        const rgb = hexToRgb(c);
+        return rgb ? relativeLuminance(rgb) : 0.5;
+      })
+      .reduce((a, b) => a + b, 0) / Math.max(backgroundColors.length, 1);
+  const isDarkBg = avgLum < 0.5;
+
+  // Neutral overlay color that works on either background
+  const overlayColor = isDarkBg ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const overlayStrong = isDarkBg ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
 
   if (type === 'none') return null;
 
@@ -130,191 +145,107 @@ function DecorationLayer({
           top: 0,
           left: 0,
           width: W,
-          height: 12,
+          height: 10,
           background: accent,
         }}
       />
     );
   }
 
-  if (type === 'corner-circles') {
+  if (type === 'single-circle') {
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: -160,
-            right: -160,
-            width: 400,
-            height: 400,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -200,
-            left: -200,
-            width: 500,
-            height: 500,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)',
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: -180,
+          right: -180,
+          width: 460,
+          height: 460,
+          borderRadius: '50%',
+          background: overlayColor,
+        }}
+      />
     );
   }
 
-  if (type === 'border-frame') {
+  if (type === 'corner-accent') {
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 20,
-            left: 20,
-            right: 20,
-            bottom: 20,
-            border: `1px solid rgba(255,255,255,0.15)`,
-            borderRadius: 4,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 6,
-            height: H,
-            background: accent,
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: 40,
+          right: 40,
+          width: 60,
+          height: 60,
+          borderTop: `2px solid ${accent}`,
+          borderRight: `2px solid ${accent}`,
+        }}
+      />
     );
   }
 
-  if (type === 'double-divider') {
+  if (type === 'thin-rule') {
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 140,
-            left: 60,
-            right: 60,
-            height: 1,
-            background: 'rgba(255,255,255,0.25)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 140,
-            left: 60,
-            right: 60,
-            height: 1,
-            background: 'rgba(255,255,255,0.25)',
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: 130,
+          left: 60,
+          right: 60,
+          height: 1,
+          background: overlayStrong,
+        }}
+      />
     );
   }
 
-  if (type === 'corner-triangle') {
+  if (type === 'grain') {
+    // Neutral grain overlay using a low-opacity radial gradient pattern
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: 0,
-            height: 0,
-            borderTop: `220px solid rgba(255,255,255,0.06)`,
-            borderLeft: `220px solid transparent`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            width: 0,
-            height: 0,
-            borderBottom: `280px solid rgba(0,0,0,0.15)`,
-            borderRight: `280px solid transparent`,
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: W,
+          height: H,
+          backgroundImage: `radial-gradient(${overlayColor} 1px, transparent 1px)`,
+          backgroundSize: '18px 18px',
+          opacity: 0.6,
+        }}
+      />
     );
   }
 
-  if (type === 'diagonal-band') {
+  if (type === 'side-divider') {
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: W,
-            height: H,
-            backgroundImage: `linear-gradient(120deg, ${accent}33 0%, ${accent}00 40%, ${accent}00 60%, ${accent}33 100%)`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 80,
-            right: 60,
-            width: 80,
-            height: 4,
-            background: accent,
-            borderRadius: 2,
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: 60,
+          right: 40,
+          width: 4,
+          height: H - 120,
+          background: accent,
+          borderRadius: 2,
+        }}
+      />
     );
   }
 
   if (type === 'dots-grid') {
     return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: W,
-            height: H,
-            backgroundImage: `radial-gradient(${accent}30 1.5px, transparent 1.5px)`,
-            backgroundSize: '28px 28px',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 40,
-            left: 40,
-            width: 40,
-            height: 40,
-            borderTop: `2px solid ${accent}`,
-            borderLeft: `2px solid ${accent}`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 40,
-            right: 40,
-            width: 40,
-            height: 40,
-            borderBottom: `2px solid ${accent}`,
-            borderRight: `2px solid ${accent}`,
-          }}
-        />
-      </>
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: W,
+          height: H,
+          backgroundImage: `radial-gradient(${accent}20 1.2px, transparent 1.2px)`,
+          backgroundSize: '40px 40px',
+        }}
+      />
     );
   }
 
@@ -324,34 +255,23 @@ function DecorationLayer({
         <div
           style={{
             position: 'absolute',
-            top: -120,
-            right: -120,
-            width: 320,
-            height: 320,
+            top: -100,
+            right: -100,
+            width: 260,
+            height: 260,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.18)',
+            background: overlayColor,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            bottom: -140,
-            left: -140,
-            width: 360,
-            height: 360,
+            bottom: -120,
+            left: -120,
+            width: 300,
+            height: 300,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.12)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 100,
-            left: 60,
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.35)',
+            background: overlayColor,
           }}
         />
       </>
@@ -361,7 +281,7 @@ function DecorationLayer({
   return null;
 }
 
-export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Buffer> {
+export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<string> {
   const template = getTemplate(recipe.templateId);
   const showWebsite = recipe.showWebsite ?? template.showWebsite;
   const showHandles = recipe.showHandles ?? template.showHandles;
@@ -369,7 +289,16 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
   const hasHoliday = !!recipe.holidayName;
   const hasTransparency = recipe.logoHasTransparency ?? true;
 
-  const accentColor = recipe.brandColors?.primary || template.textColor;
+  const bgColors = backgroundColorsOf(template);
+
+  // Accent color: brand primary if it has sufficient contrast, else template text
+  const rawAccent = recipe.brandColors?.primary || template.textColor;
+  const accentColor = ensureAccentContrast(rawAccent, bgColors, template.textColor);
+
+  // Holiday name color: pick from palette using deterministic seed
+  const seed = `${recipe.companyId || 'anon'}-${recipe.holidayName || 'base'}-${new Date().getFullYear()}`;
+  const holidayColor =
+    pickHolidayColor(recipe.holidayName, bgColors, seed) || template.textColor;
 
   const backgroundStyle: React.CSSProperties =
     template.background.type === 'gradient'
@@ -387,21 +316,26 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
   };
 
   const LogoBlock = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, ...baseTextStyle }}>
-      <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={100} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ width: 56, height: 4, background: accentColor, borderRadius: 2 }} />
-        <div style={{ fontSize: template.companyNameSize, fontWeight: 'bold', letterSpacing: 0.5 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20, ...baseTextStyle }}>
+      <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={110} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ width: 48, height: 3, background: accentColor, borderRadius: 2 }} />
+        <div
+          style={{
+            fontSize: template.companyNameSize,
+            fontWeight: 'bold',
+            letterSpacing: 0.4,
+          }}
+        >
           {recipe.companyName}
         </div>
         {recipe.tagline && (
           <div
             style={{
-              fontSize: 18,
-              opacity: 0.75,
-              letterSpacing: 0.5,
+              fontSize: template.taglineSize,
+              opacity: 0.7,
+              letterSpacing: 0.4,
               fontFamily: 'Inter',
-              marginTop: 2,
             }}
           >
             {recipe.tagline}
@@ -429,6 +363,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           textAlign: 'center',
           lineHeight: 1.1,
           maxWidth: 1000,
+          color: holidayColor,
         }}
       >
         {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
@@ -436,10 +371,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       {recipe.holidayDate && (
         <div
           style={{
-            fontSize: 28,
+            fontSize: 26,
             opacity: 0.85,
             letterSpacing: 2,
             fontFamily: recipe.holidayFontName,
+            color: holidayColor,
           }}
         >
           {recipe.holidayDate}
@@ -448,11 +384,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       {recipe.dedication && (
         <div
           style={{
-            fontSize: 20,
+            fontSize: 18,
             opacity: 0.75,
             fontFamily: 'Inter',
             fontStyle: 'italic',
-            marginTop: 10,
+            marginTop: 8,
             textAlign: 'center',
             maxWidth: 900,
           }}
@@ -515,7 +451,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       <div
         style={{
           display: 'flex',
-          gap: 22,
+          gap: 20,
           flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'center',
@@ -541,7 +477,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           justifyContent: 'space-between',
           width: '100%',
           height: '100%',
-          padding: 60,
+          padding: 50,
           position: 'relative',
         }}
       >
@@ -551,15 +487,15 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 24,
+            gap: 20,
             ...baseTextStyle,
           }}
         >
-          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={160} />
-          <div style={{ width: 80, height: 4, background: accentColor, borderRadius: 2 }} />
-          <div style={{ fontSize: 38, fontWeight: 'bold' }}>{recipe.companyName}</div>
+          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={140} />
+          <div style={{ width: 64, height: 3, background: accentColor, borderRadius: 2 }} />
+          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{recipe.companyName}</div>
           {recipe.tagline && (
-            <div style={{ fontSize: 18, opacity: 0.75, marginTop: -8 }}>
+            <div style={{ fontSize: 14, opacity: 0.7, marginTop: -6 }}>
               {recipe.tagline}
             </div>
           )}
@@ -569,7 +505,8 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
                 fontSize: 52,
                 fontFamily: recipe.holidayFontName,
                 textAlign: 'center',
-                marginTop: 20,
+                marginTop: 16,
+                color: holidayColor,
               }}
             >
               {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
@@ -578,7 +515,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           {recipe.dedication && (
             <div
               style={{
-                fontSize: 20,
+                fontSize: 18,
                 opacity: 0.75,
                 fontStyle: 'italic',
                 textAlign: 'center',
@@ -603,7 +540,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           justifyContent: 'space-between',
           width: '100%',
           height: '100%',
-          padding: 60,
+          padding: 50,
           position: 'relative',
         }}
       >
@@ -613,7 +550,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 24,
+            gap: 20,
           }}
         >
           {LogoBlock}
@@ -630,7 +567,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
           justifyContent: 'space-between',
           width: '100%',
           height: '100%',
-          padding: 60,
+          padding: 50,
           position: 'relative',
         }}
       >
@@ -641,7 +578,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
     );
   }
 
-  // Compose with decoration layer
   const composed = (
     <div
       style={{
@@ -655,7 +591,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
       <DecorationLayer
         type={template.decoration}
         accent={accentColor}
-        textColor={template.textColor}
+        backgroundColors={bgColors}
       />
       <div
         style={{
@@ -696,5 +632,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<Bu
   const pngData = resvg.render();
   const pngBuffer = pngData.asPng();
 
-  return await sharp(pngBuffer).resize(1200, 630).png().toBuffer();
+  const finalBuffer = await sharp(pngBuffer).resize(1200, 630).png().toBuffer();
+  return finalBuffer.toString('base64');
 }

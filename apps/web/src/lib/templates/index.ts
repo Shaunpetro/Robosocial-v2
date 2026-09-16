@@ -2,12 +2,11 @@
 export type DecorationType =
   | 'none'
   | 'top-bar'
-  | 'corner-circles'
-  | 'side-line'
-  | 'border-frame'
-  | 'double-divider'
-  | 'corner-triangle'
-  | 'diagonal-band'
+  | 'single-circle'
+  | 'corner-accent'
+  | 'thin-rule'
+  | 'grain'
+  | 'side-divider'
   | 'dots-grid'
   | 'corner-blobs';
 
@@ -23,6 +22,7 @@ export interface TemplateDefinition {
   textColor: string;
   fontFamily: string;
   companyNameSize: number;
+  taglineSize: number;
   websiteSize: number;
   showWebsite: boolean;
   showHandles: boolean;
@@ -37,8 +37,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#111827',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
     decoration: 'top-bar',
@@ -50,11 +51,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#FFFFFF',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'corner-circles',
+    decoration: 'single-circle',
   },
   {
     id: 'minimalist-dark',
@@ -63,11 +65,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#FFFFFF',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'border-frame',
+    decoration: 'corner-accent',
   },
   {
     id: 'professional-blue',
@@ -76,11 +79,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#FFFFFF',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'double-divider',
+    decoration: 'thin-rule',
   },
   {
     id: 'earthy-sa',
@@ -89,11 +93,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#FFFBEB',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'corner-triangle',
+    decoration: 'grain',
   },
   {
     id: 'modern-split',
@@ -102,11 +107,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#F8FAFC',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
-    decoration: 'diagonal-band',
+    decoration: 'side-divider',
   },
   {
     id: 'tech-grid',
@@ -115,8 +121,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#E2E8F0',
     fontFamily: 'Inter',
-    companyNameSize: 34,
-    websiteSize: 19,
+    companyNameSize: 24,
+    taglineSize: 13,
+    websiteSize: 17,
     showWebsite: true,
     showHandles: true,
     decoration: 'dots-grid',
@@ -128,8 +135,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     logoPosition: 'top',
     textColor: '#1F2937',
     fontFamily: 'Inter',
-    companyNameSize: 36,
-    websiteSize: 20,
+    companyNameSize: 26,
+    taglineSize: 14,
+    websiteSize: 18,
     showWebsite: true,
     showHandles: true,
     decoration: 'corner-blobs',

@@ -24,7 +24,6 @@ import {
   Pencil,
   Layers,
   Star,
-  Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -438,6 +437,8 @@ export default function SpecialDatesHubPage() {
             holidayName: selectedHoliday?.name,
             holidayDate: selectedHoliday?.date,
             holidayMessage: selectedHoliday ? `Happy ${selectedHoliday.name}!` : undefined,
+            holidayDescription: selectedHoliday?.description,
+            holidayTone: undefined,
           }),
         }
       );
@@ -561,7 +562,7 @@ export default function SpecialDatesHubPage() {
             <div className="flex items-center gap-2 mb-1">
               <Layers className="h-5 w-5 text-brand-500" />
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                Step 1 — Which calendars should we watch?
+                Step 1: Which calendars should we watch?
               </h2>
             </div>
             <p className="text-sm text-[var(--text-tertiary)] mb-4">
@@ -606,7 +607,7 @@ export default function SpecialDatesHubPage() {
               <div className="flex items-center gap-2 mb-1">
                 <Star className="h-5 w-5 text-brand-500" />
                 <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                  Step 2 — What kinds of days?
+                  Step 2: What kinds of days?
                 </h2>
               </div>
               <p className="text-sm text-[var(--text-tertiary)] mb-4">
@@ -638,17 +639,17 @@ export default function SpecialDatesHubPage() {
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="h-5 w-5 text-brand-500" />
                 <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                  Step 3 — Which dates to feature?
+                  Step 3: Which dates to feature?
                 </h2>
               </div>
               <p className="text-sm text-[var(--text-tertiary)] mb-4">
-                Toggle off any dates you don&apos;t want. Toggle back on to include them again.
+                Toggle off any dates you do not want. Toggle back on to include them again.
               </p>
 
               {quickPicks.length > 0 && (
                 <div className="mb-6">
                   <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)] mb-2">
-                    Quick picks — next major moments
+                    Quick picks: next major moments
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {quickPicks.map((h) => {
@@ -824,7 +825,6 @@ export default function SpecialDatesHubPage() {
               </div>
             </div>
 
-            {/* Tagline + Dedication */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div>
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
@@ -844,18 +844,18 @@ export default function SpecialDatesHubPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Dedication <span className="text-[var(--text-tertiary)]">(optional)</span>
+                  Fallback dedication <span className="text-[var(--text-tertiary)]">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={config.dedication ?? ""}
                   onChange={(e) => updateConfig({ dedication: e.target.value })}
-                  placeholder="e.g., Dedicated to our team"
+                  placeholder="Leave empty to auto-generate per holiday"
                   maxLength={100}
                   className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
                 />
                 <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                  Appears below the holiday message
+                  If empty, a unique line is generated for each holiday
                 </p>
               </div>
             </div>
@@ -940,7 +940,7 @@ export default function SpecialDatesHubPage() {
                   className="text-xs flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline"
                 >
                   <Pencil className="h-3 w-3" />
-                  {editingHandles ? "Done" : "Edit / Add"}
+                  {editingHandles ? "Done" : "Edit or Add"}
                 </button>
               </div>
               {visiblePlatforms.length === 0 ? (
@@ -1061,8 +1061,8 @@ export default function SpecialDatesHubPage() {
             >
               <Wand2 className="h-5 w-5" />
               {selectedHoliday
-                ? `Preview & Generate — ${selectedHoliday.name}`
-                : "Preview & Generate"}
+                ? `Preview and Generate: ${selectedHoliday.name}`
+                : "Preview and Generate"}
             </button>
             <button
               onClick={performSave}
@@ -1092,8 +1092,8 @@ export default function SpecialDatesHubPage() {
             <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                 {selectedHoliday
-                  ? `Preview — ${selectedHoliday.name}`
-                  : "Preview — Base Image"}
+                  ? `Preview: ${selectedHoliday.name}`
+                  : "Preview: Base Image"}
               </h2>
               <button
                 onClick={() => setShowPreviewModal(false)}
