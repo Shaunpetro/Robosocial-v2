@@ -133,6 +133,7 @@ function DecorationLayer({
   const W = 1200;
   const H = 630;
 
+  // Determine whether background is dark so we can choose light or dark accents
   const avgLum =
     backgroundColors
       .map((c) => {
@@ -142,114 +143,181 @@ function DecorationLayer({
       .reduce((a, b) => a + b, 0) / Math.max(backgroundColors.length, 1);
   const isDarkBg = avgLum < 0.5;
 
-  const overlayColor = isDarkBg ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const overlayStrong = isDarkBg ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)';
-
   if (type === 'none') return null;
 
+  // Clean Corporate: solid brand bar plus soft gradient strip beneath
   if (type === 'top-bar') {
-    return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: W,
-          height: 10,
-          background: accent,
-        }}
-      />
-    );
-  }
-
-  if (type === 'dual-circles') {
     return (
       <>
         <div
           style={{
             position: 'absolute',
-            top: -200,
-            right: -200,
-            width: 520,
-            height: 520,
-            borderRadius: '50%',
-            background: overlayColor,
+            top: 0,
+            left: 0,
+            width: W,
+            height: 14,
+            background: accent,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            top: -80,
-            right: -320,
-            width: 360,
-            height: 360,
-            borderRadius: '50%',
-            background: overlayStrong,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -180,
-            left: -180,
-            width: 440,
-            height: 440,
-            borderRadius: '50%',
-            background: overlayColor,
+            top: 14,
+            left: 0,
+            width: W,
+            height: 60,
+            backgroundImage: `linear-gradient(180deg, ${accent}26 0%, ${accent}00 100%)`,
           }}
         />
       </>
     );
   }
 
+  // Bold Gradient: two radial gradient circles plus a solid accent dot
+  if (type === 'dual-circles') {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: -180,
+            right: -180,
+            width: 500,
+            height: 500,
+            borderRadius: '50%',
+            backgroundImage:
+              'radial-gradient(circle, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 70%)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 20,
+            right: -100,
+            width: 320,
+            height: 320,
+            borderRadius: '50%',
+            backgroundImage:
+              'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 80,
+            left: 80,
+            width: 80,
+            height: 80,
+            borderRadius: '50%',
+            background: accent,
+            opacity: 0.5,
+          }}
+        />
+      </>
+    );
+  }
+
+  // Minimalist Dark: mirrored corner brackets
   if (type === 'corner-accent') {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 40,
-          right: 40,
-          width: 60,
-          height: 60,
-          borderTop: `2px solid ${accent}`,
-          borderRight: `2px solid ${accent}`,
-        }}
-      />
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            right: 40,
+            width: 60,
+            height: 60,
+            borderTop: `3px solid ${accent}`,
+            borderRight: `3px solid ${accent}`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            left: 40,
+            width: 60,
+            height: 60,
+            borderBottom: `3px solid ${accent}`,
+            borderLeft: `3px solid ${accent}`,
+          }}
+        />
+      </>
     );
   }
 
+  // Professional Blue: top rule plus bottom accent band
   if (type === 'thin-rule') {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 130,
-          left: 60,
-          right: 60,
-          height: 1,
-          background: overlayStrong,
-        }}
-      />
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 130,
+            left: 60,
+            right: 60,
+            height: 2,
+            background: 'rgba(255,255,255,0.40)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            width: W,
+            height: 20,
+            background: accent,
+            opacity: 0.4,
+          }}
+        />
+      </>
     );
   }
 
+  // Earthy SA: bold dot pattern plus large soft wave bottom-left
   if (type === 'grain') {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: W,
-          height: H,
-          backgroundImage: `radial-gradient(${overlayColor} 1px, transparent 1px)`,
-          backgroundSize: '18px 18px',
-          opacity: 0.6,
-        }}
-      />
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
+            backgroundImage: `radial-gradient(rgba(255,255,255,0.30) 2px, transparent 2px)`,
+            backgroundSize: '20px 20px',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -250,
+            left: -150,
+            width: 500,
+            height: 500,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.15)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 60,
+            right: 80,
+            width: 120,
+            height: 120,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.10)',
+          }}
+        />
+      </>
     );
   }
 
+  // Modern Split: darker right band plus thick divider plus accent square
   if (type === 'side-divider') {
     return (
       <>
@@ -260,7 +328,7 @@ function DecorationLayer({
             right: 0,
             width: 160,
             height: H,
-            background: overlayColor,
+            background: 'rgba(0,0,0,0.20)',
           }}
         />
         <div
@@ -268,79 +336,141 @@ function DecorationLayer({
             position: 'absolute',
             top: 0,
             right: 160,
-            width: 4,
+            width: 6,
             height: H,
             background: accent,
             opacity: 0.7,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            right: 40,
+            width: 60,
+            height: 60,
+            background: accent,
+            opacity: 0.85,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            right: 60,
+            width: 40,
+            height: 4,
+            background: accent,
+            opacity: 0.85,
           }}
         />
       </>
     );
   }
 
+  // Tech Grid: denser dot pattern plus four corner brackets
   if (type === 'dots-grid') {
-    return (
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: W,
-          height: H,
-          backgroundImage: `radial-gradient(${accent}20 1.2px, transparent 1.2px)`,
-          backgroundSize: '40px 40px',
-        }}
-      />
-    );
-  }
-
-  if (type === 'corner-blobs') {
     return (
       <>
         <div
           style={{
             position: 'absolute',
-            top: -180,
-            right: -180,
-            width: 400,
-            height: 400,
-            borderRadius: '50%',
-            background: overlayColor,
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
+            backgroundImage: `radial-gradient(${accent}55 1.5px, transparent 1.5px)`,
+            backgroundSize: '32px 32px',
           }}
         />
         <div
           style={{
             position: 'absolute',
-            bottom: -220,
-            left: -220,
-            width: 480,
-            height: 480,
-            borderRadius: '50%',
-            background: overlayColor,
+            top: 30,
+            left: 30,
+            width: 40,
+            height: 40,
+            borderTop: `2px solid ${accent}`,
+            borderLeft: `2px solid ${accent}`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            top: 120,
-            left: 80,
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            background: overlayStrong,
+            top: 30,
+            right: 30,
+            width: 40,
+            height: 40,
+            borderTop: `2px solid ${accent}`,
+            borderRight: `2px solid ${accent}`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            top: 78,
-            left: 140,
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            background: overlayStrong,
+            bottom: 30,
+            left: 30,
+            width: 40,
+            height: 40,
+            borderBottom: `2px solid ${accent}`,
+            borderLeft: `2px solid ${accent}`,
           }}
         />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 30,
+            right: 30,
+            width: 40,
+            height: 40,
+            borderBottom: `2px solid ${accent}`,
+            borderRight: `2px solid ${accent}`,
+          }}
+        />
+      </>
+    );
+  }
+
+  // Playful: scattered confetti across the canvas
+  if (type === 'corner-blobs') {
+    const confetti: Array<{
+      x: number;
+      y: number;
+      size: number;
+      opacity: number;
+      color: string;
+    }> = [
+      { x: 80, y: 80, size: 20, opacity: 0.45, color: accent },
+      { x: 180, y: 160, size: 12, opacity: 0.35, color: '#FFFFFF' },
+      { x: 1040, y: 100, size: 24, opacity: 0.40, color: accent },
+      { x: 1120, y: 200, size: 14, opacity: 0.50, color: '#FFFFFF' },
+      { x: 60, y: 500, size: 18, opacity: 0.40, color: '#FFFFFF' },
+      { x: 180, y: 560, size: 10, opacity: 0.55, color: accent },
+      { x: 1070, y: 520, size: 22, opacity: 0.35, color: accent },
+      { x: 960, y: 570, size: 14, opacity: 0.45, color: '#FFFFFF' },
+      { x: 400, y: 60, size: 10, opacity: 0.40, color: '#FFFFFF' },
+      { x: 800, y: 70, size: 12, opacity: 0.35, color: accent },
+      { x: 350, y: 580, size: 16, opacity: 0.40, color: accent },
+      { x: 850, y: 590, size: 8, opacity: 0.45, color: '#FFFFFF' },
+    ];
+
+    return (
+      <>
+        {confetti.map((c, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              top: c.y,
+              left: c.x,
+              width: c.size,
+              height: c.size,
+              borderRadius: '50%',
+              background: c.color,
+              opacity: c.opacity,
+            }}
+          />
+        ))}
       </>
     );
   }

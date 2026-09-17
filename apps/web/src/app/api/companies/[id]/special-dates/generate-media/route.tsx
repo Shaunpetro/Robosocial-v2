@@ -1,202 +1,171 @@
 // apps/web/src/app/api/companies/[id]/special-dates/generate-media/route.tsx
-import { NextRequest, NextResponse } from 'next/server';
-import { checkCompanyAccess } from '@/lib/access';
-import { prisma } from '@/lib/db';
-import { renderBrandedImage } from '@/lib/templates/renderer';
-import { getFontForHoliday, getInterFont } from '@/lib/templates/fonts';
-import { buildHandleMap } from '@/lib/social-handles';
-import { getTemplateMood } from '@/lib/templates/colors';
-import { getDedicationForHoliday } from '@/lib/ai/dedication';
-import { UTApi } from 'uploadthing/server';
+
+import { NextRequest, NextResponse } from "next/server";
+import { ImageResponse } from "@vercel/og";
+import { prisma } from "@/lib/db";
+import { UTApi } from "uploadthing/server";
 
 const utapi = new UTApi();
 
-export const runtime = 'nodejs';
-
-function slugify(str: string): string {
-  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
+export const runtime = "nodejs";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: companyId } = await params;
-
-  const access = await checkCompanyAccess(companyId);
-  if (!access.allowed) {
-    return NextResponse.json({ error: access.error }, { status: access.status });
-  }
-
-  const body = await request.json().catch(() => ({}));
-  const holidayName: string | undefined = body.holidayName;
-  const holidayDate: string | undefined = body.holidayDate;
-  const holidayMessage: string | undefined = body.holidayMessage;
-  const holidayDescription: string | undefined = body.holidayDescription;
-  const holidayTone: string | undefined = body.holidayTone;
-
   try {
+    const { id: companyId } = await params;
+
+    // 1. Fetch config with logo media
     const config = await prisma.companySpecialDatesConfig.findUnique({
       where: { companyId },
       include: { logoMedia: true },
     });
 
-    if (!config || !config.logoMedia) {
+    if (!config || !config.enabled) {
       return NextResponse.json(
-        { error: 'Please upload a company logo first' },
+        { error: "Special dates feature not enabled" },
+        { status: 400 }
+      );
+    }
+    if (!config.logoMedia) {
+      return NextResponse.json(
+        { error: "Please upload a company logo first" },
         { status: 400 }
       );
     }
 
+    // 2. Fetch company details
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      include: { intelligence: true },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-    }
-
-    const handleMap = buildHandleMap(
-      company.socialLinks as Record<string, string> | null,
-      company.socialHandles as Record<string, string> | null
-    );
-
-    const socialItems = Object.entries(handleMap).map(([platform, handle]) => ({
-      platform,
-      handle,
-    }));
-
-    const socialJson = (company.socialLinks as Record<string, string> | null) || {};
-    const contactWhatsapp = socialJson.whatsapp
-      ? socialJson.whatsapp.replace(/^https?:\/\/wa\.me\//, '')
-      : null;
-
-    const templateMood = getTemplateMood(config.templateId);
-
-    let dedicationText: string | null = null;
-    if (holidayName) {
-      if (config.dedication && config.dedication.trim().length > 0) {
-        dedicationText = config.dedication.trim();
-      } else {
-        dedicationText = await getDedicationForHoliday({
-          companyId,
-          companyName: company.name,
-          industry: company.industry,
-          brandVoice: company.intelligence?.brandVoice || null,
-          holidayName,
-          holidayDescription: holidayDescription || holidayName,
-          holidayTone,
-          templateId: config.templateId,
-          templateMood,
-        });
-      }
-    }
-
-    const { fontData: holidayFontData, fontName: holidayFontName } =
-      getFontForHoliday(holidayName);
-    const baseFontData = getInterFont();
-
-    const base64Image = await renderBrandedImage({
-      templateId: config.templateId || 'clean-corporate',
-      companyName: company.name,
-      logoUrl: config.logoMedia.url,
-      logoHasTransparency: config.logoHasTransparency ?? true,
-      tagline: config.tagline,
-      dedication: dedicationText,
-      website: company.website || '',
-      socialItems,
-      contactEmail: company.contactEmail,
-      contactPhone: company.contactPhone,
-      contactWhatsapp,
-      brandColors: (company.brandColors as Record<string, string>) || {},
-      logoPosition: (config.logoPosition as 'top' | 'center' | 'bottom') || 'top',
-      showWebsite: config.showWebsite,
-      showHandles: config.showHandles,
-      holidayName,
-      holidayDate,
-      holidayMessage,
-      companyId,
-      baseFontData,
-      holidayFontData,
-      holidayFontName,
-    });
-
-    const imageBuffer = Buffer.from(base64Image, 'base64');
-
-    const baseFilename = holidayName
-      ? `special-dates-${slugify(holidayName)}-${companyId}.png`
-      : `special-dates-base-${companyId}.png`;
-
-    const fileEsque = new File([new Uint8Array(imageBuffer)], baseFilename, {
-      type: 'image/png',
-    });
-    const uploadResult = await utapi.uploadFiles(fileEsque);
-    if (!uploadResult.data) {
-      return NextResponse.json({ error: 'Image upload failed' }, { status: 500 });
-    }
-
-    const imageUrl = uploadResult.data.ufsUrl || uploadResult.data.url;
-
-    const tags = holidayName
-      ? ['special-dates', 'holiday', `holiday:${slugify(holidayName)}`]
-      : ['special-dates', 'base'];
-
-    const existing = await prisma.media.findFirst({
-      where: {
-        companyId,
-        tags: { has: holidayName ? `holiday:${slugify(holidayName)}` : 'base' },
+      include: {
+        platforms: {
+          where: { isConnected: true },
+        },
       },
     });
 
-    let mediaId: string;
-    if (existing) {
-      await prisma.media.update({
-        where: { id: existing.id },
-        data: {
-          url: imageUrl,
-          filename: baseFilename,
-          mimeType: 'image/png',
-          size: imageBuffer.length,
-          tags,
-          expiresAt: new Date('2099-01-01T00:00:00.000Z'),
-        },
-      });
-      mediaId = existing.id;
-    } else {
-      const media = await prisma.media.create({
-        data: {
-          companyId,
-          filename: baseFilename,
-          url: imageUrl,
-          type: 'IMAGE',
-          mimeType: 'image/png',
-          size: imageBuffer.length,
-          tags,
-          expiresAt: new Date('2099-01-01T00:00:00.000Z'),
-        },
-      });
-      mediaId = media.id;
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    if (!holidayName) {
-      await prisma.companySpecialDatesConfig.update({
-        where: { companyId },
-        data: { generatedMediaId: mediaId },
-      });
+    const logoUrl = config.logoMedia.url;
+    const website = company.website || "";
+    const platformHandles = company.platforms.map(
+      (p) => `${p.type}: @${p.username || p.name}`
+    );
+
+    // Determine template style
+    const templateId = config.templateId || "clean-corporate";
+    let backgroundStyle: React.CSSProperties = {
+      background: "linear-gradient(135deg, #6366f1, #a855f7)",
+      color: "white",
+    };
+    if (templateId === "clean-corporate") {
+      backgroundStyle = {
+        background: "white",
+        color: "#111827",
+        border: "2px solid #e5e7eb",
+      };
+    } else if (templateId === "minimalist-dark") {
+      backgroundStyle = {
+        background: "#111827",
+        color: "white",
+      };
     }
 
-    return NextResponse.json({
-      mediaId,
-      url: imageUrl,
-      holidayFontName,
-      holidayName,
-      dedication: dedicationText,
+    // 3. Generate image with @vercel/og
+    const imageResponse = new ImageResponse(
+      (
+        <div
+          style={{
+            width: 1200,
+            height: 630,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 40,
+            fontFamily: "Arial, sans-serif",
+            ...backgroundStyle,
+          }}
+        >
+          <img
+            src={logoUrl}
+            alt="Logo"
+            style={{
+              width: 200,
+              height: 200,
+              objectFit: "contain",
+              marginBottom: 20,
+            }}
+          />
+          <h1 style={{ fontSize: 48, fontWeight: "bold", margin: "0 0 10px 0" }}>
+            {company.name}
+          </h1>
+          {website && (
+            <p style={{ fontSize: 28, margin: "0 0 10px 0" }}>{website}</p>
+          )}
+          <div style={{ display: "flex", gap: 20, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            {platformHandles.map((handle, i) => (
+              <span key={i} style={{ fontSize: 22 }}>
+                {handle}
+              </span>
+            ))}
+          </div>
+        </div>
+      ),
+      { width: 1200, height: 630 }
+    );
+
+    // 4. Get image buffer
+    const imageBuffer = await imageResponse.arrayBuffer();
+
+    // 5. Upload to Vercel Blob via Uploadthing
+    const blob = await utapi.uploadFiles(
+      new File([imageBuffer], `special-dates-${companyId}.png`, {
+        type: "image/png",
+      })
+    );
+
+    if (!blob.data) {
+      return NextResponse.json({ error: "Image upload failed" }, { status: 500 });
+    }
+
+    const imageUrl = blob.data.ufsUrl || blob.data.url;
+
+    // 6. Create permanent Media record
+    const expiresAt = new Date("2099-01-01T00:00:00.000Z");
+    const media = await prisma.media.create({
+      data: {
+        companyId,
+        filename: `special-dates-${companyId}.png`,
+        url: imageUrl,
+        type: "IMAGE",
+        mimeType: "image/png",
+        size: blob.data.size,
+        expiresAt,
+        tags: ["special-dates", "permanent"],
+        isUsed: false,
+        autoSelect: false,
+        priority: 10,
+      },
     });
+
+    // 7. Update config with generated media ID
+    await prisma.companySpecialDatesConfig.update({
+      where: { companyId },
+      data: { generatedMediaId: media.id },
+    });
+
+    return NextResponse.json({ mediaId: media.id, url: imageUrl });
   } catch (error) {
-    console.error('Media generation failed:', error);
+    console.error("Special dates media generation failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Media generation failed' },
+      {
+        error:
+          error instanceof Error ? error.message : "Media generation failed",
+      },
       { status: 500 }
     );
   }

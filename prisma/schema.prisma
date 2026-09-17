@@ -387,6 +387,20 @@ model HolidayDedication {
   @@index([companyId])
 }
 
+model HolidayStockImage {
+  id           String   @id @default(cuid())
+  holidaySlug  String
+  pexelsId     String
+  url          String
+  photographer String?
+  width        Int
+  height       Int
+  createdAt    DateTime @default(now())
+
+  @@unique([holidaySlug, pexelsId])
+  @@index([holidaySlug])
+}
+
 // ============================================
 // COMPANY INTELLIGENCE
 // ============================================
