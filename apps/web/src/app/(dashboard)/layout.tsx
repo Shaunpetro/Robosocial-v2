@@ -161,7 +161,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   const navItems = useMemo(() => {
     const specialDatesHref = selectedCompanyId
-      ? `/companies/${selectedCompanyId}/special-dates`
+      ? `/special-dates?companyId=${selectedCompanyId}`
       : "/special-dates";
 
     return [

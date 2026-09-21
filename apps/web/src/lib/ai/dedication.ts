@@ -3,6 +3,7 @@ import Groq from 'groq-sdk';
 import { prisma } from '@/lib/db';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 
 export interface DedicationIntelligenceContext {
   brandVoice?: string | null;
@@ -26,6 +27,24 @@ export interface GenerateDedicationInput {
   holidayTone?: string;
   templateId?: string | null;
   templateMood?: string;
+}
+
+export interface DedicationTrace {
+  source: 'cache' | 'ai' | 'fallback';
+  cacheHit: boolean;
+  fresh: boolean;
+  templateMatch: boolean;
+  prompt: string | null;
+  model: string;
+  groqStatus: number | null;
+  groqError: string | null;
+  rawContent: string | null;
+  rawLength: number;
+  cleanedText: string | null;
+  cleanedLength: number;
+  finalText: string;
+  envGroqKeyPresent: boolean;
+  envGroqKeyLength: number;
 }
 
 const FALLBACK_BY_TONE: Record<string, string[]> = {
@@ -79,11 +98,9 @@ function buildIntelligenceBlock(
   if (!intel) return [];
   const lines: string[] = [];
 
-  // Explicit voice wins
   if (intel.brandVoice && intel.brandVoice.trim().length > 0) {
     lines.push(`Speak in this brand voice: ${intel.brandVoice.trim()}`);
   } else if (intel.brandPersonality && intel.brandPersonality.length > 0) {
-    // Synthesize a voice descriptor from personality traits
     lines.push(`Brand personality: ${intel.brandPersonality.join(', ')}`);
   }
 
@@ -116,11 +133,20 @@ function buildIntelligenceBlock(
   return lines;
 }
 
-async function generateWithGroq(input: GenerateDedicationInput): Promise<string | null> {
+interface GroqCallResult {
+  prompt: string;
+  generated: string | null;
+  groqStatus: number | null;
+  groqError: string | null;
+  rawContent: string | null;
+  rawLength: number;
+  cleanedLength: number;
+}
+
+async function generateWithGroq(input: GenerateDedicationInput): Promise<GroqCallResult> {
   const tone = input.holidayTone || 'warm';
   const mood = input.templateMood || 'warm, grounded';
 
-  // Context lines, only populated fields included
   const contextLines: string[] = [];
 
   if (input.industry && input.industry.trim().length > 0) {
@@ -135,7 +161,6 @@ async function generateWithGroq(input: GenerateDedicationInput): Promise<string 
     input.companyDescription &&
     input.companyDescription.trim().length > 0
   ) {
-    // Fallback: raw description
     contextLines.push(`About the company: ${input.companyDescription.trim().slice(0, 240)}`);
   }
 
@@ -163,7 +188,7 @@ Return only the sentence, nothing else.`;
 
   try {
     const response = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-20b',
+      model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.95,
       max_tokens: 80,
@@ -174,10 +199,70 @@ Return only the sentence, nothing else.`;
       .replace(/^["']|["']$/g, '')
       .replace(/[\u2014\u2013]/g, ',')
       .slice(0, 90);
-    return cleaned.length > 0 ? cleaned : null;
+
+    console.log('[dedication] Groq success', {
+      model: GROQ_MODEL,
+      companyId: input.companyId,
+      holidayName: input.holidayName,
+      rawLength: raw.length,
+      cleanedLength: cleaned.length,
+      rawPreview: raw.slice(0, 120),
+    });
+
+    return {
+      prompt,
+      generated: cleaned.length > 0 ? cleaned : null,
+      groqStatus: 200,
+      groqError: null,
+      rawContent: raw,
+      rawLength: raw.length,
+      cleanedLength: cleaned.length,
+    };
   } catch (error) {
-    console.error('Groq dedication failed:', error);
-    return null;
+    const err = error as Record<string, unknown> & {
+      status?: number;
+      response?: { status?: number; data?: unknown };
+      error?: { message?: string };
+      message?: string;
+    };
+
+    const status =
+      typeof err?.status === 'number'
+        ? err.status
+        : typeof err?.response?.status === 'number'
+        ? err.response.status
+        : null;
+
+    const errorMessage =
+      typeof err?.message === 'string'
+        ? err.message
+        : typeof err?.error?.message === 'string'
+        ? err.error.message
+        : String(error);
+
+    const errorBody =
+      typeof err?.response?.data !== 'undefined'
+        ? JSON.stringify(err.response.data).slice(0, 500)
+        : null;
+
+    console.error('[dedication] Groq call failed', {
+      model: GROQ_MODEL,
+      companyId: input.companyId,
+      holidayName: input.holidayName,
+      status,
+      message: errorMessage,
+      body: errorBody,
+    });
+
+    return {
+      prompt,
+      generated: null,
+      groqStatus: status,
+      groqError: errorBody ? `${errorMessage} | body: ${errorBody}` : errorMessage,
+      rawContent: null,
+      rawLength: 0,
+      cleanedLength: 0,
+    };
   }
 }
 
@@ -187,12 +272,30 @@ function pickFallback(tone?: string): string {
 }
 
 /**
- * Returns a cached or freshly generated dedication for a company/holiday/template.
- * Cache invalidates when the template changes or after 90 days.
+ * Trace-returning variant used by the diagnostic endpoint. Normal callers
+ * should use `getDedicationForHoliday`, which returns just the string.
  */
-export async function getDedicationForHoliday(
+export async function getDedicationForHolidayWithTrace(
   input: GenerateDedicationInput
-): Promise<string> {
+): Promise<{ text: string; trace: DedicationTrace }> {
+  const trace: DedicationTrace = {
+    source: 'fallback',
+    cacheHit: false,
+    fresh: false,
+    templateMatch: false,
+    prompt: null,
+    model: GROQ_MODEL,
+    groqStatus: null,
+    groqError: null,
+    rawContent: null,
+    rawLength: 0,
+    cleanedText: null,
+    cleanedLength: 0,
+    finalText: '',
+    envGroqKeyPresent: !!process.env.GROQ_API_KEY,
+    envGroqKeyLength: process.env.GROQ_API_KEY?.length || 0,
+  };
+
   const existing = await prisma.holidayDedication.findUnique({
     where: {
       companyId_holidayName: {
@@ -203,21 +306,71 @@ export async function getDedicationForHoliday(
   });
 
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const fresh = existing && existing.generatedAt > ninetyDaysAgo;
+  const fresh = !!(existing && existing.generatedAt > ninetyDaysAgo);
   const sameTemplate = existing?.templateId === (input.templateId || null);
 
+  trace.fresh = fresh;
+  trace.templateMatch = sameTemplate;
+
   if (existing && fresh && sameTemplate) {
-    return existing.text;
+    trace.source = 'cache';
+    trace.cacheHit = true;
+    trace.finalText = existing.text;
+
+    console.log('[dedication] cache hit', {
+      companyId: input.companyId,
+      holidayName: input.holidayName,
+      templateId: input.templateId,
+      text: existing.text,
+    });
+
+    return { text: existing.text, trace };
   }
 
-  const generated = await generateWithGroq(input);
-  const text = generated || pickFallback(input.holidayTone);
+  console.log('[dedication] cache miss, calling Groq', {
+    companyId: input.companyId,
+    holidayName: input.holidayName,
+    templateId: input.templateId,
+    hadExisting: !!existing,
+    fresh,
+    sameTemplate,
+    envGroqKeyPresent: trace.envGroqKeyPresent,
+    envGroqKeyLength: trace.envGroqKeyLength,
+  });
+
+  const groqResult = await generateWithGroq(input);
+
+  trace.prompt = groqResult.prompt;
+  trace.groqStatus = groqResult.groqStatus;
+  trace.groqError = groqResult.groqError;
+  trace.rawContent = groqResult.rawContent;
+  trace.rawLength = groqResult.rawLength;
+  trace.cleanedLength = groqResult.cleanedLength;
+  trace.cleanedText = groqResult.generated;
+
+  let finalText: string;
+  if (groqResult.generated) {
+    trace.source = 'ai';
+    finalText = groqResult.generated;
+  } else {
+    trace.source = 'fallback';
+    finalText = pickFallback(input.holidayTone);
+    console.warn('[dedication] Groq returned nothing, using fallback', {
+      companyId: input.companyId,
+      holidayName: input.holidayName,
+      groqStatus: groqResult.groqStatus,
+      groqError: groqResult.groqError,
+      fallback: finalText,
+    });
+  }
+
+  trace.finalText = finalText;
 
   if (existing) {
     await prisma.holidayDedication.update({
       where: { id: existing.id },
       data: {
-        text,
+        text: finalText,
         generatedAt: new Date(),
         templateId: input.templateId || null,
       },
@@ -228,10 +381,21 @@ export async function getDedicationForHoliday(
         companyId: input.companyId,
         holidayName: input.holidayName,
         templateId: input.templateId || null,
-        text,
+        text: finalText,
       },
     });
   }
 
+  return { text: finalText, trace };
+}
+
+/**
+ * Returns a cached or freshly generated dedication for a company/holiday/template.
+ * Cache invalidates when the template changes or after 90 days.
+ */
+export async function getDedicationForHoliday(
+  input: GenerateDedicationInput
+): Promise<string> {
+  const { text } = await getDedicationForHolidayWithTrace(input);
   return text;
 }

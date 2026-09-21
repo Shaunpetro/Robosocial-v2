@@ -98,8 +98,10 @@ export async function POST(
     }
 
     let dedication: string | null = null;
-    if (config.dedication && config.dedication.trim().length > 0) {
-      dedication = config.dedication.trim();
+    const usedConfigOverride = !!(config.dedication && config.dedication.trim().length > 0);
+
+    if (usedConfigOverride) {
+      dedication = config.dedication!.trim();
     } else if (holidayName && holidayDescription) {
       const intel = company.intelligence;
       try {
@@ -127,10 +129,19 @@ export async function POST(
           templateMood: getTemplateMood(config.templateId),
         });
       } catch (err) {
-        console.error("Dedication generation failed, continuing without:", err);
+        console.error("[special-dates/generate-media] dedication threw, continuing without:", err);
         dedication = null;
       }
     }
+
+    console.log("[special-dates/generate-media] dedication resolved", {
+      companyId,
+      holidayName: holidayName || null,
+      usedConfigOverride,
+      hasDedication: !!dedication,
+      dedicationLength: dedication?.length ?? 0,
+      dedicationPreview: dedication?.slice(0, 60) ?? null,
+    });
 
     let backgroundImageUrl: string | null = null;
     if (config.useStockBackgrounds && holidayName) {
