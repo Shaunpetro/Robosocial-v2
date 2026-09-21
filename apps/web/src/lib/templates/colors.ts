@@ -143,15 +143,13 @@ function hashSeed(str: string): number {
 
 /**
  * Picks a holiday color that clears a strict contrast threshold against the
- * template background. Thresholds raised from 4.5/3.5 to 5.5/4.5 so that
- * mid-tone palette options (muted browns, dusty reds) do not slip through
- * on high-chroma backgrounds like pink-orange gradients.
+ * template background.
  *
- * Solid backgrounds (single dominant color behind the text):
- *   WCAG AA for normal text = 4.5, we require 5.5 for headroom.
- * Gradient backgrounds (text sits across colour transitions):
- *   Contrast varies as the background sweeps through colours, so we require
- *   4.5 rather than AA-large 3.5 to hold up in the worst sample.
+ * Thresholds raised to 6.0 (gradients) / 7.0 (solids) — the previous 4.5/5.5
+ * technically passed WCAG AA but produced visually muddy picks like dark red
+ * on pink. At 6.0/7.0 a palette option must be genuinely distinct from the
+ * background to survive. If nothing clears the bar, we return an empty
+ * string and the caller falls back to the template's own text colour.
  */
 export function pickHolidayColor(
   holidayName: string | undefined,
@@ -162,7 +160,7 @@ export function pickHolidayColor(
   const palette = HOLIDAY_PALETTES.find((p) => p.holiday === holidayName);
   if (!palette) return '';
 
-  const threshold = backgroundColors.length > 1 ? 4.5 : 5.5;
+  const threshold = backgroundColors.length > 1 ? 6.0 : 7.0;
   const candidates = palette.colors.filter((c) => {
     return minContrastAcrossBackgrounds(c, backgroundColors) >= threshold;
   });

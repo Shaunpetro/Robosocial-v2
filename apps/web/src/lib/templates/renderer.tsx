@@ -9,7 +9,6 @@ import {
   ensureAccentContrast,
   hexToRgb,
   relativeLuminance,
-  minContrastAcrossBackgrounds,
 } from './colors';
 
 export interface SocialItem {
@@ -48,14 +47,6 @@ function getTemplate(templateId: string): TemplateDefinition {
   return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
 }
 
-/**
- * Panel/card/circle backgrounds. Uses axis-aligned gradients so the palette
- * actually spans the container's short axis:
- *   horizontal (wide, short): 90deg — colours sweep left to right
- *   vertical (tall, narrow):  180deg — colours sweep top to bottom
- * Diagonal gradients (135deg) collapse into near-solid on narrow panels, which
- * is why "bold-gradient" was rendering as flat indigo.
- */
 function getPanelBackground(
   template: TemplateDefinition,
   orientation: 'horizontal' | 'vertical'
@@ -100,10 +91,11 @@ function pickIconCircleColor(
 }
 
 /**
- * Holiday text colour resolver. Prefers the holiday palette pick, but only
- * when it also beats the template's own text colour in contrast. This stops
- * muted palette options (brown on pink, dusty red on orange) from rendering
- * when the template's text colour would be clearer.
+ * Resolves the colour used for holiday name, date, and dedication.
+ * Uses the palette pick when it cleared the strict thresholds in
+ * `pickHolidayColor` (6.0 on gradients, 7.0 on solids). Otherwise falls
+ * back to the template's own text colour, which is guaranteed to be
+ * calibrated for the template's palette.
  */
 function pickHolidayTextColor(
   holidayName: string | undefined,
@@ -112,18 +104,7 @@ function pickHolidayTextColor(
   templateTextColor: string
 ): string {
   const holidayPick = pickHolidayColor(holidayName, bgColors, seed);
-  if (!holidayPick) return templateTextColor;
-
-  const holidayContrast = minContrastAcrossBackgrounds(holidayPick, bgColors);
-  const templateContrast = minContrastAcrossBackgrounds(templateTextColor, bgColors);
-
-  // Require the holiday colour to clear AA-large (4.5) AND beat the template
-  // text colour. Otherwise fall back to the template's text colour which is
-  // guaranteed to be calibrated for that palette.
-  if (holidayContrast >= 4.5 && holidayContrast >= templateContrast) {
-    return holidayPick;
-  }
-  return templateTextColor;
+  return holidayPick || templateTextColor;
 }
 
 function LogoElement({
@@ -429,8 +410,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
           color: template.textColor,
         };
 
-  // Panels use axis-aligned gradients; left/right sweep vertically, top/bottom
-  // sweep horizontally, card and circle keep the template's original angle.
   const panelHorizontal = getPanelBackground(template, 'horizontal');
   const panelVertical = getPanelBackground(template, 'vertical');
 
@@ -519,6 +498,9 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     </div>
   );
 
+  // Holiday message, date, and dedication share the same resolved colour.
+  // No opacity reduction on the name or dedication — only the date uses a
+  // slight 0.9 to sit visually below the message.
   const buildHoliday = (fontSize: number, color: string) =>
     hasHoliday ? (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, ...baseTextStyle }}>
@@ -541,7 +523,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
             <span
               style={{
                 fontSize: Math.max(16, Math.round(fontSize * 0.28)),
-                opacity: 0.85,
+                opacity: 0.9,
                 letterSpacing: 2,
                 fontFamily: recipe.holidayFontName,
                 color,
@@ -553,7 +535,15 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
         )}
         {recipe.dedication && (
           <div style={{ display: 'flex', flexDirection: 'column', maxWidth: 900 }}>
-            <span style={{ fontSize: 18, opacity: 0.85, fontStyle: 'italic', textAlign: 'center' }}>
+            <span
+              style={{
+                fontSize: 19,
+                fontFamily: 'Inter',
+                fontStyle: 'italic',
+                textAlign: 'center',
+                color,
+              }}
+            >
               {recipe.dedication}
             </span>
           </div>
@@ -588,7 +578,6 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   } else if (composition.id === 'bottom-panel') {
     const panelH = composition.panelSize ?? 300;
     const photoH = 630 - panelH;
-    const holidayRenderColor = holidayTextColor;
     composed = (
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
@@ -615,7 +604,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
             gap: 14,
           }}
         >
-          {buildHoliday(46, holidayRenderColor)}
+          {buildHoliday(46, holidayTextColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -833,7 +822,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
                 <span
                   style={{
                     fontSize: 16,
-                    opacity: 0.85,
+                    opacity: 0.9,
                     letterSpacing: 2,
                     fontFamily: recipe.holidayFontName,
                     color: holidayTextColor,
