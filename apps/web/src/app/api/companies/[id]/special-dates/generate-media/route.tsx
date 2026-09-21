@@ -37,7 +37,6 @@ export async function POST(
       holidayTone,
     } = body;
 
-    // 1. Load config with logo
     const config = await prisma.companySpecialDatesConfig.findUnique({
       where: { companyId },
       include: { logoMedia: true },
@@ -62,7 +61,6 @@ export async function POST(
       );
     }
 
-    // 2. Load company, connected platforms, and intelligence
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       include: {
@@ -77,7 +75,6 @@ export async function POST(
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // 3. Build social items
     const socialItems: SocialItem[] = [];
     const handles = (company.socialHandles as Record<string, string> | null) || {};
 
@@ -100,7 +97,6 @@ export async function POST(
       }
     }
 
-    // 4. Dedication
     let dedication: string | null = null;
     if (config.dedication && config.dedication.trim().length > 0) {
       dedication = config.dedication.trim();
@@ -136,7 +132,6 @@ export async function POST(
       }
     }
 
-    // 5. Fetch stock background if enabled and holiday selected
     let backgroundImageUrl: string | null = null;
     if (config.useStockBackgrounds && holidayName) {
       try {
@@ -147,14 +142,13 @@ export async function POST(
       }
     }
 
-    // 6. Resolve fonts
     const baseFontData = getInterFont();
     const { fontData: holidayFontData, fontName: holidayFontName } =
       getFontForHoliday(holidayName);
 
-    // 7. Render
     const base64 = await renderBrandedImage({
       templateId: config.templateId || "clean-corporate",
+      compositionId: config.compositionId,
       companyName: company.name,
       logoUrl: config.logoMedia.url,
       logoHasTransparency: config.logoHasTransparency,
@@ -182,7 +176,6 @@ export async function POST(
 
     const imageBuffer = Buffer.from(base64, "base64");
 
-    // 8. Upload
     const slug = holidayName
       ? holidayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
       : "base";
@@ -198,11 +191,11 @@ export async function POST(
 
     const imageUrl = blob.data.ufsUrl || blob.data.url;
 
-    // 9. Persist Media record
     const expiresAt = new Date("2099-01-01T00:00:00.000Z");
     const tags = ["special-dates", "permanent"];
     if (holidayName) tags.push(`holiday:${holidayName}`);
     if (backgroundImageUrl) tags.push("stock-background");
+    if (config.compositionId) tags.push(`composition:${config.compositionId}`);
 
     const media = await prisma.media.create({
       data: {
@@ -220,7 +213,6 @@ export async function POST(
       },
     });
 
-    // 10. Only overwrite base image config when no holiday
     if (!holidayName) {
       await prisma.companySpecialDatesConfig.update({
         where: { companyId },

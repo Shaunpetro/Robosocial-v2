@@ -359,6 +359,7 @@ model CompanySpecialDatesConfig {
   generatedMediaId String?  @unique
   generatedMedia   Media?   @relation(name: "GeneratedMedia", fields: [generatedMediaId], references: [id], onDelete: SetNull)
   templateId       String?
+  compositionId    String?
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   fontStyle           String  @default("Arial")

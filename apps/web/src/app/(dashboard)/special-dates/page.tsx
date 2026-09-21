@@ -26,6 +26,7 @@ import {
   Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COMPOSITIONS } from "@/lib/templates/compositions";
 
 interface Company {
   id: string;
@@ -59,6 +60,7 @@ interface Config {
   logoMediaId?: string | null;
   generatedMediaId?: string | null;
   templateId?: string | null;
+  compositionId?: string | null;
   logoPosition?: "top" | "center" | "bottom";
   showWebsite?: boolean;
   showHandles?: boolean;
@@ -130,6 +132,7 @@ export default function SpecialDatesHubPage() {
     tagline: null,
     dedication: null,
     useStockBackgrounds: false,
+    compositionId: null,
   });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
   const [allHolidays, setAllHolidays] = useState<UpcomingHoliday[]>([]);
@@ -200,6 +203,7 @@ export default function SpecialDatesHubPage() {
             tagline: null,
             dedication: null,
             useStockBackgrounds: false,
+            compositionId: null,
           };
           setConfig({
             ...cfg,
@@ -207,6 +211,7 @@ export default function SpecialDatesHubPage() {
             tagline: cfg.tagline ?? null,
             dedication: cfg.dedication ?? null,
             useStockBackgrounds: cfg.useStockBackgrounds ?? false,
+            compositionId: cfg.compositionId ?? null,
           });
           setAvailableSets(data.availableSets || []);
           setBrandInfo(data.company || {});
@@ -281,6 +286,7 @@ export default function SpecialDatesHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     config.templateId,
+    config.compositionId,
     config.logoPosition,
     config.showWebsite,
     config.showHandles,
@@ -1017,6 +1023,37 @@ export default function SpecialDatesHubPage() {
               ))}
             </div>
 
+            <div className="mb-6 pt-4 border-t border-[var(--border-subtle)]">
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+                Composition layout
+              </label>
+              <p className="text-xs text-[var(--text-tertiary)] mb-3">
+                8 layouts combine with 8 templates for 64 possible looks. Auto uses the built-in Full Hero. Ship B3b will auto-pick based on brand voice and holiday tone.
+              </p>
+              <div className="relative">
+                <select
+                  value={config.compositionId ?? ""}
+                  onChange={(e) =>
+                    updateConfig({ compositionId: e.target.value || null })
+                  }
+                  className="w-full appearance-none px-4 py-2.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer"
+                >
+                  <option value="">Auto (Full Hero)</option>
+                  {COMPOSITIONS.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)] pointer-events-none" />
+              </div>
+              {config.compositionId && (
+                <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                  {COMPOSITIONS.find((c) => c.id === config.compositionId)?.description}
+                </p>
+              )}
+            </div>
+
             <h3 className="text-sm font-medium text-[var(--text-primary)] mb-2">Logo position</h3>
             <div className="flex flex-wrap gap-3 mb-4">
               {LOGO_POSITIONS.map((pos) => (
@@ -1034,6 +1071,9 @@ export default function SpecialDatesHubPage() {
                 </button>
               ))}
             </div>
+            <p className="text-xs text-[var(--text-tertiary)] mb-4">
+              Honoured by Full Hero and Vignette. Other compositions use fixed layouts.
+            </p>
 
             <div className="flex flex-wrap gap-4 text-sm mb-3">
               <label className="flex items-center gap-2 text-[var(--text-secondary)]">

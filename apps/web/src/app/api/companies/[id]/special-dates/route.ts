@@ -64,6 +64,7 @@ export async function GET(
       tagline: null,
       dedication: null,
       useStockBackgrounds: false,
+      compositionId: null,
     },
     availableSets: HOLIDAY_SETS.map((s) => ({
       id: s.id,
@@ -110,6 +111,7 @@ export async function PUT(
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,
+      compositionId: body.compositionId ?? null,
       logoPosition: body.logoPosition ?? "top",
       showWebsite: body.showWebsite ?? true,
       showHandles: body.showHandles ?? true,
@@ -125,6 +127,7 @@ export async function PUT(
       logoMediaId: body.logoMediaId ?? null,
       generatedMediaId: body.generatedMediaId ?? null,
       templateId: body.templateId ?? null,
+      compositionId: body.compositionId ?? null,
       logoPosition: body.logoPosition ?? "top",
       showWebsite: body.showWebsite ?? true,
       showHandles: body.showHandles ?? true,

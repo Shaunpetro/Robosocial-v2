@@ -3,6 +3,7 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { TEMPLATES, TemplateDefinition, DecorationType } from './index';
 import { PLATFORMS, CONTACT } from './icons';
+import { getComposition } from './compositions';
 import {
   pickHolidayColor,
   ensureAccentContrast,
@@ -17,6 +18,7 @@ export interface SocialItem {
 
 export interface BrandedImageRecipe {
   templateId: string;
+  compositionId?: string | null;
   companyName: string;
   logoUrl: string;
   logoHasTransparency?: boolean;
@@ -117,7 +119,7 @@ function ContactBadge({ badge }: { badge: Badge }) {
           <img src={badge.iconUri} alt="" style={{ width: 15, height: 15 }} />
         </div>
       </div>
-      <span style={{ fontSize: 16, opacity: 0.9 }}>{badge.text}</span>
+      <span style={{ fontSize: 16, opacity: 0.95 }}>{badge.text}</span>
     </div>
   );
 }
@@ -126,10 +128,12 @@ function DecorationLayer({
   type,
   accent,
   backgroundColors,
+  hasPhoto,
 }: {
   type: DecorationType;
   accent: string;
   backgroundColors: string[];
+  hasPhoto?: boolean;
 }) {
   const W = 1200;
   const H = 630;
@@ -143,6 +147,12 @@ function DecorationLayer({
       .reduce((a, b) => a + b, 0) / Math.max(backgroundColors.length, 1);
   const isDarkBg = avgLum < 0.5;
 
+  // Photo variant: white accents stand out over imagery
+  const effectiveAccent = hasPhoto ? '#FFFFFF' : accent;
+  const dotAlpha = hasPhoto ? 0.55 : 0.30;
+  const circleAlpha = hasPhoto ? 0.55 : 0.30;
+  const circleAlphaSoft = hasPhoto ? 0.40 : 0.22;
+
   if (type === 'none') return null;
 
   if (type === 'top-bar') {
@@ -155,7 +165,7 @@ function DecorationLayer({
             left: 0,
             width: W,
             height: 14,
-            background: accent,
+            background: effectiveAccent,
           }}
         />
         <div
@@ -165,7 +175,7 @@ function DecorationLayer({
             left: 0,
             width: W,
             height: 60,
-            backgroundImage: `linear-gradient(180deg, ${accent}26 0%, ${accent}00 100%)`,
+            backgroundImage: `linear-gradient(180deg, ${effectiveAccent}26 0%, ${effectiveAccent}00 100%)`,
           }}
         />
       </>
@@ -183,8 +193,7 @@ function DecorationLayer({
             width: 500,
             height: 500,
             borderRadius: '50%',
-            backgroundImage:
-              'radial-gradient(circle, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 70%)',
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,${circleAlpha}) 0%, rgba(255,255,255,0) 70%)`,
           }}
         />
         <div
@@ -195,8 +204,7 @@ function DecorationLayer({
             width: 320,
             height: 320,
             borderRadius: '50%',
-            backgroundImage:
-              'radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)',
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,${circleAlphaSoft}) 0%, rgba(255,255,255,0) 70%)`,
           }}
         />
         <div
@@ -207,8 +215,8 @@ function DecorationLayer({
             width: 80,
             height: 80,
             borderRadius: '50%',
-            background: accent,
-            opacity: 0.5,
+            background: effectiveAccent,
+            opacity: hasPhoto ? 0.85 : 0.5,
           }}
         />
       </>
@@ -225,8 +233,8 @@ function DecorationLayer({
             right: 40,
             width: 60,
             height: 60,
-            borderTop: `3px solid ${accent}`,
-            borderRight: `3px solid ${accent}`,
+            borderTop: `3px solid ${effectiveAccent}`,
+            borderRight: `3px solid ${effectiveAccent}`,
           }}
         />
         <div
@@ -236,8 +244,8 @@ function DecorationLayer({
             left: 40,
             width: 60,
             height: 60,
-            borderBottom: `3px solid ${accent}`,
-            borderLeft: `3px solid ${accent}`,
+            borderBottom: `3px solid ${effectiveAccent}`,
+            borderLeft: `3px solid ${effectiveAccent}`,
           }}
         />
       </>
@@ -254,7 +262,7 @@ function DecorationLayer({
             left: 60,
             right: 60,
             height: 2,
-            background: 'rgba(255,255,255,0.40)',
+            background: `rgba(255,255,255,${hasPhoto ? 0.70 : 0.40})`,
           }}
         />
         <div
@@ -264,8 +272,8 @@ function DecorationLayer({
             left: 0,
             width: W,
             height: 20,
-            background: accent,
-            opacity: 0.4,
+            background: effectiveAccent,
+            opacity: hasPhoto ? 0.75 : 0.4,
           }}
         />
       </>
@@ -282,7 +290,7 @@ function DecorationLayer({
             left: 0,
             width: W,
             height: H,
-            backgroundImage: `radial-gradient(rgba(255,255,255,0.30) 2px, transparent 2px)`,
+            backgroundImage: `radial-gradient(rgba(255,255,255,${dotAlpha}) 2px, transparent 2px)`,
             backgroundSize: '20px 20px',
           }}
         />
@@ -294,7 +302,7 @@ function DecorationLayer({
             width: 500,
             height: 500,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.15)',
+            background: `rgba(255,255,255,${hasPhoto ? 0.20 : 0.15})`,
           }}
         />
         <div
@@ -305,7 +313,7 @@ function DecorationLayer({
             width: 120,
             height: 120,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.10)',
+            background: `rgba(255,255,255,${hasPhoto ? 0.18 : 0.10})`,
           }}
         />
       </>
@@ -315,16 +323,18 @@ function DecorationLayer({
   if (type === 'side-divider') {
     return (
       <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: 160,
-            height: H,
-            background: 'rgba(0,0,0,0.20)',
-          }}
-        />
+        {!hasPhoto && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 160,
+              height: H,
+              background: 'rgba(0,0,0,0.20)',
+            }}
+          />
+        )}
         <div
           style={{
             position: 'absolute',
@@ -332,8 +342,8 @@ function DecorationLayer({
             right: 160,
             width: 6,
             height: H,
-            background: accent,
-            opacity: 0.7,
+            background: effectiveAccent,
+            opacity: 0.85,
           }}
         />
         <div
@@ -343,7 +353,7 @@ function DecorationLayer({
             right: 40,
             width: 60,
             height: 60,
-            background: accent,
+            background: effectiveAccent,
             opacity: 0.85,
           }}
         />
@@ -354,7 +364,7 @@ function DecorationLayer({
             right: 60,
             width: 40,
             height: 4,
-            background: accent,
+            background: effectiveAccent,
             opacity: 0.85,
           }}
         />
@@ -372,7 +382,7 @@ function DecorationLayer({
             left: 0,
             width: W,
             height: H,
-            backgroundImage: `radial-gradient(${accent}55 1.5px, transparent 1.5px)`,
+            backgroundImage: `radial-gradient(rgba(255,255,255,${hasPhoto ? 0.45 : 0.35}) 1.5px, transparent 1.5px)`,
             backgroundSize: '32px 32px',
           }}
         />
@@ -383,8 +393,8 @@ function DecorationLayer({
             left: 30,
             width: 40,
             height: 40,
-            borderTop: `2px solid ${accent}`,
-            borderLeft: `2px solid ${accent}`,
+            borderTop: `2px solid ${effectiveAccent}`,
+            borderLeft: `2px solid ${effectiveAccent}`,
           }}
         />
         <div
@@ -394,8 +404,8 @@ function DecorationLayer({
             right: 30,
             width: 40,
             height: 40,
-            borderTop: `2px solid ${accent}`,
-            borderRight: `2px solid ${accent}`,
+            borderTop: `2px solid ${effectiveAccent}`,
+            borderRight: `2px solid ${effectiveAccent}`,
           }}
         />
         <div
@@ -405,8 +415,8 @@ function DecorationLayer({
             left: 30,
             width: 40,
             height: 40,
-            borderBottom: `2px solid ${accent}`,
-            borderLeft: `2px solid ${accent}`,
+            borderBottom: `2px solid ${effectiveAccent}`,
+            borderLeft: `2px solid ${effectiveAccent}`,
           }}
         />
         <div
@@ -416,8 +426,8 @@ function DecorationLayer({
             right: 30,
             width: 40,
             height: 40,
-            borderBottom: `2px solid ${accent}`,
-            borderRight: `2px solid ${accent}`,
+            borderBottom: `2px solid ${effectiveAccent}`,
+            borderRight: `2px solid ${effectiveAccent}`,
           }}
         />
       </>
@@ -425,6 +435,7 @@ function DecorationLayer({
   }
 
   if (type === 'corner-blobs') {
+    const baseAccent = hasPhoto ? '#FFFFFF' : accent;
     const confetti: Array<{
       x: number;
       y: number;
@@ -432,18 +443,18 @@ function DecorationLayer({
       opacity: number;
       color: string;
     }> = [
-      { x: 80, y: 80, size: 20, opacity: 0.45, color: accent },
-      { x: 180, y: 160, size: 12, opacity: 0.35, color: '#FFFFFF' },
-      { x: 1040, y: 100, size: 24, opacity: 0.40, color: accent },
-      { x: 1120, y: 200, size: 14, opacity: 0.50, color: '#FFFFFF' },
-      { x: 60, y: 500, size: 18, opacity: 0.40, color: '#FFFFFF' },
-      { x: 180, y: 560, size: 10, opacity: 0.55, color: accent },
-      { x: 1070, y: 520, size: 22, opacity: 0.35, color: accent },
-      { x: 960, y: 570, size: 14, opacity: 0.45, color: '#FFFFFF' },
-      { x: 400, y: 60, size: 10, opacity: 0.40, color: '#FFFFFF' },
-      { x: 800, y: 70, size: 12, opacity: 0.35, color: accent },
-      { x: 350, y: 580, size: 16, opacity: 0.40, color: accent },
-      { x: 850, y: 590, size: 8, opacity: 0.45, color: '#FFFFFF' },
+      { x: 80, y: 80, size: 20, opacity: hasPhoto ? 0.75 : 0.45, color: baseAccent },
+      { x: 180, y: 160, size: 12, opacity: hasPhoto ? 0.55 : 0.35, color: '#FFFFFF' },
+      { x: 1040, y: 100, size: 24, opacity: hasPhoto ? 0.70 : 0.40, color: baseAccent },
+      { x: 1120, y: 200, size: 14, opacity: hasPhoto ? 0.80 : 0.50, color: '#FFFFFF' },
+      { x: 60, y: 500, size: 18, opacity: hasPhoto ? 0.70 : 0.40, color: '#FFFFFF' },
+      { x: 180, y: 560, size: 10, opacity: hasPhoto ? 0.85 : 0.55, color: baseAccent },
+      { x: 1070, y: 520, size: 22, opacity: hasPhoto ? 0.65 : 0.35, color: baseAccent },
+      { x: 960, y: 570, size: 14, opacity: hasPhoto ? 0.75 : 0.45, color: '#FFFFFF' },
+      { x: 400, y: 60, size: 10, opacity: hasPhoto ? 0.70 : 0.40, color: '#FFFFFF' },
+      { x: 800, y: 70, size: 12, opacity: hasPhoto ? 0.65 : 0.35, color: baseAccent },
+      { x: 350, y: 580, size: 16, opacity: hasPhoto ? 0.70 : 0.40, color: baseAccent },
+      { x: 850, y: 590, size: 8, opacity: hasPhoto ? 0.75 : 0.45, color: '#FFFFFF' },
     ];
 
     return (
@@ -472,15 +483,14 @@ function DecorationLayer({
 
 export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<string> {
   const template = getTemplate(recipe.templateId);
-  const showWebsite = recipe.showWebsite ?? template.showWebsite;
-  const showHandles = recipe.showHandles ?? template.showHandles;
-  const logoPosition = recipe.logoPosition || 'top';
+  const composition = getComposition(recipe.compositionId);
+  const hasPhoto = !!recipe.backgroundImageUrl;
   const hasHoliday = !!recipe.holidayName;
   const hasTransparency = recipe.logoHasTransparency ?? true;
-  const hasBackgroundImage = !!recipe.backgroundImageUrl;
+  const showWebsite = recipe.showWebsite ?? template.showWebsite;
+  const showHandles = recipe.showHandles ?? template.showHandles;
 
   const bgColors = template.background.colors;
-
   const rawAccent = recipe.brandColors?.primary || template.textColor;
   const accentColor = ensureAccentContrast(rawAccent, bgColors, template.textColor);
 
@@ -499,96 +509,13 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
           color: template.textColor,
         };
 
-  const baseTextStyle: React.CSSProperties = {
-    fontFamily: 'Inter',
-  };
+  const baseTextStyle: React.CSSProperties = { fontFamily: 'Inter' };
 
-  const LogoBlock = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 20, ...baseTextStyle }}>
-      <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={110} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ width: 48, height: 3, background: accentColor, borderRadius: 2 }} />
-        <div
-          style={{
-            fontSize: template.companyNameSize,
-            fontWeight: 'bold',
-            letterSpacing: 0.4,
-          }}
-        >
-          {recipe.companyName}
-        </div>
-        {recipe.tagline && (
-          <div
-            style={{
-              fontSize: template.taglineSize,
-              opacity: 0.7,
-              letterSpacing: 0.4,
-              fontFamily: 'Inter',
-            }}
-          >
-            {recipe.tagline}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const panelTextColor = template.textColor;
+  const photoTextColor = '#FFFFFF';
+  const photoAccentColor = '#FFFFFF';
 
-  const HolidayBlock = hasHoliday ? (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 20,
-        flex: 1,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 84,
-          fontFamily: recipe.holidayFontName,
-          textAlign: 'center',
-          lineHeight: 1.1,
-          maxWidth: 1000,
-          color: holidayColor,
-        }}
-      >
-        {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
-      </div>
-      {recipe.holidayDate && (
-        <div
-          style={{
-            fontSize: 26,
-            opacity: 0.85,
-            letterSpacing: 2,
-            fontFamily: recipe.holidayFontName,
-            color: holidayColor,
-          }}
-        >
-          {recipe.holidayDate}
-        </div>
-      )}
-      {recipe.dedication && (
-        <div
-          style={{
-            fontSize: 18,
-            opacity: 0.75,
-            fontFamily: 'Inter',
-            fontStyle: 'italic',
-            marginTop: 8,
-            textAlign: 'center',
-            maxWidth: 900,
-          }}
-        >
-          {recipe.dedication}
-        </div>
-      )}
-    </div>
-  ) : (
-    <div style={{ flex: 1 }} />
-  );
-
+  // ---- Build badges ----
   const contactBadges: Badge[] = [];
   if (showWebsite && recipe.website) {
     contactBadges.push({
@@ -634,12 +561,114 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
 
   const allBadges = [...contactBadges, ...socialBadges];
 
-  const FooterBlock =
+  // ---- Content builders ----
+  const buildLogoRow = (size: number, textColor: string, accent: string) => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        ...baseTextStyle,
+        color: textColor,
+      }}
+    >
+      <LogoElement
+        logoUrl={recipe.logoUrl}
+        hasTransparency={hasTransparency}
+        size={size}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div
+          style={{
+            width: 48,
+            height: 3,
+            background: accent,
+            borderRadius: 2,
+          }}
+        />
+        <div
+          style={{
+            fontSize: template.companyNameSize,
+            fontWeight: 'bold',
+            letterSpacing: 0.4,
+          }}
+        >
+          {recipe.companyName}
+        </div>
+        {recipe.tagline && (
+          <div
+            style={{
+              fontSize: template.taglineSize,
+              opacity: 0.85,
+              letterSpacing: 0.4,
+            }}
+          >
+            {recipe.tagline}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const buildHoliday = (fontSize: number, color: string) =>
+    hasHoliday ? (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          ...baseTextStyle,
+        }}
+      >
+        <div
+          style={{
+            fontSize,
+            fontFamily: recipe.holidayFontName,
+            textAlign: 'center',
+            lineHeight: 1.15,
+            maxWidth: 1000,
+            color,
+          }}
+        >
+          {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
+        </div>
+        {recipe.holidayDate && (
+          <div
+            style={{
+              fontSize: Math.max(16, Math.round(fontSize * 0.28)),
+              opacity: 0.85,
+              letterSpacing: 2,
+              fontFamily: recipe.holidayFontName,
+              color,
+            }}
+          >
+            {recipe.holidayDate}
+          </div>
+        )}
+        {recipe.dedication && (
+          <div
+            style={{
+              fontSize: 18,
+              opacity: 0.85,
+              fontStyle: 'italic',
+              textAlign: 'center',
+              maxWidth: 900,
+              marginTop: 4,
+            }}
+          >
+            {recipe.dedication}
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  const buildFooter = () =>
     allBadges.length > 0 ? (
       <div
         style={{
           display: 'flex',
-          gap: 20,
+          gap: 16,
           flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'center',
@@ -653,132 +682,93 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
       </div>
     ) : null;
 
-  let contentLayout: React.ReactNode;
+  // ---- Compose based on selected composition ----
+  let composed: React.ReactNode = null;
 
-  if (logoPosition === 'center') {
-    contentLayout = (
+  if (composition.id === 'full-hero') {
+    const overlayOp = composition.overlayOpacity ?? 0.65;
+    composed = (
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          height: '100%',
-          padding: 50,
           position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
         }}
       >
-        <div style={{ display: 'flex', flex: 1 }} />
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 20,
-            ...baseTextStyle,
-          }}
-        >
-          <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={140} />
-          <div style={{ width: 64, height: 3, background: accentColor, borderRadius: 2 }} />
-          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{recipe.companyName}</div>
-          {recipe.tagline && (
-            <div style={{ fontSize: 14, opacity: 0.7, marginTop: -6 }}>
-              {recipe.tagline}
-            </div>
-          )}
-          {hasHoliday && (
+        {hasPhoto && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={recipe.backgroundImageUrl!}
+              alt=""
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                objectFit: 'cover',
+              }}
+            />
             <div
               style={{
-                fontSize: 52,
-                fontFamily: recipe.holidayFontName,
-                textAlign: 'center',
-                marginTop: 16,
-                color: holidayColor,
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                background: '#0F172A',
+                opacity: overlayOp,
               }}
-            >
-              {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
-            </div>
-          )}
-          {recipe.dedication && (
-            <div
-              style={{
-                fontSize: 18,
-                opacity: 0.75,
-                fontStyle: 'italic',
-                textAlign: 'center',
-                maxWidth: 900,
-                marginTop: 6,
-              }}
-            >
-              {recipe.dedication}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', flex: 1 }} />
-        {FooterBlock}
-      </div>
-    );
-  } else if (logoPosition === 'bottom') {
-    contentLayout = (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          width: '100%',
-          height: '100%',
-          padding: 50,
-          position: 'relative',
-        }}
-      >
-        {HolidayBlock}
+            />
+          </>
+        )}
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
         <div
           style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: 20,
+            justifyContent: 'space-between',
+            width: '100%',
+            height: '100%',
+            padding: 50,
+            zIndex: 1,
+            color: hasPhoto ? photoTextColor : panelTextColor,
           }}
         >
-          {LogoBlock}
-          {FooterBlock}
+          {buildLogoRow(
+            110,
+            hasPhoto ? photoTextColor : panelTextColor,
+            hasPhoto ? photoAccentColor : accentColor
+          )}
+          {buildHoliday(84, hasPhoto ? photoTextColor : holidayColor)}
+          {buildFooter()}
         </div>
       </div>
     );
-  } else {
-    contentLayout = (
+  } else if (composition.id === 'bottom-panel') {
+    const panelH = composition.panelSize ?? 300;
+    const photoH = 630 - panelH;
+    composed = (
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          width: '100%',
-          height: '100%',
-          padding: 50,
           position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
         }}
       >
-        {LogoBlock}
-        {HolidayBlock}
-        {FooterBlock}
-      </div>
-    );
-  }
-
-  const composed = (
-    <div
-      style={{
-        position: 'relative',
-        display: 'flex',
-        width: 1200,
-        height: 630,
-        ...backgroundStyle,
-      }}
-    >
-      {hasBackgroundImage && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={recipe.backgroundImageUrl!}
             alt=""
@@ -787,41 +777,588 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
               top: 0,
               left: 0,
               width: 1200,
-              height: 630,
+              height: photoH,
               objectFit: 'cover',
             }}
           />
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: 630,
-              background: template.background.colors[0],
-              opacity: 0.80,
-            }}
-          />
-        </>
-      )}
-      <DecorationLayer
-        type={template.decoration}
-        accent={accentColor}
-        backgroundColors={bgColors}
-      />
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            top: photoH,
+            left: 0,
+            width: 1200,
+            height: panelH,
+            background: template.background.colors[0],
+          }}
+        />
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+            paddingTop: photoH,
+            paddingBottom: 20,
+            paddingLeft: 40,
+            paddingRight: 40,
+            zIndex: 1,
+            color: panelTextColor,
+            gap: 12,
+          }}
+        >
+          {buildHoliday(48, holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else if (composition.id === 'top-panel') {
+    const panelH = composition.panelSize ?? 260;
+    const photoH = 630 - panelH;
+    composed = (
       <div
         style={{
           position: 'relative',
           display: 'flex',
           width: 1200,
           height: 630,
-          zIndex: 1,
+          ...backgroundStyle,
         }}
       >
-        {contentLayout}
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={recipe.backgroundImageUrl!}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: panelH,
+              left: 0,
+              width: 1200,
+              height: photoH,
+              objectFit: 'cover',
+            }}
+          />
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 1200,
+            height: panelH,
+            background: template.background.colors[0],
+          }}
+        />
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            height: '100%',
+            zIndex: 1,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: panelH,
+              padding: '16px 40px',
+              gap: 8,
+              color: panelTextColor,
+            }}
+          >
+            {buildLogoRow(66, panelTextColor, accentColor)}
+            {hasHoliday && (
+              <div
+                style={{
+                  fontSize: 30,
+                  fontFamily: recipe.holidayFontName,
+                  color: holidayColor,
+                  textAlign: 'center',
+                }}
+              >
+                {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flex: 1,
+              alignItems: 'flex-end',
+              justifyContent: 'center',
+              padding: 24,
+            }}
+          >
+            {allBadges.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  padding: '10px 18px',
+                  borderRadius: 14,
+                  background: 'rgba(0,0,0,0.45)',
+                }}
+              >
+                {buildFooter()}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  } else if (composition.id === 'left-panel') {
+    const panelW = composition.panelSize ?? 500;
+    const photoW = 1200 - panelW;
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={recipe.backgroundImageUrl!}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: panelW,
+              width: photoW,
+              height: 630,
+              objectFit: 'cover',
+            }}
+          />
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: panelW,
+            height: 630,
+            background: template.background.colors[0],
+          }}
+        />
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            width: panelW,
+            height: '100%',
+            padding: 36,
+            zIndex: 1,
+            color: panelTextColor,
+          }}
+        >
+          {buildLogoRow(70, panelTextColor, accentColor)}
+          {buildHoliday(42, holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else if (composition.id === 'right-panel') {
+    const panelW = composition.panelSize ?? 500;
+    const panelX = 1200 - panelW;
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={recipe.backgroundImageUrl!}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: panelX,
+              height: 630,
+              objectFit: 'cover',
+            }}
+          />
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: panelX,
+            width: panelW,
+            height: 630,
+            background: template.background.colors[0],
+          }}
+        />
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: panelX,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            width: panelW,
+            height: 630,
+            padding: 36,
+            zIndex: 1,
+            color: panelTextColor,
+          }}
+        >
+          {buildLogoRow(70, panelTextColor, accentColor)}
+          {buildHoliday(42, holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else if (composition.id === 'center-card') {
+    const cardW = composition.cardWidth ?? 760;
+    const cardH = composition.cardHeight ?? 470;
+    const overlayOp = composition.overlayOpacity ?? 0.35;
+    const cardX = Math.round((1200 - cardW) / 2);
+    const cardY = Math.round((630 - cardH) / 2);
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        {hasPhoto && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={recipe.backgroundImageUrl!}
+              alt=""
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                objectFit: 'cover',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                background: '#0F172A',
+                opacity: overlayOp,
+              }}
+            />
+          </>
+        )}
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: cardY,
+            left: cardX,
+            width: cardW,
+            height: cardH,
+            borderRadius: 32,
+            background: template.background.colors[0],
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: 36,
+            zIndex: 1,
+            color: panelTextColor,
+          }}
+        >
+          {buildLogoRow(66, panelTextColor, accentColor)}
+          {buildHoliday(52, holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else if (composition.id === 'center-circle') {
+    const circleSize = composition.circleSize ?? 460;
+    const overlayOp = composition.overlayOpacity ?? 0.30;
+    const circleX = Math.round((1200 - circleSize) / 2);
+    const circleY = Math.round((630 - circleSize) / 2);
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        {hasPhoto && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={recipe.backgroundImageUrl!}
+              alt=""
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                objectFit: 'cover',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                background: '#0F172A',
+                opacity: overlayOp,
+              }}
+            />
+          </>
+        )}
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            left: 50,
+            zIndex: 2,
+          }}
+        >
+          {buildLogoRow(80, photoTextColor, photoAccentColor)}
+        </div>
+        {hasHoliday && (
+          <div
+            style={{
+              position: 'absolute',
+              top: circleY,
+              left: circleX,
+              width: circleSize,
+              height: circleSize,
+              borderRadius: '50%',
+              background: template.background.colors[0],
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 36,
+              zIndex: 1,
+              color: panelTextColor,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 52,
+                fontFamily: recipe.holidayFontName,
+                textAlign: 'center',
+                lineHeight: 1.1,
+                color: holidayColor,
+              }}
+            >
+              {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
+            </div>
+            {recipe.holidayDate && (
+              <div
+                style={{
+                  fontSize: 16,
+                  opacity: 0.85,
+                  letterSpacing: 2,
+                  fontFamily: recipe.holidayFontName,
+                  color: holidayColor,
+                  marginTop: 10,
+                }}
+              >
+                {recipe.holidayDate}
+              </div>
+            )}
+          </div>
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 30,
+            left: 0,
+            width: 1200,
+            display: 'flex',
+            justifyContent: 'center',
+            zIndex: 2,
+          }}
+        >
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else if (composition.id === 'vignette') {
+    const edgeH = composition.vignetteEdge ?? 130;
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        {hasPhoto && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={recipe.backgroundImageUrl!}
+              alt=""
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: 630,
+                objectFit: 'cover',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: 1200,
+                height: edgeH,
+                backgroundImage:
+                  'linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                width: 1200,
+                height: edgeH,
+                backgroundImage:
+                  'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
+              }}
+            />
+          </>
+        )}
+        <DecorationLayer
+          type={template.decoration}
+          accent={accentColor}
+          backgroundColors={bgColors}
+          hasPhoto={hasPhoto}
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            width: '100%',
+            height: '100%',
+            padding: 50,
+            zIndex: 1,
+            color: hasPhoto ? photoTextColor : panelTextColor,
+          }}
+        >
+          {buildLogoRow(
+            110,
+            hasPhoto ? photoTextColor : panelTextColor,
+            hasPhoto ? photoAccentColor : accentColor
+          )}
+          {buildHoliday(84, hasPhoto ? photoTextColor : holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  } else {
+    // Unknown composition — fall back to full-hero behaviour
+    composed = (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          width: 1200,
+          height: 630,
+          ...backgroundStyle,
+        }}
+      >
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            width: '100%',
+            height: '100%',
+            padding: 50,
+            color: panelTextColor,
+          }}
+        >
+          {buildLogoRow(110, panelTextColor, accentColor)}
+          {buildHoliday(84, holidayColor)}
+          {buildFooter()}
+        </div>
+      </div>
+    );
+  }
 
   const { default: satori } = await import('satori');
 
