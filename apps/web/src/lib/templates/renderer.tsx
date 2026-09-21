@@ -9,6 +9,7 @@ import {
   ensureAccentContrast,
   hexToRgb,
   relativeLuminance,
+  minContrastAcrossBackgrounds,
 } from './colors';
 
 export interface SocialItem {
@@ -47,11 +48,82 @@ function getTemplate(templateId: string): TemplateDefinition {
   return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
 }
 
-function pickReadableTextColor(bgHex: string): string {
-  const rgb = hexToRgb(bgHex);
-  if (!rgb) return '#FFFFFF';
-  const lum = relativeLuminance(rgb);
-  return lum < 0.5 ? '#FFFFFF' : '#111827';
+/**
+ * Panel/card/circle backgrounds. Uses axis-aligned gradients so the palette
+ * actually spans the container's short axis:
+ *   horizontal (wide, short): 90deg — colours sweep left to right
+ *   vertical (tall, narrow):  180deg — colours sweep top to bottom
+ * Diagonal gradients (135deg) collapse into near-solid on narrow panels, which
+ * is why "bold-gradient" was rendering as flat indigo.
+ */
+function getPanelBackground(
+  template: TemplateDefinition,
+  orientation: 'horizontal' | 'vertical'
+): React.CSSProperties {
+  if (template.background.type === 'solid') {
+    return { background: template.background.colors[0] };
+  }
+  const angle = orientation === 'vertical' ? 180 : 90;
+  return {
+    backgroundImage: `linear-gradient(${angle}deg, ${template.background.colors.join(', ')})`,
+  };
+}
+
+function pickReadableTextColorForPalette(colors: string[]): string {
+  if (colors.length === 0) return '#FFFFFF';
+  const lums = colors.map((c) => {
+    const rgb = hexToRgb(c);
+    return rgb ? relativeLuminance(rgb) : 0.5;
+  });
+  const avg = lums.reduce((a, b) => a + b, 0) / Math.max(lums.length, 1);
+  return avg < 0.30 ? '#FFFFFF' : '#111827';
+}
+
+function pickIconCircleColor(
+  brandPrimary: string | undefined,
+  template: TemplateDefinition
+): string {
+  if (brandPrimary) {
+    const rgb = hexToRgb(brandPrimary);
+    if (rgb) {
+      const lum = relativeLuminance(rgb);
+      if (lum < 0.80 && lum > 0.02) return brandPrimary;
+    }
+  }
+  for (const c of template.background.colors) {
+    const rgb = hexToRgb(c);
+    if (!rgb) continue;
+    const lum = relativeLuminance(rgb);
+    if (lum < 0.80 && lum > 0.02) return c;
+  }
+  return template.textColor;
+}
+
+/**
+ * Holiday text colour resolver. Prefers the holiday palette pick, but only
+ * when it also beats the template's own text colour in contrast. This stops
+ * muted palette options (brown on pink, dusty red on orange) from rendering
+ * when the template's text colour would be clearer.
+ */
+function pickHolidayTextColor(
+  holidayName: string | undefined,
+  bgColors: string[],
+  seed: string,
+  templateTextColor: string
+): string {
+  const holidayPick = pickHolidayColor(holidayName, bgColors, seed);
+  if (!holidayPick) return templateTextColor;
+
+  const holidayContrast = minContrastAcrossBackgrounds(holidayPick, bgColors);
+  const templateContrast = minContrastAcrossBackgrounds(templateTextColor, bgColors);
+
+  // Require the holiday colour to clear AA-large (4.5) AND beat the template
+  // text colour. Otherwise fall back to the template's text colour which is
+  // guaranteed to be calibrated for that palette.
+  if (holidayContrast >= 4.5 && holidayContrast >= templateContrast) {
+    return holidayPick;
+  }
+  return templateTextColor;
 }
 
 function LogoElement({
@@ -73,9 +145,7 @@ function LogoElement({
   );
 
   if (hasTransparency) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'row' }}>{img}</div>
-    );
+    return <div style={{ display: 'flex', flexDirection: 'row' }}>{img}</div>;
   }
 
   return (
@@ -99,16 +169,15 @@ function LogoElement({
 
 interface Badge {
   iconUri: string;
-  color: string;
   text: string;
 }
 
 function ContactBadge({
   badge,
-  ringColor,
+  circleColor,
 }: {
   badge: Badge;
-  ringColor: string;
+  circleColor: string;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -118,27 +187,14 @@ function ContactBadge({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 2,
-          background: '#FFFFFF',
-          borderRadius: 10,
-          border: `2px solid ${ringColor}`,
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: circleColor,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 24,
-            height: 24,
-            borderRadius: 6,
-            background: badge.color,
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={badge.iconUri} alt="" style={{ width: 13, height: 13 }} />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={badge.iconUri} alt="" style={{ width: 14, height: 14 }} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'row' }}>
         <span style={{ fontSize: 14, opacity: 0.95 }}>{badge.text}</span>
@@ -160,7 +216,6 @@ function DecorationLayer({
 }) {
   const W = 1200;
   const H = 630;
-
   const effectiveAccent = hasPhoto ? '#FFFFFF' : accent;
   const dotAlpha = hasPhoto ? 0.55 : 0.30;
   const circleAlpha = hasPhoto ? 0.55 : 0.30;
@@ -171,16 +226,7 @@ function DecorationLayer({
   if (type === 'top-bar') {
     return (
       <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H, display: 'flex', flexDirection: 'column' }}>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: W,
-            height: 14,
-            background: effectiveAccent,
-          }}
-        />
+        <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: 14, background: effectiveAccent }} />
         <div
           style={{
             position: 'absolute',
@@ -239,28 +285,8 @@ function DecorationLayer({
   if (type === 'corner-accent') {
     return (
       <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H, display: 'flex', flexDirection: 'column' }}>
-        <div
-          style={{
-            position: 'absolute',
-            top: 40,
-            right: 40,
-            width: 60,
-            height: 60,
-            borderTop: `3px solid ${effectiveAccent}`,
-            borderRight: `3px solid ${effectiveAccent}`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 40,
-            left: 40,
-            width: 60,
-            height: 60,
-            borderBottom: `3px solid ${effectiveAccent}`,
-            borderLeft: `3px solid ${effectiveAccent}`,
-          }}
-        />
+        <div style={{ position: 'absolute', top: 40, right: 40, width: 60, height: 60, borderTop: `3px solid ${effectiveAccent}`, borderRight: `3px solid ${effectiveAccent}` }} />
+        <div style={{ position: 'absolute', bottom: 40, left: 40, width: 60, height: 60, borderBottom: `3px solid ${effectiveAccent}`, borderLeft: `3px solid ${effectiveAccent}` }} />
       </div>
     );
   }
@@ -268,27 +294,8 @@ function DecorationLayer({
   if (type === 'thin-rule') {
     return (
       <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H, display: 'flex', flexDirection: 'column' }}>
-        <div
-          style={{
-            position: 'absolute',
-            top: 130,
-            left: 60,
-            right: 60,
-            height: 2,
-            background: `rgba(255,255,255,${hasPhoto ? 0.70 : 0.40})`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            width: W,
-            height: 20,
-            background: effectiveAccent,
-            opacity: hasPhoto ? 0.75 : 0.4,
-          }}
-        />
+        <div style={{ position: 'absolute', top: 130, left: 60, right: 60, height: 2, background: `rgba(255,255,255,${hasPhoto ? 0.70 : 0.40})` }} />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, width: W, height: 20, background: effectiveAccent, opacity: hasPhoto ? 0.75 : 0.4 }} />
       </div>
     );
   }
@@ -307,28 +314,8 @@ function DecorationLayer({
             backgroundSize: '20px 20px',
           }}
         />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -250,
-            left: -150,
-            width: 500,
-            height: 500,
-            borderRadius: '50%',
-            background: `rgba(255,255,255,${hasPhoto ? 0.20 : 0.15})`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 60,
-            right: 80,
-            width: 120,
-            height: 120,
-            borderRadius: '50%',
-            background: `rgba(255,255,255,${hasPhoto ? 0.18 : 0.10})`,
-          }}
-        />
+        <div style={{ position: 'absolute', bottom: -250, left: -150, width: 500, height: 500, borderRadius: '50%', background: `rgba(255,255,255,${hasPhoto ? 0.20 : 0.15})` }} />
+        <div style={{ position: 'absolute', top: 60, right: 80, width: 120, height: 120, borderRadius: '50%', background: `rgba(255,255,255,${hasPhoto ? 0.18 : 0.10})` }} />
       </div>
     );
   }
@@ -337,50 +324,11 @@ function DecorationLayer({
     return (
       <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H, display: 'flex', flexDirection: 'column' }}>
         {!hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: 160,
-              height: H,
-              background: 'rgba(0,0,0,0.20)',
-            }}
-          />
+          <div style={{ position: 'absolute', top: 0, right: 0, width: 160, height: H, background: 'rgba(0,0,0,0.20)' }} />
         )}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 160,
-            width: 6,
-            height: H,
-            background: effectiveAccent,
-            opacity: 0.85,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 40,
-            right: 40,
-            width: 60,
-            height: 60,
-            background: effectiveAccent,
-            opacity: 0.85,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 40,
-            right: 60,
-            width: 40,
-            height: 4,
-            background: effectiveAccent,
-            opacity: 0.85,
-          }}
-        />
+        <div style={{ position: 'absolute', top: 0, right: 160, width: 6, height: H, background: effectiveAccent, opacity: 0.85 }} />
+        <div style={{ position: 'absolute', top: 40, right: 40, width: 60, height: 60, background: effectiveAccent, opacity: 0.85 }} />
+        <div style={{ position: 'absolute', bottom: 40, right: 60, width: 40, height: 4, background: effectiveAccent, opacity: 0.85 }} />
       </div>
     );
   }
@@ -399,63 +347,17 @@ function DecorationLayer({
             backgroundSize: '32px 32px',
           }}
         />
-        <div
-          style={{
-            position: 'absolute',
-            top: 30,
-            left: 30,
-            width: 40,
-            height: 40,
-            borderTop: `2px solid ${effectiveAccent}`,
-            borderLeft: `2px solid ${effectiveAccent}`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 30,
-            right: 30,
-            width: 40,
-            height: 40,
-            borderTop: `2px solid ${effectiveAccent}`,
-            borderRight: `2px solid ${effectiveAccent}`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 30,
-            left: 30,
-            width: 40,
-            height: 40,
-            borderBottom: `2px solid ${effectiveAccent}`,
-            borderLeft: `2px solid ${effectiveAccent}`,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 30,
-            right: 30,
-            width: 40,
-            height: 40,
-            borderBottom: `2px solid ${effectiveAccent}`,
-            borderRight: `2px solid ${effectiveAccent}`,
-          }}
-        />
+        <div style={{ position: 'absolute', top: 30, left: 30, width: 40, height: 40, borderTop: `2px solid ${effectiveAccent}`, borderLeft: `2px solid ${effectiveAccent}` }} />
+        <div style={{ position: 'absolute', top: 30, right: 30, width: 40, height: 40, borderTop: `2px solid ${effectiveAccent}`, borderRight: `2px solid ${effectiveAccent}` }} />
+        <div style={{ position: 'absolute', bottom: 30, left: 30, width: 40, height: 40, borderBottom: `2px solid ${effectiveAccent}`, borderLeft: `2px solid ${effectiveAccent}` }} />
+        <div style={{ position: 'absolute', bottom: 30, right: 30, width: 40, height: 40, borderBottom: `2px solid ${effectiveAccent}`, borderRight: `2px solid ${effectiveAccent}` }} />
       </div>
     );
   }
 
   if (type === 'corner-blobs') {
     const baseAccent = hasPhoto ? '#FFFFFF' : accent;
-    const confetti: Array<{
-      x: number;
-      y: number;
-      size: number;
-      opacity: number;
-      color: string;
-    }> = [
+    const confetti: Array<{ x: number; y: number; size: number; opacity: number; color: string }> = [
       { x: 80, y: 80, size: 20, opacity: hasPhoto ? 0.75 : 0.45, color: baseAccent },
       { x: 180, y: 160, size: 12, opacity: hasPhoto ? 0.55 : 0.35, color: '#FFFFFF' },
       { x: 1040, y: 100, size: 24, opacity: hasPhoto ? 0.70 : 0.40, color: baseAccent },
@@ -504,16 +406,17 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   const showHandles = recipe.showHandles ?? template.showHandles;
 
   const bgColors = template.background.colors;
-  const panelColor = template.background.colors[0];
   const rawAccent = recipe.brandColors?.primary || template.textColor;
   const accentColor = ensureAccentContrast(rawAccent, bgColors, template.textColor);
-
-  const iconRingColor =
-    recipe.brandColors?.primary || accentColor || template.textColor;
+  const iconCircleColor = pickIconCircleColor(recipe.brandColors?.primary, template);
 
   const seed = `${recipe.companyId || 'anon'}-${recipe.holidayName || 'base'}-${new Date().getFullYear()}`;
-  const holidayColor =
-    pickHolidayColor(recipe.holidayName, bgColors, seed) || template.textColor;
+  const holidayTextColor = pickHolidayTextColor(
+    recipe.holidayName,
+    bgColors,
+    seed,
+    template.textColor
+  );
 
   const backgroundStyle: React.CSSProperties =
     template.background.type === 'gradient'
@@ -526,52 +429,39 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
           color: template.textColor,
         };
 
+  // Panels use axis-aligned gradients; left/right sweep vertically, top/bottom
+  // sweep horizontally, card and circle keep the template's original angle.
+  const panelHorizontal = getPanelBackground(template, 'horizontal');
+  const panelVertical = getPanelBackground(template, 'vertical');
+
   const baseTextStyle: React.CSSProperties = { fontFamily: 'Inter' };
 
-  const panelTextColor = pickReadableTextColor(panelColor);
+  const panelTextColor = pickReadableTextColorForPalette(template.background.colors);
   const photoTextColor = '#FFFFFF';
 
-  // ---- Build badges grouped into 2 rows ----
-  const row1Badges: Badge[] = []; // socials + phone + whatsapp
-  const row2Badges: Badge[] = []; // email + website
+  const row1Badges: Badge[] = [];
+  const row2Badges: Badge[] = [];
 
   if (recipe.contactPhone) {
-    row1Badges.push({
-      iconUri: CONTACT.phone.uri,
-      color: CONTACT.phone.color,
-      text: recipe.contactPhone,
-    });
+    row1Badges.push({ iconUri: CONTACT.phone.uri, text: recipe.contactPhone });
   }
   if (recipe.contactWhatsapp) {
-    row1Badges.push({
-      iconUri: CONTACT.whatsapp.uri,
-      color: CONTACT.whatsapp.color,
-      text: recipe.contactWhatsapp,
-    });
+    row1Badges.push({ iconUri: CONTACT.whatsapp.uri, text: recipe.contactWhatsapp });
   }
   if (showHandles && recipe.socialItems) {
     for (const item of recipe.socialItems) {
       const platform = PLATFORMS[item.platform];
       if (!platform) continue;
-      row1Badges.push({
-        iconUri: platform.uri,
-        color: platform.color,
-        text: item.handle,
-      });
+      row1Badges.push({ iconUri: platform.uri, text: item.handle });
     }
   }
 
   if (recipe.contactEmail) {
-    row2Badges.push({
-      iconUri: CONTACT.email.uri,
-      color: CONTACT.email.color,
-      text: recipe.contactEmail,
-    });
+    row2Badges.push({ iconUri: CONTACT.email.uri, text: recipe.contactEmail });
   }
   if (showWebsite && recipe.website) {
     row2Badges.push({
       iconUri: CONTACT.website.uri,
-      color: CONTACT.website.color,
       text: recipe.website.replace(/^https?:\/\//, '').replace(/\/$/, ''),
     });
   }
@@ -591,34 +481,16 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
         }}
       >
         {row1Badges.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              gap: 14,
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
             {row1Badges.map((badge, i) => (
-              <ContactBadge key={`r1-${i}`} badge={badge} ringColor={iconRingColor} />
+              <ContactBadge key={`r1-${i}`} badge={badge} circleColor={iconCircleColor} />
             ))}
           </div>
         )}
         {row2Badges.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              gap: 14,
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
             {row2Badges.map((badge, i) => (
-              <ContactBadge key={`r2-${i}`} badge={badge} ringColor={iconRingColor} />
+              <ContactBadge key={`r2-${i}`} badge={badge} circleColor={iconCircleColor} />
             ))}
           </div>
         )}
@@ -627,39 +499,18 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   };
 
   const buildLogoRow = (size: number, textColor: string, accent: string) => (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 20,
-        ...baseTextStyle,
-        color: textColor,
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 20, ...baseTextStyle, color: textColor }}>
       <LogoElement logoUrl={recipe.logoUrl} hasTransparency={hasTransparency} size={size} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', flexDirection: 'row', width: 48, height: 3, background: accent, borderRadius: 2 }} />
         <div style={{ display: 'flex', flexDirection: 'row' }}>
-          <span
-            style={{
-              fontSize: template.companyNameSize,
-              fontWeight: 'bold',
-              letterSpacing: 0.4,
-            }}
-          >
+          <span style={{ fontSize: template.companyNameSize, fontWeight: 'bold', letterSpacing: 0.4 }}>
             {recipe.companyName}
           </span>
         </div>
         {recipe.tagline && (
           <div style={{ display: 'flex', flexDirection: 'row' }}>
-            <span
-              style={{
-                fontSize: template.taglineSize,
-                opacity: 0.85,
-                letterSpacing: 0.4,
-              }}
-            >
+            <span style={{ fontSize: template.taglineSize, opacity: 0.85, letterSpacing: 0.4 }}>
               {recipe.tagline}
             </span>
           </div>
@@ -670,15 +521,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
 
   const buildHoliday = (fontSize: number, color: string) =>
     hasHoliday ? (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 14,
-          ...baseTextStyle,
-        }}
-      >
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, ...baseTextStyle }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span
             style={{
@@ -710,14 +553,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
         )}
         {recipe.dedication && (
           <div style={{ display: 'flex', flexDirection: 'column', maxWidth: 900 }}>
-            <span
-              style={{
-                fontSize: 18,
-                opacity: 0.85,
-                fontStyle: 'italic',
-                textAlign: 'center',
-              }}
-            >
+            <span style={{ fontSize: 18, opacity: 0.85, fontStyle: 'italic', textAlign: 'center' }}>
               {recipe.dedication}
             </span>
           </div>
@@ -731,76 +567,20 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const overlayOp = composition.overlayOpacity ?? 0.65;
     const contentColor = hasPhoto ? photoTextColor : panelTextColor;
     const contentAccent = hasPhoto ? '#FFFFFF' : accentColor;
+    const holidayRenderColor = hasPhoto ? photoTextColor : holidayTextColor;
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                background: '#0F172A',
-                opacity: overlayOp,
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, background: '#0F172A', opacity: overlayOp }} />
           </div>
         )}
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            width: '100%',
-            height: '100%',
-            padding: 50,
-            zIndex: 1,
-            color: contentColor,
-          }}
-        >
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%', height: '100%', padding: 50, zIndex: 1, color: contentColor }}>
           {buildLogoRow(110, contentColor, contentAccent)}
-          {buildHoliday(84, hasPhoto ? photoTextColor : holidayColor)}
+          {buildHoliday(84, holidayRenderColor)}
           {buildFooter(contentColor)}
         </div>
       </div>
@@ -808,48 +588,15 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   } else if (composition.id === 'bottom-panel') {
     const panelH = composition.panelSize ?? 300;
     const photoH = 630 - panelH;
+    const holidayRenderColor = holidayTextColor;
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={recipe.backgroundImageUrl!}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: photoH,
-              objectFit: 'cover',
-            }}
-          />
+          <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: photoH, objectFit: 'cover' }} />
         )}
-        <div
-          style={{
-            position: 'absolute',
-            top: photoH,
-            left: 0,
-            width: 1200,
-            height: panelH,
-            background: panelColor,
-          }}
-        />
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
+        <div style={{ position: 'absolute', top: photoH, left: 0, width: 1200, height: panelH, ...panelHorizontal }} />
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
         <div
           style={{
             position: 'relative',
@@ -868,7 +615,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
             gap: 14,
           }}
         >
-          {buildHoliday(46, holidayColor)}
+          {buildHoliday(46, holidayRenderColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -877,106 +624,27 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const panelH = composition.panelSize ?? 260;
     const photoH = 630 - panelH;
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={recipe.backgroundImageUrl!}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: panelH,
-              left: 0,
-              width: 1200,
-              height: photoH,
-              objectFit: 'cover',
-            }}
-          />
+          <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: panelH, left: 0, width: 1200, height: photoH, objectFit: 'cover' }} />
         )}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 1200,
-            height: panelH,
-            background: panelColor,
-          }}
-        />
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            width: '100%',
-            height: '100%',
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: panelH,
-              padding: '16px 40px',
-              gap: 8,
-              color: panelTextColor,
-            }}
-          >
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: panelH, ...panelHorizontal }} />
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', width: '100%', height: '100%', zIndex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: panelH, padding: '16px 40px', gap: 8, color: panelTextColor }}>
             {buildLogoRow(66, panelTextColor, accentColor)}
             {hasHoliday && (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span
-                  style={{
-                    fontSize: 28,
-                    fontFamily: recipe.holidayFontName,
-                    color: holidayColor,
-                    textAlign: 'center',
-                  }}
-                >
+                <span style={{ fontSize: 28, fontFamily: recipe.holidayFontName, color: holidayTextColor, textAlign: 'center' }}>
                   {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
                 </span>
               </div>
             )}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              padding: 20,
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, alignItems: 'center', justifyContent: 'flex-end', padding: 20 }}>
             {(row1Badges.length > 0 || row2Badges.length > 0) && (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '10px 18px',
-                  borderRadius: 14,
-                  background: 'rgba(0,0,0,0.45)',
-                  color: '#FFFFFF',
-                }}
-              >
+              <div style={{ display: 'flex', flexDirection: 'column', padding: '10px 18px', borderRadius: 14, background: 'rgba(0,0,0,0.55)', color: '#FFFFFF' }}>
                 {buildFooter('#FFFFFF')}
               </div>
             )}
@@ -989,41 +657,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const photoW = 1200 - panelW;
     const fadeW = Math.round(photoW * 0.25);
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: panelW,
-              width: photoW,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: panelW, width: photoW, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: photoW,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: photoW, height: 630, objectFit: 'cover' }} />
             <div
               style={{
                 position: 'absolute',
@@ -1031,27 +669,13 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
                 left: 0,
                 width: fadeW,
                 height: 630,
-                backgroundImage: `linear-gradient(90deg, ${panelColor} 0%, ${panelColor}00 100%)`,
+                backgroundImage: `linear-gradient(90deg, ${template.background.colors[0]} 0%, ${template.background.colors[0]}00 100%)`,
               }}
             />
           </div>
         )}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: panelW,
-            height: 630,
-            background: panelColor,
-          }}
-        />
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
+        <div style={{ position: 'absolute', top: 0, left: 0, width: panelW, height: 630, ...panelVertical }} />
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
         <div
           style={{
             position: 'relative',
@@ -1066,7 +690,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
           }}
         >
           {buildLogoRow(70, panelTextColor, accentColor)}
-          {buildHoliday(42, holidayColor)}
+          {buildHoliday(42, holidayTextColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -1076,41 +700,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const panelX = 1200 - panelW;
     const fadeW = Math.round(panelX * 0.25);
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: panelX,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: 0, width: panelX, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: panelX,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: panelX, height: 630, objectFit: 'cover' }} />
             <div
               style={{
                 position: 'absolute',
@@ -1118,27 +712,13 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
                 left: panelX - fadeW,
                 width: fadeW,
                 height: 630,
-                backgroundImage: `linear-gradient(90deg, ${panelColor}00 0%, ${panelColor} 100%)`,
+                backgroundImage: `linear-gradient(90deg, ${template.background.colors[0]}00 0%, ${template.background.colors[0]} 100%)`,
               }}
             />
           </div>
         )}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: panelX,
-            width: panelW,
-            height: 630,
-            background: panelColor,
-          }}
-        />
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
+        <div style={{ position: 'absolute', top: 0, left: panelX, width: panelW, height: 630, ...panelVertical }} />
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
         <div
           style={{
             position: 'absolute',
@@ -1155,7 +735,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
           }}
         >
           {buildLogoRow(70, panelTextColor, accentColor)}
-          {buildHoliday(42, holidayColor)}
+          {buildHoliday(42, holidayTextColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -1166,71 +746,16 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const overlayOp = composition.overlayOpacity ?? 0.25;
     const cardX = Math.round((1200 - cardW) / 2);
     const cardY = Math.round((630 - cardH) / 2);
-
-    const cardBackground: React.CSSProperties =
-      template.background.type === 'gradient'
-        ? {
-            backgroundImage: `linear-gradient(${template.background.angle || 135}deg, ${template.background.colors.join(', ')})`,
-          }
-        : {
-            background: template.background.colors[0],
-          };
-
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                background: '#0F172A',
-                opacity: overlayOp,
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, background: '#0F172A', opacity: overlayOp }} />
           </div>
         )}
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
         <div
           style={{
             position: 'absolute',
@@ -1246,11 +771,11 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
             padding: 32,
             zIndex: 1,
             color: panelTextColor,
-            ...cardBackground,
+            ...panelVertical,
           }}
         >
           {buildLogoRow(60, panelTextColor, accentColor)}
-          {buildHoliday(48, holidayColor)}
+          {buildHoliday(48, holidayTextColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -1261,70 +786,16 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const circleX = Math.round((1200 - circleSize) / 2);
     const circleY = Math.round((630 - circleSize) / 2);
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                background: '#0F172A',
-                opacity: overlayOp,
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, background: '#0F172A', opacity: overlayOp }} />
           </div>
         )}
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 40,
-            left: 50,
-            display: 'flex',
-            flexDirection: 'column',
-            zIndex: 2,
-          }}
-        >
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
+        <div style={{ position: 'absolute', top: 40, left: 50, display: 'flex', flexDirection: 'column', zIndex: 2 }}>
           {buildLogoRow(80, photoTextColor, '#FFFFFF')}
         </div>
         {hasHoliday && (
@@ -1343,23 +814,17 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
               padding: 36,
               zIndex: 1,
               color: panelTextColor,
-              background: panelColor,
+              ...panelVertical,
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-              }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <span
                 style={{
                   fontSize: 52,
                   fontFamily: recipe.holidayFontName,
                   textAlign: 'center',
                   lineHeight: 1.1,
-                  color: holidayColor,
+                  color: holidayTextColor,
                 }}
               >
                 {recipe.holidayMessage || `Happy ${recipe.holidayName}!`}
@@ -1371,7 +836,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
                     opacity: 0.85,
                     letterSpacing: 2,
                     fontFamily: recipe.holidayFontName,
-                    color: holidayColor,
+                    color: holidayTextColor,
                     marginTop: 10,
                   }}
                 >
@@ -1381,18 +846,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
             </div>
           </div>
         )}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 24,
-            left: 0,
-            width: 1200,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            zIndex: 2,
-          }}
-        >
+        <div style={{ position: 'absolute', bottom: 24, left: 0, width: 1200, display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
           {buildFooter(photoTextColor)}
         </div>
       </div>
@@ -1401,118 +855,31 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     const edgeH = composition.vignetteEdge ?? 130;
     const contentColor = hasPhoto ? photoTextColor : panelTextColor;
     const contentAccent = hasPhoto ? '#FFFFFF' : accentColor;
+    const holidayRenderColor = hasPhoto ? photoTextColor : holidayTextColor;
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
         {hasPhoto && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1200,
-              height: 630,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, display: 'flex', flexDirection: 'column' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={recipe.backgroundImageUrl!}
-              alt=""
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: 630,
-                objectFit: 'cover',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1200,
-                height: edgeH,
-                backgroundImage:
-                  'linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                width: 1200,
-                height: edgeH,
-                backgroundImage:
-                  'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
-              }}
-            />
+            <img src={recipe.backgroundImageUrl!} alt="" style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: 630, objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: 1200, height: edgeH, backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: 1200, height: edgeH, backgroundImage: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)' }} />
           </div>
         )}
-        <DecorationLayer
-          type={template.decoration}
-          accent={accentColor}
-          backgroundColors={bgColors}
-          hasPhoto={hasPhoto}
-        />
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            width: '100%',
-            height: '100%',
-            padding: 50,
-            zIndex: 1,
-            color: contentColor,
-          }}
-        >
+        <DecorationLayer type={template.decoration} accent={accentColor} backgroundColors={bgColors} hasPhoto={hasPhoto} />
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%', height: '100%', padding: 50, zIndex: 1, color: contentColor }}>
           {buildLogoRow(110, contentColor, contentAccent)}
-          {buildHoliday(84, hasPhoto ? photoTextColor : holidayColor)}
+          {buildHoliday(84, holidayRenderColor)}
           {buildFooter(contentColor)}
         </div>
       </div>
     );
   } else {
-    // Fallback — same as full-hero behaviour, Satori-safe
     composed = (
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'row',
-          width: 1200,
-          height: 630,
-          ...backgroundStyle,
-        }}
-      >
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            width: '100%',
-            height: '100%',
-            padding: 50,
-            color: panelTextColor,
-          }}
-        >
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: 1200, height: 630, ...backgroundStyle }}>
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%', height: '100%', padding: 50, color: panelTextColor }}>
           {buildLogoRow(110, panelTextColor, accentColor)}
-          {buildHoliday(84, holidayColor)}
+          {buildHoliday(84, holidayTextColor)}
           {buildFooter(panelTextColor)}
         </div>
       </div>
@@ -1525,18 +892,8 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
     width: 1200,
     height: 630,
     fonts: [
-      {
-        name: 'Inter',
-        data: recipe.baseFontData,
-        weight: 400,
-        style: 'normal',
-      },
-      {
-        name: recipe.holidayFontName,
-        data: recipe.holidayFontData,
-        weight: 400,
-        style: 'normal',
-      },
+      { name: 'Inter', data: recipe.baseFontData, weight: 400, style: 'normal' },
+      { name: recipe.holidayFontName, data: recipe.holidayFontData, weight: 400, style: 'normal' },
     ],
   });
 
