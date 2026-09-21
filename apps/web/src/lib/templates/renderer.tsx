@@ -35,6 +35,7 @@ export interface BrandedImageRecipe {
   holidayDate?: string;
   holidayMessage?: string;
   companyId?: string;
+  backgroundImageUrl?: string | null;
   baseFontData: ArrayBuffer;
   holidayFontData: ArrayBuffer;
   holidayFontName: string;
@@ -133,7 +134,6 @@ function DecorationLayer({
   const W = 1200;
   const H = 630;
 
-  // Determine whether background is dark so we can choose light or dark accents
   const avgLum =
     backgroundColors
       .map((c) => {
@@ -145,7 +145,6 @@ function DecorationLayer({
 
   if (type === 'none') return null;
 
-  // Clean Corporate: solid brand bar plus soft gradient strip beneath
   if (type === 'top-bar') {
     return (
       <>
@@ -173,7 +172,6 @@ function DecorationLayer({
     );
   }
 
-  // Bold Gradient: two radial gradient circles plus a solid accent dot
   if (type === 'dual-circles') {
     return (
       <>
@@ -217,7 +215,6 @@ function DecorationLayer({
     );
   }
 
-  // Minimalist Dark: mirrored corner brackets
   if (type === 'corner-accent') {
     return (
       <>
@@ -247,7 +244,6 @@ function DecorationLayer({
     );
   }
 
-  // Professional Blue: top rule plus bottom accent band
   if (type === 'thin-rule') {
     return (
       <>
@@ -276,7 +272,6 @@ function DecorationLayer({
     );
   }
 
-  // Earthy SA: bold dot pattern plus large soft wave bottom-left
   if (type === 'grain') {
     return (
       <>
@@ -317,7 +312,6 @@ function DecorationLayer({
     );
   }
 
-  // Modern Split: darker right band plus thick divider plus accent square
   if (type === 'side-divider') {
     return (
       <>
@@ -368,7 +362,6 @@ function DecorationLayer({
     );
   }
 
-  // Tech Grid: denser dot pattern plus four corner brackets
   if (type === 'dots-grid') {
     return (
       <>
@@ -431,7 +424,6 @@ function DecorationLayer({
     );
   }
 
-  // Playful: scattered confetti across the canvas
   if (type === 'corner-blobs') {
     const confetti: Array<{
       x: number;
@@ -485,6 +477,7 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
   const logoPosition = recipe.logoPosition || 'top';
   const hasHoliday = !!recipe.holidayName;
   const hasTransparency = recipe.logoHasTransparency ?? true;
+  const hasBackgroundImage = !!recipe.backgroundImageUrl;
 
   const bgColors = template.background.colors;
 
@@ -783,6 +776,34 @@ export async function renderBrandedImage(recipe: BrandedImageRecipe): Promise<st
         ...backgroundStyle,
       }}
     >
+      {hasBackgroundImage && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={recipe.backgroundImageUrl!}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 1200,
+              height: 630,
+              objectFit: 'cover',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 1200,
+              height: 630,
+              background: template.background.colors[0],
+              opacity: 0.80,
+            }}
+          />
+        </>
+      )}
       <DecorationLayer
         type={template.decoration}
         accent={accentColor}

@@ -64,6 +64,7 @@ interface Config {
   showHandles?: boolean;
   tagline?: string | null;
   dedication?: string | null;
+  useStockBackgrounds?: boolean;
 }
 
 interface BrandInfo {
@@ -128,6 +129,7 @@ export default function SpecialDatesHubPage() {
     excludedHolidays: [],
     tagline: null,
     dedication: null,
+    useStockBackgrounds: false,
   });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
   const [allHolidays, setAllHolidays] = useState<UpcomingHoliday[]>([]);
@@ -197,12 +199,14 @@ export default function SpecialDatesHubPage() {
             excludedHolidays: [],
             tagline: null,
             dedication: null,
+            useStockBackgrounds: false,
           };
           setConfig({
             ...cfg,
             excludedHolidays: cfg.excludedHolidays || [],
             tagline: cfg.tagline ?? null,
             dedication: cfg.dedication ?? null,
+            useStockBackgrounds: cfg.useStockBackgrounds ?? false,
           });
           setAvailableSets(data.availableSets || []);
           setBrandInfo(data.company || {});
@@ -284,6 +288,7 @@ export default function SpecialDatesHubPage() {
     config.excludedHolidays.join(","),
     config.tagline,
     config.dedication,
+    config.useStockBackgrounds,
   ]);
 
   const updateConfig = (updates: Partial<Config>) => {
@@ -1030,7 +1035,7 @@ export default function SpecialDatesHubPage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex flex-wrap gap-4 text-sm mb-3">
               <label className="flex items-center gap-2 text-[var(--text-secondary)]">
                 <input
                   type="checkbox"
@@ -1048,6 +1053,20 @@ export default function SpecialDatesHubPage() {
                 Show social handles
               </label>
             </div>
+
+            <div className="flex flex-wrap gap-4 text-sm pt-3 border-t border-[var(--border-subtle)]">
+              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={config.useStockBackgrounds ?? false}
+                  onChange={(e) => updateConfig({ useStockBackgrounds: e.target.checked })}
+                />
+                Use stock photo backgrounds for holidays
+              </label>
+            </div>
+            <p className="text-xs text-[var(--text-tertiary)] mt-2">
+              Pexels photos appear behind the branded overlay. Only applies when a holiday is selected.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

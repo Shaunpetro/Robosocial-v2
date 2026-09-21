@@ -7,6 +7,7 @@ import { renderBrandedImage, type SocialItem } from "@/lib/templates/renderer";
 import { getFontForHoliday, getInterFont } from "@/lib/templates/fonts";
 import { getDedicationForHoliday } from "@/lib/ai/dedication";
 import { getTemplateMood } from "@/lib/templates/colors";
+import { getHolidayBackground } from "@/lib/templates/holiday-backgrounds";
 
 const utapi = new UTApi();
 
@@ -76,7 +77,7 @@ export async function POST(
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // 3. Build social items — prefer saved handles, fall back to connected platforms
+    // 3. Build social items
     const socialItems: SocialItem[] = [];
     const handles = (company.socialHandles as Record<string, string> | null) || {};
 
@@ -99,11 +100,7 @@ export async function POST(
       }
     }
 
-    // 4. Dedication precedence:
-    //    - config.dedication set  -> fixed override, skip AI
-    //    - holiday selected       -> cached or AI-generated per holiday,
-    //                                enriched with CompanyIntelligence
-    //    - neither                -> null
+    // 4. Dedication
     let dedication: string | null = null;
     if (config.dedication && config.dedication.trim().length > 0) {
       dedication = config.dedication.trim();
@@ -139,12 +136,23 @@ export async function POST(
       }
     }
 
-    // 5. Resolve fonts
+    // 5. Fetch stock background if enabled and holiday selected
+    let backgroundImageUrl: string | null = null;
+    if (config.useStockBackgrounds && holidayName) {
+      try {
+        backgroundImageUrl = await getHolidayBackground(holidayName, companyId);
+      } catch (err) {
+        console.error("Stock background fetch failed, continuing without:", err);
+        backgroundImageUrl = null;
+      }
+    }
+
+    // 6. Resolve fonts
     const baseFontData = getInterFont();
     const { fontData: holidayFontData, fontName: holidayFontName } =
       getFontForHoliday(holidayName);
 
-    // 6. Render branded image
+    // 7. Render
     const base64 = await renderBrandedImage({
       templateId: config.templateId || "clean-corporate",
       companyName: company.name,
@@ -166,6 +174,7 @@ export async function POST(
       holidayDate,
       holidayMessage,
       companyId,
+      backgroundImageUrl,
       baseFontData,
       holidayFontData,
       holidayFontName,
@@ -173,7 +182,7 @@ export async function POST(
 
     const imageBuffer = Buffer.from(base64, "base64");
 
-    // 7. Upload to blob storage
+    // 8. Upload
     const slug = holidayName
       ? holidayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
       : "base";
@@ -189,10 +198,11 @@ export async function POST(
 
     const imageUrl = blob.data.ufsUrl || blob.data.url;
 
-    // 8. Persist Media record
+    // 9. Persist Media record
     const expiresAt = new Date("2099-01-01T00:00:00.000Z");
     const tags = ["special-dates", "permanent"];
     if (holidayName) tags.push(`holiday:${holidayName}`);
+    if (backgroundImageUrl) tags.push("stock-background");
 
     const media = await prisma.media.create({
       data: {
@@ -210,7 +220,7 @@ export async function POST(
       },
     });
 
-    // 9. Only overwrite config.generatedMediaId for base images
+    // 10. Only overwrite base image config when no holiday
     if (!holidayName) {
       await prisma.companySpecialDatesConfig.update({
         where: { companyId },

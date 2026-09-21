@@ -27,6 +27,7 @@ export async function GET(
       socialHandles: true,
       contactEmail: true,
       contactPhone: true,
+      contactWhatsapp: true,
       brandColors: true,
       name: true,
       logoUrl: true,
@@ -62,6 +63,7 @@ export async function GET(
       excludedHolidays: [],
       tagline: null,
       dedication: null,
+      useStockBackgrounds: false,
     },
     availableSets: HOLIDAY_SETS.map((s) => ({
       id: s.id,
@@ -86,7 +88,6 @@ export async function PUT(
 
   const body = await request.json();
 
-  // If template changed, delete cached dedications so they regenerate
   const existingConfig = await prisma.companySpecialDatesConfig.findUnique({
     where: { companyId },
     select: { templateId: true },
@@ -114,6 +115,7 @@ export async function PUT(
       showHandles: body.showHandles ?? true,
       tagline: body.tagline ?? null,
       dedication: body.dedication ?? null,
+      useStockBackgrounds: body.useStockBackgrounds ?? false,
     },
     create: {
       companyId,
@@ -128,6 +130,7 @@ export async function PUT(
       showHandles: body.showHandles ?? true,
       tagline: body.tagline ?? null,
       dedication: body.dedication ?? null,
+      useStockBackgrounds: body.useStockBackgrounds ?? false,
     },
   });
 
@@ -141,6 +144,7 @@ export async function PUT(
         socialHandles: brandInfo.socialHandles !== undefined ? brandInfo.socialHandles : undefined,
         contactEmail: brandInfo.contactEmail !== undefined ? brandInfo.contactEmail : undefined,
         contactPhone: brandInfo.contactPhone !== undefined ? brandInfo.contactPhone : undefined,
+        contactWhatsapp: brandInfo.contactWhatsapp !== undefined ? brandInfo.contactWhatsapp : undefined,
         brandColors: brandInfo.brandColors !== undefined ? brandInfo.brandColors : undefined,
       },
     });

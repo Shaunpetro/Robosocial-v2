@@ -368,6 +368,7 @@ model CompanySpecialDatesConfig {
   logoHasTransparency Boolean @default(false)
   tagline             String?
   dedication          String?
+  useStockBackgrounds Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
