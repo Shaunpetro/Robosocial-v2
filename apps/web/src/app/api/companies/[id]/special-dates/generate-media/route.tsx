@@ -1,13 +1,24 @@
 // apps/web/src/app/api/companies/[id]/special-dates/generate-media/route.tsx
 
 import { NextRequest, NextResponse } from "next/server";
-import { ImageResponse } from "@vercel/og";
 import { prisma } from "@/lib/db";
 import { UTApi } from "uploadthing/server";
+import { renderBrandedImage, type SocialItem } from "@/lib/templates/renderer";
+import { getFontForHoliday, getInterFont } from "@/lib/templates/fonts";
+import { getDedicationForHoliday } from "@/lib/ai/dedication";
+import { getTemplateMood } from "@/lib/templates/colors";
 
 const utapi = new UTApi();
 
 export const runtime = "nodejs";
+
+interface GenerateMediaBody {
+  holidayName?: string;
+  holidayDate?: string;
+  holidayMessage?: string;
+  holidayDescription?: string;
+  holidayTone?: string;
+}
 
 export async function POST(
   request: NextRequest,
@@ -15,14 +26,29 @@ export async function POST(
 ) {
   try {
     const { id: companyId } = await params;
+    const body: GenerateMediaBody = await request.json().catch(() => ({}));
 
-    // 1. Fetch config with logo media
+    const {
+      holidayName,
+      holidayDate,
+      holidayMessage,
+      holidayDescription,
+      holidayTone,
+    } = body;
+
+    // 1. Load config with logo
     const config = await prisma.companySpecialDatesConfig.findUnique({
       where: { companyId },
       include: { logoMedia: true },
     });
 
-    if (!config || !config.enabled) {
+    if (!config) {
+      return NextResponse.json(
+        { error: "Special dates not configured for this company" },
+        { status: 400 }
+      );
+    }
+    if (!config.enabled) {
       return NextResponse.json(
         { error: "Special dates feature not enabled" },
         { status: 400 }
@@ -35,13 +61,14 @@ export async function POST(
       );
     }
 
-    // 2. Fetch company details
+    // 2. Load company, connected platforms, and intelligence
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       include: {
         platforms: {
           where: { isConnected: true },
         },
+        intelligence: true,
       },
     });
 
@@ -49,83 +76,111 @@ export async function POST(
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    const logoUrl = config.logoMedia.url;
-    const website = company.website || "";
-    const platformHandles = company.platforms.map(
-      (p) => `${p.type}: @${p.username || p.name}`
-    );
+    // 3. Build social items — prefer saved handles, fall back to connected platforms
+    const socialItems: SocialItem[] = [];
+    const handles = (company.socialHandles as Record<string, string> | null) || {};
 
-    // Determine template style
-    const templateId = config.templateId || "clean-corporate";
-    let backgroundStyle: React.CSSProperties = {
-      background: "linear-gradient(135deg, #6366f1, #a855f7)",
-      color: "white",
-    };
-    if (templateId === "clean-corporate") {
-      backgroundStyle = {
-        background: "white",
-        color: "#111827",
-        border: "2px solid #e5e7eb",
-      };
-    } else if (templateId === "minimalist-dark") {
-      backgroundStyle = {
-        background: "#111827",
-        color: "white",
-      };
+    for (const [platform, handle] of Object.entries(handles)) {
+      if (!handle) continue;
+      socialItems.push({
+        platform: platform.toLowerCase(),
+        handle: `@${String(handle).replace(/^@/, "")}`,
+      });
     }
 
-    // 3. Generate image with @vercel/og
-    const imageResponse = new ImageResponse(
-      (
-        <div
-          style={{
-            width: 1200,
-            height: 630,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 40,
-            fontFamily: "Arial, sans-serif",
-            ...backgroundStyle,
-          }}
-        >
-          <img
-            src={logoUrl}
-            alt="Logo"
-            style={{
-              width: 200,
-              height: 200,
-              objectFit: "contain",
-              marginBottom: 20,
-            }}
-          />
-          <h1 style={{ fontSize: 48, fontWeight: "bold", margin: "0 0 10px 0" }}>
-            {company.name}
-          </h1>
-          {website && (
-            <p style={{ fontSize: 28, margin: "0 0 10px 0" }}>{website}</p>
-          )}
-          <div style={{ display: "flex", gap: 20, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-            {platformHandles.map((handle, i) => (
-              <span key={i} style={{ fontSize: 22 }}>
-                {handle}
-              </span>
-            ))}
-          </div>
-        </div>
-      ),
-      { width: 1200, height: 630 }
-    );
+    if (socialItems.length === 0) {
+      for (const p of company.platforms) {
+        const handle = p.username || p.name;
+        if (!handle) continue;
+        socialItems.push({
+          platform: p.type.toLowerCase(),
+          handle: `@${handle.replace(/^@/, "")}`,
+        });
+      }
+    }
 
-    // 4. Get image buffer
-    const imageBuffer = await imageResponse.arrayBuffer();
+    // 4. Dedication precedence:
+    //    - config.dedication set  -> fixed override, skip AI
+    //    - holiday selected       -> cached or AI-generated per holiday,
+    //                                enriched with CompanyIntelligence
+    //    - neither                -> null
+    let dedication: string | null = null;
+    if (config.dedication && config.dedication.trim().length > 0) {
+      dedication = config.dedication.trim();
+    } else if (holidayName && holidayDescription) {
+      const intel = company.intelligence;
+      try {
+        dedication = await getDedicationForHoliday({
+          companyId,
+          companyName: company.name,
+          industry: company.industry,
+          companyDescription: company.description,
+          intelligence: intel
+            ? {
+                brandVoice: intel.brandVoice,
+                brandPersonality: intel.brandPersonality,
+                uniqueSellingPoints: intel.uniqueSellingPoints,
+                targetAudience: intel.targetAudience,
+                communityFocus: intel.communityFocus,
+                primaryBusinessGoal: intel.primaryBusinessGoal,
+                primaryKeywords: intel.primaryKeywords,
+                defaultTone: intel.defaultTone,
+              }
+            : null,
+          holidayName,
+          holidayDescription,
+          holidayTone,
+          templateId: config.templateId,
+          templateMood: getTemplateMood(config.templateId),
+        });
+      } catch (err) {
+        console.error("Dedication generation failed, continuing without:", err);
+        dedication = null;
+      }
+    }
 
-    // 5. Upload to Vercel Blob via Uploadthing
+    // 5. Resolve fonts
+    const baseFontData = getInterFont();
+    const { fontData: holidayFontData, fontName: holidayFontName } =
+      getFontForHoliday(holidayName);
+
+    // 6. Render branded image
+    const base64 = await renderBrandedImage({
+      templateId: config.templateId || "clean-corporate",
+      companyName: company.name,
+      logoUrl: config.logoMedia.url,
+      logoHasTransparency: config.logoHasTransparency,
+      tagline: config.tagline,
+      dedication,
+      website: company.website || undefined,
+      socialItems,
+      contactEmail: company.contactEmail,
+      contactPhone: company.contactPhone,
+      contactWhatsapp: company.contactWhatsapp,
+      brandColors:
+        (company.brandColors as Record<string, string> | null) || undefined,
+      logoPosition: (config.logoPosition as "top" | "center" | "bottom") || "top",
+      showWebsite: config.showWebsite,
+      showHandles: config.showHandles,
+      holidayName,
+      holidayDate,
+      holidayMessage,
+      companyId,
+      baseFontData,
+      holidayFontData,
+      holidayFontName,
+    });
+
+    const imageBuffer = Buffer.from(base64, "base64");
+
+    // 7. Upload to blob storage
+    const slug = holidayName
+      ? holidayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : "base";
+    const safeName = `special-dates-${companyId}-${slug}.png`;
+
     const blob = await utapi.uploadFiles(
-      new File([imageBuffer], `special-dates-${companyId}.png`, {
-        type: "image/png",
-      })
+      new File([imageBuffer], safeName, { type: "image/png" })
     );
 
     if (!blob.data) {
@@ -134,29 +189,34 @@ export async function POST(
 
     const imageUrl = blob.data.ufsUrl || blob.data.url;
 
-    // 6. Create permanent Media record
+    // 8. Persist Media record
     const expiresAt = new Date("2099-01-01T00:00:00.000Z");
+    const tags = ["special-dates", "permanent"];
+    if (holidayName) tags.push(`holiday:${holidayName}`);
+
     const media = await prisma.media.create({
       data: {
         companyId,
-        filename: `special-dates-${companyId}.png`,
+        filename: safeName,
         url: imageUrl,
         type: "IMAGE",
         mimeType: "image/png",
         size: blob.data.size,
         expiresAt,
-        tags: ["special-dates", "permanent"],
+        tags,
         isUsed: false,
         autoSelect: false,
         priority: 10,
       },
     });
 
-    // 7. Update config with generated media ID
-    await prisma.companySpecialDatesConfig.update({
-      where: { companyId },
-      data: { generatedMediaId: media.id },
-    });
+    // 9. Only overwrite config.generatedMediaId for base images
+    if (!holidayName) {
+      await prisma.companySpecialDatesConfig.update({
+        where: { companyId },
+        data: { generatedMediaId: media.id },
+      });
+    }
 
     return NextResponse.json({ mediaId: media.id, url: imageUrl });
   } catch (error) {

@@ -247,6 +247,7 @@ export default function SpecialDatesHubPage() {
             socialHandles: b.socialHandles,
             contactEmail: b.contactEmail,
             contactPhone: b.contactPhone,
+            contactWhatsapp: b.contactWhatsapp,
             brandColors: b.brandColors,
           },
         }),

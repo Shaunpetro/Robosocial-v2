@@ -76,11 +76,12 @@ model Company {
   ownerId     String?
   owner       User?    @relation(fields: [ownerId], references: [id])
 
-  socialLinks   Json?
-  socialHandles Json?
-  contactEmail  String?
-  contactPhone  String?
-  brandColors   Json?
+  socialLinks     Json?
+  socialHandles   Json?
+  contactEmail    String?
+  contactPhone    String?
+  contactWhatsapp String?
+  brandColors     Json?
 
   platforms           Platform[]
   contentSettings     ContentSettings?

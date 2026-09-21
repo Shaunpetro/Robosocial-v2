@@ -4,11 +4,23 @@ import { prisma } from '@/lib/db';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-interface GenerateDedicationInput {
+export interface DedicationIntelligenceContext {
+  brandVoice?: string | null;
+  brandPersonality?: string[] | null;
+  uniqueSellingPoints?: string[] | null;
+  targetAudience?: string | null;
+  communityFocus?: string | null;
+  primaryBusinessGoal?: string | null;
+  primaryKeywords?: string[] | null;
+  defaultTone?: string | null;
+}
+
+export interface GenerateDedicationInput {
   companyId: string;
   companyName: string;
   industry?: string | null;
-  brandVoice?: string | null;
+  companyDescription?: string | null;
+  intelligence?: DedicationIntelligenceContext | null;
   holidayName: string;
   holidayDescription: string;
   holidayTone?: string;
@@ -61,17 +73,77 @@ const FALLBACK_BY_TONE: Record<string, string[]> = {
   ],
 };
 
+function buildIntelligenceBlock(
+  intel: DedicationIntelligenceContext | null | undefined
+): string[] {
+  if (!intel) return [];
+  const lines: string[] = [];
+
+  // Explicit voice wins
+  if (intel.brandVoice && intel.brandVoice.trim().length > 0) {
+    lines.push(`Speak in this brand voice: ${intel.brandVoice.trim()}`);
+  } else if (intel.brandPersonality && intel.brandPersonality.length > 0) {
+    // Synthesize a voice descriptor from personality traits
+    lines.push(`Brand personality: ${intel.brandPersonality.join(', ')}`);
+  }
+
+  if (intel.targetAudience && intel.targetAudience.trim().length > 0) {
+    lines.push(`Speaks to: ${intel.targetAudience.trim()}`);
+  }
+
+  if (intel.uniqueSellingPoints && intel.uniqueSellingPoints.length > 0) {
+    const usps = intel.uniqueSellingPoints
+      .filter((s) => s && s.trim().length > 0)
+      .slice(0, 4);
+    if (usps.length > 0) lines.push(`What makes them different: ${usps.join('; ')}`);
+  }
+
+  if (intel.communityFocus && intel.communityFocus.trim().length > 0) {
+    lines.push(`Community role: ${intel.communityFocus.trim()}`);
+  }
+
+  if (intel.primaryBusinessGoal && intel.primaryBusinessGoal.trim().length > 0) {
+    lines.push(`Purpose: ${intel.primaryBusinessGoal.trim()}`);
+  }
+
+  if (intel.primaryKeywords && intel.primaryKeywords.length > 0) {
+    const kw = intel.primaryKeywords
+      .filter((s) => s && s.trim().length > 0)
+      .slice(0, 6);
+    if (kw.length > 0) lines.push(`Themes to weave in naturally: ${kw.join(', ')}`);
+  }
+
+  return lines;
+}
+
 async function generateWithGroq(input: GenerateDedicationInput): Promise<string | null> {
   const tone = input.holidayTone || 'warm';
   const mood = input.templateMood || 'warm, grounded';
-  const industryLine = input.industry ? `Industry: ${input.industry}.` : '';
-  const voiceLine = input.brandVoice ? `Brand voice: ${input.brandVoice}.` : '';
+
+  // Context lines, only populated fields included
+  const contextLines: string[] = [];
+
+  if (input.industry && input.industry.trim().length > 0) {
+    contextLines.push(`Industry: ${input.industry.trim()}`);
+  }
+
+  const intelLines = buildIntelligenceBlock(input.intelligence);
+  contextLines.push(...intelLines);
+
+  if (
+    contextLines.length === 0 &&
+    input.companyDescription &&
+    input.companyDescription.trim().length > 0
+  ) {
+    // Fallback: raw description
+    contextLines.push(`About the company: ${input.companyDescription.trim().slice(0, 240)}`);
+  }
+
+  const contextBlock = contextLines.length > 0 ? `\n${contextLines.join('\n')}\n` : '';
 
   const prompt = `Write one short dedication line for a social media post.
 
-Company: ${input.companyName}
-${industryLine}
-${voiceLine}
+Company: ${input.companyName}${contextBlock}
 Holiday: ${input.holidayName}
 Description: ${input.holidayDescription}
 Holiday tone: ${tone}
@@ -82,8 +154,8 @@ Rules:
 - Maximum 90 characters
 - No greetings, no emojis, no hashtags
 - Reference the holiday theme
-- Feel personal to the industry if one is given
-- Match the energy of the visual style above
+- If brand context is given above, let it shape the language naturally
+- Match the energy of the visual style
 - Avoid dry or generic phrasing; aim for a line that carries weight
 - No em dashes
 
