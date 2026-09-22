@@ -3,7 +3,7 @@ import Groq from 'groq-sdk';
 import { prisma } from '@/lib/db';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const GROQ_MODEL = 'openai/gpt-oss-20b';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 export interface DedicationIntelligenceContext {
   brandVoice?: string | null;
@@ -190,8 +190,8 @@ Return only the sentence, nothing else.`;
     const response = await groq.chat.completions.create({
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.95,
-      max_tokens: 80,
+      temperature: 0.85,
+      max_tokens: 200,
     });
 
     const raw = response.choices[0]?.message?.content?.trim() || '';
