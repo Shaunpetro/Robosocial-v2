@@ -1,13 +1,19 @@
 // apps/web/src/lib/special-dates/scheduler.ts
-// Term scheduler: builds a preview of what would be scheduled, and commits
-// one holiday at a time (to fit Vercel's 10s serverless limit).
+// Term scheduler + manual scheduler. Both share the same underlying core:
+// generate one holiday's media, then create a GeneratedPost per compatible
+// platform. Term scheduling additionally marks `lastScheduledTermId`.
+//
+// Deduplication is semantic: (company, platform, holiday name, day).
+// This is robust to prompt-string format changes and prevents manual and
+// term scheduling from creating duplicate posts for the same holiday.
 
 import { prisma } from "@/lib/db";
 import { generateSpecialDatePost } from "@/lib/ai/openai";
 import {
   getTermById,
   getTermProgress,
-  getHolidaysInTerm,
+  getCurrentWindow,
+  getHolidaysInWindow,
   type SaTerm,
 } from "./terms";
 import {
@@ -20,11 +26,169 @@ import {
  * output. Instagram needs square/portrait, WordPress is a blog platform.
  * Multi-AR rendering is a future ship.
  */
-const COMPATIBLE_PLATFORMS: Record<string, { label: string; captionMax: number }> = {
+export const COMPATIBLE_PLATFORMS: Record<string, { label: string; captionMax: number }> = {
   LINKEDIN: { label: "LinkedIn", captionMax: 210 },
   FACEBOOK: { label: "Facebook", captionMax: 200 },
   TWITTER: { label: "X", captionMax: 240 },
 };
+
+// ---------- Types ----------
+
+export interface SchedulableHoliday {
+  name: string;
+  isoDate: string;
+  displayDate: string;
+  description: string;
+  tone: string;
+  setId: string;
+  categories: string[];
+  alreadyScheduledPlatforms: string[];
+}
+
+export interface SchedulableHolidaysResponse {
+  window: {
+    startIso: string;
+    endIso: string;
+    daysRemaining: number;
+    isShortWindow: boolean;
+    termLabel: string | null;
+    isBetweenTerms: boolean;
+  };
+  holidays: SchedulableHoliday[];
+  compatiblePlatforms: Array<{
+    id: string;
+    type: string;
+    label: string;
+    name: string;
+  }>;
+}
+
+export interface ScheduleHolidayResult {
+  holidayName: string;
+  isoDate: string;
+  mediaId: string | null;
+  postsCreated: Array<{
+    platformId: string;
+    platformLabel: string;
+    postId: string;
+    status: string;
+    skipped?: boolean;
+    skipReason?: string;
+  }>;
+  errors: string[];
+}
+
+export interface ScheduleHolidayInput {
+  companyId: string;
+  holidayName: string;
+  holidayIsoDate: string;
+  holidayDescription: string;
+  holidayTone: string;
+  setId: string;
+}
+
+// ---------- Helpers ----------
+
+function dayBounds(isoDate: string): { start: Date; end: Date } {
+  const start = new Date(`${isoDate}T00:00:00.000Z`);
+  const end = new Date(`${isoDate}T23:59:59.999Z`);
+  return { start, end };
+}
+
+// ---------- Schedulable holidays (used by both term preview and manual card) ----------
+
+/**
+ * Returns every holiday in the CURRENT schedulable window that isn't
+ * already scheduled for this company. Uses all enabled holiday sets —
+ * public holidays, awareness days, cultural sets, everything the user
+ * turned on in Step 1.
+ */
+export async function getSchedulableHolidays(
+  companyId: string
+): Promise<SchedulableHolidaysResponse> {
+  const config = await prisma.companySpecialDatesConfig.findUnique({
+    where: { companyId },
+  });
+
+  if (!config) throw new Error("Special dates not configured for this company");
+
+  const window = getCurrentWindow();
+  if (!window) {
+    throw new Error("No active or upcoming term window found.");
+  }
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    include: { platforms: { where: { isConnected: true } } },
+  });
+  if (!company) throw new Error("Company not found");
+
+  const compatiblePlatforms = company.platforms
+    .filter((p) => COMPATIBLE_PLATFORMS[p.type])
+    .map((p) => ({
+      id: p.id,
+      type: p.type,
+      label: COMPATIBLE_PLATFORMS[p.type].label,
+      name: p.name || p.username || p.type,
+    }));
+
+  const raw = getHolidaysInWindow(
+    { start: window.start, end: window.end },
+    config.holidaySets || [],
+    config.excludedHolidays || []
+  );
+
+  const holidays: SchedulableHoliday[] = [];
+
+  for (const { entry, date, setId } of raw) {
+    const isoDate = date.toISOString().slice(0, 10);
+    const { start, end } = dayBounds(isoDate);
+
+    const existing = await prisma.generatedPost.findMany({
+      where: {
+        companyId,
+        topic: entry.name,
+        scheduledFor: { gte: start, lte: end },
+        status: { not: "FAILED" },
+      },
+      include: { platform: true },
+    });
+
+    const alreadyScheduledPlatforms = existing.map(
+      (p) => COMPATIBLE_PLATFORMS[p.platform.type]?.label || p.platform.type
+    );
+
+    holidays.push({
+      name: entry.name,
+      isoDate,
+      displayDate: date.toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+      description: entry.description,
+      tone: entry.tone || "warm",
+      setId,
+      categories: entry.categories,
+      alreadyScheduledPlatforms,
+    });
+  }
+
+  return {
+    window: {
+      startIso: window.start.toISOString().slice(0, 10),
+      endIso: window.end.toISOString().slice(0, 10),
+      daysRemaining: window.daysRemaining,
+      isShortWindow: window.isShortWindow,
+      termLabel: window.term?.label || null,
+      isBetweenTerms: window.isBetweenTerms,
+    },
+    holidays,
+    compatiblePlatforms,
+  };
+}
+
+// ---------- Term plan (existing — unchanged shape) ----------
 
 export interface TermPlanHoliday {
   name: string;
@@ -73,9 +237,7 @@ export async function buildTermPlan(
     where: { companyId },
   });
 
-  if (!config) {
-    throw new Error("Special dates not configured for this company");
-  }
+  if (!config) throw new Error("Special dates not configured for this company");
 
   const term = termId ? getTermById(termId) : null;
   const resolvedTerm = term || (await import("./terms")).getCurrentTerm();
@@ -86,19 +248,16 @@ export async function buildTermPlan(
 
   const progress = getTermProgress(resolvedTerm);
 
-  const holidays = getHolidaysInTerm(
-    resolvedTerm,
+  const holidays = getHolidaysInWindow(
+    { start: resolvedTerm.start, end: resolvedTerm.end },
     config.holidaySets || [],
     config.excludedHolidays || []
   );
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: {
-      platforms: { where: { isConnected: true } },
-    },
+    include: { platforms: { where: { isConnected: true } } },
   });
-
   if (!company) throw new Error("Company not found");
 
   const platforms: TermPlanPlatform[] = company.platforms.map((p) => {
@@ -167,52 +326,27 @@ export async function buildTermPlan(
   };
 }
 
-export interface CommitHolidayResult {
-  holidayName: string;
-  isoDate: string;
-  mediaId: string | null;
-  postsCreated: Array<{
-    platformId: string;
-    platformLabel: string;
-    postId: string;
-    status: string;
-    skipped?: boolean;
-    skipReason?: string;
-  }>;
-  errors: string[];
-}
-
-export interface CommitHolidayInput {
-  companyId: string;
-  termId: string;
-  holidayName: string;
-  holidayIsoDate: string;
-  holidayDescription: string;
-  holidayTone: string;
-  setId: string;
-  isFinalHoliday?: boolean;
-}
+// ---------- Core scheduling ----------
 
 /**
- * Commits one holiday: generates media once, then creates a GeneratedPost
- * per compatible platform. Called once per holiday by the client, so each
- * request stays inside Vercel's 10s limit.
+ * Schedules one holiday for all compatible platforms. Same logic whether
+ * called from the term scheduler or the manual scheduler — the only
+ * difference is bookkeeping (term scheduler touches lastScheduledTermId,
+ * manual scheduler does not).
  */
-export async function commitHolidayToTerm(
-  input: CommitHolidayInput
-): Promise<CommitHolidayResult> {
+export async function scheduleHoliday(
+  input: ScheduleHolidayInput
+): Promise<ScheduleHolidayResult> {
   const {
     companyId,
-    termId,
     holidayName,
     holidayIsoDate,
     holidayDescription,
     holidayTone,
     setId,
-    isFinalHoliday,
   } = input;
 
-  const result: CommitHolidayResult = {
+  const result: ScheduleHolidayResult = {
     holidayName,
     isoDate: holidayIsoDate,
     mediaId: null,
@@ -223,7 +357,6 @@ export async function commitHolidayToTerm(
   const config = await prisma.companySpecialDatesConfig.findUnique({
     where: { companyId },
   });
-
   if (!config) {
     result.errors.push("Special dates not configured for this company");
     return result;
@@ -236,7 +369,6 @@ export async function commitHolidayToTerm(
       intelligence: { select: { autoApprove: true, timezone: true } },
     },
   });
-
   if (!company) {
     result.errors.push("Company not found");
     return result;
@@ -251,7 +383,6 @@ export async function commitHolidayToTerm(
     return result;
   }
 
-  // Compute scheduled time: 08:00 in company timezone, on the holiday date.
   const holidayDate = new Date(`${holidayIsoDate}T00:00:00.000Z`);
   const scheduledAt = new Date(holidayDate);
   scheduledAt.setUTCHours(8, 0, 0, 0);
@@ -262,7 +393,7 @@ export async function commitHolidayToTerm(
     year: "numeric",
   });
 
-  // 1. Generate media once for this holiday (reused across platforms)
+  // 1. Generate media once for this holiday
   try {
     const media = await generateSpecialDateMedia({
       companyId,
@@ -279,19 +410,20 @@ export async function commitHolidayToTerm(
     } else {
       result.errors.push(`Media: ${String(err)}`);
     }
-    // Media failure is fatal for this holiday — no posts without an image.
     return result;
   }
 
-  // 2. For each compatible platform: dedupe check, generate caption, create post
-  for (const platform of compatiblePlatforms) {
-    const promptId = `special-date:${termId}:${setId}:${holidayName}:${platform.id}`;
+  // 2. Per-platform: dedup, generate caption, create post
+  const { start: dayStart, end: dayEnd } = dayBounds(holidayIsoDate);
 
+  for (const platform of compatiblePlatforms) {
     try {
       const existing = await prisma.generatedPost.findFirst({
         where: {
           companyId,
-          prompt: promptId,
+          platformId: platform.id,
+          topic: holidayName,
+          scheduledFor: { gte: dayStart, lte: dayEnd },
           status: { not: "FAILED" },
         },
       });
@@ -303,7 +435,7 @@ export async function commitHolidayToTerm(
           postId: existing.id,
           status: existing.status,
           skipped: true,
-          skipReason: "Already scheduled for this term",
+          skipReason: "Already scheduled",
         });
         continue;
       }
@@ -316,7 +448,10 @@ export async function commitHolidayToTerm(
         platformId: platform.id,
         dateName: holidayName,
         dateDescription: holidayDescription,
-        hashtags: [`#${holidayName.replace(/[^A-Za-z0-9]/g, "")}`, "#SpecialDates"],
+        hashtags: [
+          `#${holidayName.replace(/[^A-Za-z0-9]/g, "")}`,
+          "#SpecialDates",
+        ],
         tone: holidayTone,
       });
 
@@ -329,12 +464,12 @@ export async function commitHolidayToTerm(
           platformId: platform.id,
           content: caption,
           hashtags: generated.hashtags,
-          prompt: promptId,
+          prompt: `special-date:${setId}:${holidayName}:${platform.id}`,
           topic: holidayName,
           tone: holidayTone,
           scheduledFor: scheduledAt,
           status: company.intelligence?.autoApprove ? "SCHEDULED" : "DRAFT",
-          generatedBy: "special-dates-term-scheduler",
+          generatedBy: "special-dates-scheduler",
         },
       });
 
@@ -361,11 +496,33 @@ export async function commitHolidayToTerm(
     }
   }
 
-  // 3. Only mark the term as scheduled after the final holiday is committed.
-  if (isFinalHoliday && result.errors.length === 0) {
+  return result;
+}
+
+// ---------- Term commit (wrapper around scheduleHoliday) ----------
+
+export interface CommitHolidayInput extends ScheduleHolidayInput {
+  termId: string;
+  isFinalHoliday?: boolean;
+}
+
+export async function commitHolidayToTerm(
+  input: CommitHolidayInput
+): Promise<ScheduleHolidayResult> {
+  const result = await scheduleHoliday({
+    companyId: input.companyId,
+    holidayName: input.holidayName,
+    holidayIsoDate: input.holidayIsoDate,
+    holidayDescription: input.holidayDescription,
+    holidayTone: input.holidayTone,
+    setId: input.setId,
+  });
+
+  // Only mark the term as scheduled after the final holiday commits cleanly.
+  if (input.isFinalHoliday && result.errors.length === 0) {
     await prisma.companySpecialDatesConfig.update({
-      where: { companyId },
-      data: { lastScheduledTermId: termId },
+      where: { companyId: input.companyId },
+      data: { lastScheduledTermId: input.termId },
     });
   }
 

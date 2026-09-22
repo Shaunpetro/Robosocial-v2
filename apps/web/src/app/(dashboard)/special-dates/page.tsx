@@ -25,6 +25,7 @@ import {
   Layers,
   Star,
   CalendarCheck,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPOSITIONS } from "@/lib/templates/compositions";
@@ -116,10 +117,46 @@ interface TermPlan {
   lastScheduledTermId: string | null;
 }
 
+interface SchedulableHoliday {
+  name: string;
+  isoDate: string;
+  displayDate: string;
+  description: string;
+  tone: string;
+  setId: string;
+  categories: string[];
+  alreadyScheduledPlatforms: string[];
+}
+
+interface SchedulableHolidaysResponse {
+  window: {
+    startIso: string;
+    endIso: string;
+    daysRemaining: number;
+    isShortWindow: boolean;
+    termLabel: string | null;
+    isBetweenTerms: boolean;
+  };
+  holidays: SchedulableHoliday[];
+  compatiblePlatforms: Array<{
+    id: string;
+    type: string;
+    label: string;
+    name: string;
+  }>;
+}
+
 interface CommitProgress {
   holidayName: string;
   index: number;
   total: number;
+  status: "pending" | "success" | "error";
+  postsCreated: number;
+  errors: string[];
+}
+
+interface ManualProgress {
+  holidayName: string;
   status: "pending" | "success" | "error";
   postsCreated: number;
   errors: string[];
@@ -213,6 +250,12 @@ export default function SpecialDatesHubPage() {
   const [committing, setCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState<CommitProgress[]>([]);
 
+  // Manual scheduling state
+  const [schedulable, setSchedulable] = useState<SchedulableHolidaysResponse | null>(null);
+  const [loadingSchedulable, setLoadingSchedulable] = useState(false);
+  const [schedulableError, setSchedulableError] = useState<string | null>(null);
+  const [manualProgress, setManualProgress] = useState<Record<string, ManualProgress>>({});
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
@@ -296,6 +339,35 @@ export default function SpecialDatesHubPage() {
     };
     fetchConfig();
   }, [selectedCompanyId]);
+
+  // Load schedulable holidays whenever company or relevant config changes
+  const refreshSchedulable = useCallback(async () => {
+    if (!selectedCompanyId) return;
+    setLoadingSchedulable(true);
+    setSchedulableError(null);
+    try {
+      const res = await fetch(
+        `/api/companies/${selectedCompanyId}/special-dates/schedulable-holidays`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setSchedulable(data);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSchedulableError(err.error || "Failed to load holidays");
+      }
+    } catch (err) {
+      console.error("Schedulable fetch failed:", err);
+      setSchedulableError("Network error");
+    } finally {
+      setLoadingSchedulable(false);
+    }
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    refreshSchedulable();
+  }, [selectedCompanyId, refreshSchedulable]);
 
   const performSave = useCallback(async () => {
     const { config: c, brandInfo: b, selectedCompanyId: cid } = stateRef.current;
@@ -537,6 +609,8 @@ export default function SpecialDatesHubPage() {
     updateBrandInfo({ socialHandles: nextHandles });
   };
 
+  // ---------- Term modal ----------
+
   const openTermModal = async () => {
     setShowTermModal(true);
     setTermPlan(null);
@@ -579,12 +653,6 @@ export default function SpecialDatesHubPage() {
     for (let i = 0; i < termPlan.holidays.length; i++) {
       const h = termPlan.holidays[i];
       const isFinal = i === termPlan.holidays.length - 1;
-
-      setCommitProgress((prev) =>
-        prev.map((p, idx) =>
-          idx === i ? { ...p, status: "pending" } : p
-        )
-      );
 
       try {
         const res = await fetch(
@@ -638,7 +706,6 @@ export default function SpecialDatesHubPage() {
     }
 
     setCommitting(false);
-    // Refresh config so lastScheduledTermId is reflected
     try {
       const res = await fetch(`/api/companies/${selectedCompanyId}/special-dates`);
       if (res.ok) {
@@ -651,6 +718,80 @@ export default function SpecialDatesHubPage() {
         }
       }
     } catch {}
+    refreshSchedulable();
+  };
+
+  // ---------- Manual scheduler ----------
+
+  const scheduleOneHoliday = async (h: SchedulableHoliday) => {
+    setManualProgress((prev) => ({
+      ...prev,
+      [h.isoDate + h.name]: {
+        holidayName: h.name,
+        status: "pending",
+        postsCreated: 0,
+        errors: [],
+      },
+    }));
+
+    try {
+      const res = await fetch(
+        `/api/companies/${selectedCompanyId}/special-dates/schedule-holiday`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            holidayName: h.name,
+            holidayIsoDate: h.isoDate,
+            holidayDescription: h.description,
+            holidayTone: h.tone,
+            setId: h.setId,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setManualProgress((prev) => ({
+          ...prev,
+          [h.isoDate + h.name]: {
+            holidayName: h.name,
+            status: data.errors && data.errors.length > 0 ? "error" : "success",
+            postsCreated: (data.postsCreated || []).filter((pc: any) => !pc.skipped).length,
+            errors: data.errors || [],
+          },
+        }));
+      } else {
+        setManualProgress((prev) => ({
+          ...prev,
+          [h.isoDate + h.name]: {
+            holidayName: h.name,
+            status: "error",
+            postsCreated: 0,
+            errors: [data.error || "Request failed"],
+          },
+        }));
+      }
+    } catch (err) {
+      setManualProgress((prev) => ({
+        ...prev,
+        [h.isoDate + h.name]: {
+          holidayName: h.name,
+          status: "error",
+          postsCreated: 0,
+          errors: [String(err)],
+        },
+      }));
+    }
+
+    // Give the user a beat to see the result, then refresh the list
+    setTimeout(() => {
+      refreshSchedulable();
+      setManualProgress((prev) => {
+        const next = { ...prev };
+        delete next[h.isoDate + h.name];
+        return next;
+      });
+    }, 2200);
   };
 
   if (loadingCompanies) {
@@ -1282,15 +1423,16 @@ export default function SpecialDatesHubPage() {
             </p>
           </div>
 
+          {/* ---------- Term scheduler ---------- */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <CalendarCheck className="h-5 w-5" />
-              Schedule this term
+              Schedule the full term
             </h2>
             <p className="text-sm text-[var(--text-tertiary)] mb-4">
               Generate branded posts and images for every holiday in the current school
-              term. Each post is scheduled for 08:00 on the holiday and linked to the
-              compatible connected platforms.
+              term. Best used near the start of a term, so the whole term is planned
+              ahead. Each post is scheduled for 08:00 on the holiday.
             </p>
 
             {config.lastScheduledTermId && (
@@ -1306,7 +1448,7 @@ export default function SpecialDatesHubPage() {
               className="flex items-center gap-2 px-5 py-3 bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
             >
               <CalendarCheck className="h-5 w-5" />
-              Preview and schedule term
+              Preview full term
             </button>
             {(!config.logoMediaId || config.holidaySets.length === 0) && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
@@ -1316,6 +1458,140 @@ export default function SpecialDatesHubPage() {
               </p>
             )}
           </div>
+
+          {/* ---------- Manual scheduler ---------- */}
+          {schedulable && schedulable.window && (
+            <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                <Send className="h-5 w-5" />
+                Schedule individual holidays
+              </h2>
+              <p className="text-sm text-[var(--text-tertiary)] mb-4">
+                Schedule one holiday at a time within the current window — up to{" "}
+                {schedulable.window.termLabel
+                  ? `the end of ${schedulable.window.termLabel}`
+                  : "the next term starts"}
+                . Ideal when the term is almost over and there's just a few dates left.
+              </p>
+
+              <div className="mb-4 flex flex-wrap gap-3 text-xs text-[var(--text-tertiary)]">
+                <span className="flex items-center gap-1">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Window:{" "}
+                  {new Date(schedulable.window.startIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                  {" – "}
+                  {new Date(schedulable.window.endIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                </span>
+                <span>
+                  {schedulable.window.daysRemaining} day
+                  {schedulable.window.daysRemaining === 1 ? "" : "s"} remaining
+                </span>
+                {schedulable.compatiblePlatforms.length > 0 && (
+                  <span>
+                    Targets: {schedulable.compatiblePlatforms.map((p) => p.label).join(", ")}
+                  </span>
+                )}
+              </div>
+
+              {loadingSchedulable && (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
+                </div>
+              )}
+
+              {schedulableError && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-start gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  {schedulableError}
+                </div>
+              )}
+
+              {!loadingSchedulable && schedulable.holidays.length === 0 && (
+                <p className="text-sm text-[var(--text-tertiary)]">
+                  No holidays in the current window. Enable more calendars above or check
+                  excluded dates.
+                </p>
+              )}
+
+              {!loadingSchedulable && schedulable.holidays.length > 0 && (
+                <ul className="space-y-2">
+                  {schedulable.holidays.map((h) => {
+                    const key = h.isoDate + h.name;
+                    const progress = manualProgress[key];
+                    const allScheduled =
+                      schedulable.compatiblePlatforms.length > 0 &&
+                      h.alreadyScheduledPlatforms.length >= schedulable.compatiblePlatforms.length;
+
+                    return (
+                      <li
+                        key={key}
+                        className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--bg-secondary)]"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                            {h.name}
+                          </p>
+                          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                            {h.displayDate}
+                            {h.alreadyScheduledPlatforms.length > 0 && (
+                              <> · Scheduled on {h.alreadyScheduledPlatforms.join(", ")}</>
+                            )}
+                          </p>
+                          {progress?.status === "error" && progress.errors.length > 0 && (
+                            <ul className="mt-1 space-y-0.5">
+                              {progress.errors.map((e, ei) => (
+                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
+                                  {e}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+
+                        {progress?.status === "pending" ? (
+                          <span className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Scheduling...
+                          </span>
+                        ) : progress?.status === "success" ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {progress.postsCreated} post
+                            {progress.postsCreated === 1 ? "" : "s"} created
+                          </span>
+                        ) : allScheduled ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Scheduled
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => scheduleOneHoliday(h)}
+                            disabled={
+                              !config.logoMediaId ||
+                              schedulable.compatiblePlatforms.length === 0
+                            }
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Schedule
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {(!config.logoMediaId || schedulable.compatiblePlatforms.length === 0) && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">
+                  {!config.logoMediaId
+                    ? "Upload a company logo first."
+                    : "Connect a compatible platform (LinkedIn, Facebook, or X) to schedule."}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -1349,6 +1625,7 @@ export default function SpecialDatesHubPage() {
         </>
       )}
 
+      {/* Generate preview modal (unchanged) */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -1413,6 +1690,7 @@ export default function SpecialDatesHubPage() {
         </div>
       )}
 
+      {/* Term scheduler modal (unchanged structure) */}
       {showTermModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -1551,7 +1829,7 @@ export default function SpecialDatesHubPage() {
                       onClick={() => setShowTermModal(false)}
                       className="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
                     >
-                      Cancel
+                      {termPlan.canCommit ? "Cancel" : "Close"}
                     </button>
                     <button
                       onClick={handleCommitTerm}

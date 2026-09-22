@@ -2,8 +2,11 @@
 // SA public school term definitions, hardcoded per year.
 // Source: Department of Basic Education national framework.
 // Provincial dates can differ by a few days. Update annually in December.
-// Lunar-aware holiday placement uses lib/special-dates.ts — this file only
-// defines the calendar windows.
+//
+// The term scheduler handles full-term planning when there is enough runway.
+// The manual scheduler handles individual holidays within the remainder of
+// the CURRENT window only — never beyond, since planning further would
+// collide with what the next term's scheduler will do.
 
 import { getUpcomingSpecialDates, type Holiday } from '@/lib/special-dates';
 
@@ -22,7 +25,7 @@ function d(y: number, m: number, day: number): Date {
 
 /**
  * DBE national framework dates. Verified 2026, provisional 2027.
- * These should be reviewed and refreshed annually.
+ * Review and refresh annually.
  */
 export const SA_TERMS: SaTerm[] = [
   // ---- 2026 ----
@@ -44,7 +47,7 @@ export function getTermById(id: string): SaTerm | null {
 /**
  * Current term resolver:
  *   - If now is inside a term's window, return that term
- *   - If now is between terms, return the next one (we prepare ahead)
+ *   - If now is between terms, return the next one
  *   - If now is after the last known term, return null
  */
 export function getCurrentTerm(now: Date = new Date()): SaTerm | null {
@@ -63,6 +66,76 @@ export function getCurrentTerm(now: Date = new Date()): SaTerm | null {
   return null;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+export const SHORT_WINDOW_DAYS = 14;
+
+/**
+ * Schedulable window — the range of dates the scheduler (term or manual) is
+ * allowed to touch RIGHT NOW.
+ *
+ *   Inside a term:      [today, term.end]
+ *   Between terms:      [today, day before next term starts]
+ *   After last term:    null (caller should hide scheduling UI)
+ *
+ * The window never extends beyond the current term. Manual scheduling must
+ * only touch holidays inside this range so it never collides with what the
+ * next term's scheduler will do.
+ */
+export interface SchedulableWindow {
+  start: Date;
+  end: Date;
+  daysRemaining: number;
+  isShortWindow: boolean;
+  term: SaTerm | null;
+  isBetweenTerms: boolean;
+}
+
+export function getCurrentWindow(now: Date = new Date()): SchedulableWindow | null {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sorted = [...SA_TERMS].sort(
+    (a, b) => a.start.getTime() - b.start.getTime()
+  );
+
+  // Inside a term?
+  for (const term of sorted) {
+    if (today >= term.start && today <= term.end) {
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((term.end.getTime() - today.getTime()) / MS_PER_DAY)
+      );
+      return {
+        start: today,
+        end: term.end,
+        daysRemaining,
+        isShortWindow: daysRemaining < SHORT_WINDOW_DAYS,
+        term,
+        isBetweenTerms: false,
+      };
+    }
+  }
+
+  // Between terms? Window covers the break up to the day before next term.
+  for (const term of sorted) {
+    if (today < term.start) {
+      const endOfBreak = new Date(term.start.getTime() - MS_PER_DAY);
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((endOfBreak.getTime() - today.getTime()) / MS_PER_DAY)
+      );
+      return {
+        start: today,
+        end: endOfBreak,
+        daysRemaining,
+        isShortWindow: daysRemaining < SHORT_WINDOW_DAYS,
+        term: null,
+        isBetweenTerms: true,
+      };
+    }
+  }
+
+  return null;
+}
+
 export interface TermProgress {
   term: SaTerm;
   effectiveStart: Date;
@@ -73,13 +146,10 @@ export interface TermProgress {
   blockReason?: string;
 }
 
-const MIN_DAYS_TO_SCHEDULE = 14;
-
 /**
- * Resolves the effective window for scheduling within a term.
- * If we're already inside the term, we only schedule from today forward.
- * If fewer than 14 days remain, we block — the user should wait and schedule
- * the next term instead.
+ * Resolves the effective window for TERM scheduling within a term.
+ * Term scheduling requires at least SHORT_WINDOW_DAYS of runway — shorter
+ * windows should use the manual scheduler instead.
  */
 export function getTermProgress(term: SaTerm, now: Date = new Date()): TermProgress {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -87,13 +157,15 @@ export function getTermProgress(term: SaTerm, now: Date = new Date()): TermProgr
   const effectiveStart = isMidTerm ? startOfToday : term.start;
   const effectiveEnd = term.end;
 
-  const msRemaining = effectiveEnd.getTime() - startOfToday.getTime();
-  const daysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil((effectiveEnd.getTime() - startOfToday.getTime()) / MS_PER_DAY)
+  );
 
-  const canSchedule = daysRemaining >= MIN_DAYS_TO_SCHEDULE;
+  const canSchedule = daysRemaining >= SHORT_WINDOW_DAYS;
   const blockReason = canSchedule
     ? undefined
-    : `Only ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in this term. Wait for the next term.`;
+    : `Only ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left in this term — too short for full-term scheduling. Use "Schedule individual holidays" below to handle the remainder.`;
 
   return {
     term,
@@ -107,21 +179,26 @@ export function getTermProgress(term: SaTerm, now: Date = new Date()): TermProgr
 }
 
 /**
- * Returns all holidays that fall within the term window, filtered by the
+ * Returns all holidays that fall within the given window, filtered by the
  * company's enabled holiday sets and excluded holiday names.
+ *
+ * This covers ALL enabled sets: ZA public holidays, Global awareness days,
+ * and the cultural sets (Asia, India, Islam, Judaism). Whatever the user
+ * enabled in Step 1 is what gets picked up here.
  */
-export function getHolidaysInTerm(
-  term: SaTerm,
+export function getHolidaysInWindow(
+  window: { start: Date; end: Date },
   selectedSets: string[],
   excludedHolidays: string[]
 ): Array<{ entry: Holiday; date: Date; setId: string }> {
   if (selectedSets.length === 0) return [];
 
   const now = new Date();
-  const daysFromNow = Math.ceil(
-    (term.end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
+  const daysToEnd = Math.max(
+    1,
+    Math.ceil((window.end.getTime() - now.getTime()) / MS_PER_DAY)
   );
-  const horizon = Math.max(daysFromNow + 1, 30);
+  const horizon = daysToEnd + 1;
 
   const upcoming = getUpcomingSpecialDates(
     selectedSets,
@@ -130,5 +207,20 @@ export function getHolidaysInTerm(
     excludedHolidays
   );
 
-  return upcoming.filter((h) => h.date >= term.start && h.date <= term.end);
+  return upcoming.filter(
+    (h) => h.date >= window.start && h.date <= window.end
+  );
+}
+
+/** Backwards-compatible alias for callers still using term-based filtering. */
+export function getHolidaysInTerm(
+  term: SaTerm,
+  selectedSets: string[],
+  excludedHolidays: string[]
+): Array<{ entry: Holiday; date: Date; setId: string }> {
+  return getHolidaysInWindow(
+    { start: term.start, end: term.end },
+    selectedSets,
+    excludedHolidays
+  );
 }
