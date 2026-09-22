@@ -45,6 +45,7 @@ export interface DedicationTrace {
   finalText: string;
   envGroqKeyPresent: boolean;
   envGroqKeyLength: number;
+  finishReason: string | null;
 }
 
 const FALLBACK_BY_TONE: Record<string, string[]> = {
@@ -141,6 +142,7 @@ interface GroqCallResult {
   rawContent: string | null;
   rawLength: number;
   cleanedLength: number;
+  finishReason: string | null;
 }
 
 async function generateWithGroq(input: GenerateDedicationInput): Promise<GroqCallResult> {
@@ -187,16 +189,23 @@ Rules:
 Return only the sentence, nothing else.`;
 
   try {
-    // gpt-oss-20b is a reasoning model — reasoning tokens count against
-    // max_tokens. Low effort + generous cap so the visible sentence fits.
-    const response = await groq.chat.completions.create({
+    // gpt-oss-20b is a reasoning model: reasoning tokens count against the
+    // output budget. Use max_completion_tokens (max_tokens is deprecated for
+    // reasoning models) with a generous cap, plus reasoning_effort low to
+    // minimise hidden reasoning. Even if reasoning_effort is ignored by the
+    // SDK, 1024 tokens leaves ample room for a 90-char sentence.
+    const params: Record<string, unknown> = {
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.85,
-      max_tokens: 200,
+      max_completion_tokens: 1024,
       reasoning_effort: 'low',
-    } as any);
+      include_reasoning: false,
+    };
 
+    const response = await groq.chat.completions.create(params as any);
+
+    const finishReason = response.choices[0]?.finish_reason ?? null;
     const raw = response.choices[0]?.message?.content?.trim() || '';
     const cleaned = raw
       .replace(/^["']|["']$/g, '')
@@ -207,19 +216,27 @@ Return only the sentence, nothing else.`;
       model: GROQ_MODEL,
       companyId: input.companyId,
       holidayName: input.holidayName,
+      finishReason,
       rawLength: raw.length,
       cleanedLength: cleaned.length,
       rawPreview: raw.slice(0, 120),
     });
 
+    // Treat a "length" finish reason with truncated text as failure —
+    // returning "May" is worse than returning a curated fallback.
+    const isTruncated = finishReason === 'length' && cleaned.length < 20;
+
     return {
       prompt,
-      generated: cleaned.length > 0 ? cleaned : null,
+      generated: cleaned.length > 0 && !isTruncated ? cleaned : null,
       groqStatus: 200,
-      groqError: null,
+      groqError: isTruncated
+        ? `truncated (finish_reason=length, len=${cleaned.length})`
+        : null,
       rawContent: raw,
       rawLength: raw.length,
       cleanedLength: cleaned.length,
+      finishReason,
     };
   } catch (error) {
     const err = error as Record<string, unknown> & {
@@ -265,6 +282,7 @@ Return only the sentence, nothing else.`;
       rawContent: null,
       rawLength: 0,
       cleanedLength: 0,
+      finishReason: null,
     };
   }
 }
@@ -297,6 +315,7 @@ export async function getDedicationForHolidayWithTrace(
     finalText: '',
     envGroqKeyPresent: !!process.env.GROQ_API_KEY,
     envGroqKeyLength: process.env.GROQ_API_KEY?.length || 0,
+    finishReason: null,
   };
 
   const existing = await prisma.holidayDedication.findUnique({
@@ -350,6 +369,7 @@ export async function getDedicationForHolidayWithTrace(
   trace.rawLength = groqResult.rawLength;
   trace.cleanedLength = groqResult.cleanedLength;
   trace.cleanedText = groqResult.generated;
+  trace.finishReason = groqResult.finishReason;
 
   let finalText: string;
   if (groqResult.generated) {
@@ -358,11 +378,12 @@ export async function getDedicationForHolidayWithTrace(
   } else {
     trace.source = 'fallback';
     finalText = pickFallback(input.holidayTone);
-    console.warn('[dedication] Groq returned nothing, using fallback', {
+    console.warn('[dedication] Groq returned nothing usable, using fallback', {
       companyId: input.companyId,
       holidayName: input.holidayName,
       groqStatus: groqResult.groqStatus,
       groqError: groqResult.groqError,
+      finishReason: groqResult.finishReason,
       fallback: finalText,
     });
   }
