@@ -65,6 +65,7 @@ export async function GET(
       dedication: null,
       useStockBackgrounds: false,
       compositionId: null,
+      lastScheduledTermId: null,
     },
     availableSets: HOLIDAY_SETS.map((s) => ({
       id: s.id,

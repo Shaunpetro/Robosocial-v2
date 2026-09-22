@@ -24,6 +24,7 @@ import {
   Pencil,
   Layers,
   Star,
+  CalendarCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPOSITIONS } from "@/lib/templates/compositions";
@@ -67,6 +68,7 @@ interface Config {
   tagline?: string | null;
   dedication?: string | null;
   useStockBackgrounds?: boolean;
+  lastScheduledTermId?: string | null;
 }
 
 interface BrandInfo {
@@ -77,6 +79,50 @@ interface BrandInfo {
   contactPhone?: string | null;
   contactWhatsapp?: string | null;
   brandColors?: Record<string, string> | null;
+}
+
+interface TermPlan {
+  term: {
+    id: string;
+    label: string;
+    startIso: string;
+    endIso: string;
+    effectiveStartIso: string;
+    effectiveEndIso: string;
+    daysRemaining: number;
+    isMidTerm: boolean;
+  };
+  holidays: Array<{
+    name: string;
+    isoDate: string;
+    displayDate: string;
+    description: string;
+    tone: string;
+    setId: string;
+    categories: string[];
+  }>;
+  platforms: Array<{
+    id: string;
+    type: string;
+    label: string;
+    name: string;
+    compatible: boolean;
+    skipReason?: string;
+  }>;
+  totalPosts: number;
+  canCommit: boolean;
+  blockReason?: string;
+  alreadyScheduled: boolean;
+  lastScheduledTermId: string | null;
+}
+
+interface CommitProgress {
+  holidayName: string;
+  index: number;
+  total: number;
+  status: "pending" | "success" | "error";
+  postsCreated: number;
+  errors: string[];
 }
 
 const TEMPLATES = [
@@ -133,6 +179,7 @@ export default function SpecialDatesHubPage() {
     dedication: null,
     useStockBackgrounds: false,
     compositionId: null,
+    lastScheduledTermId: null,
   });
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
   const [allHolidays, setAllHolidays] = useState<UpcomingHoliday[]>([]);
@@ -157,6 +204,14 @@ export default function SpecialDatesHubPage() {
   const [generating, setGenerating] = useState(false);
   const [editingHandles, setEditingHandles] = useState(false);
   const [showAllHolidays, setShowAllHolidays] = useState(false);
+
+  // Term scheduling state
+  const [showTermModal, setShowTermModal] = useState(false);
+  const [termPlan, setTermPlan] = useState<TermPlan | null>(null);
+  const [loadingTermPlan, setLoadingTermPlan] = useState(false);
+  const [termPlanError, setTermPlanError] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [commitProgress, setCommitProgress] = useState<CommitProgress[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -204,6 +259,7 @@ export default function SpecialDatesHubPage() {
             dedication: null,
             useStockBackgrounds: false,
             compositionId: null,
+            lastScheduledTermId: null,
           };
           setConfig({
             ...cfg,
@@ -212,6 +268,7 @@ export default function SpecialDatesHubPage() {
             dedication: cfg.dedication ?? null,
             useStockBackgrounds: cfg.useStockBackgrounds ?? false,
             compositionId: cfg.compositionId ?? null,
+            lastScheduledTermId: cfg.lastScheduledTermId ?? null,
           });
           setAvailableSets(data.availableSets || []);
           setBrandInfo(data.company || {});
@@ -478,6 +535,122 @@ export default function SpecialDatesHubPage() {
     const nextHandles = { ...(brandInfo.socialHandles || {}) };
     nextHandles[platform] = value.trim();
     updateBrandInfo({ socialHandles: nextHandles });
+  };
+
+  const openTermModal = async () => {
+    setShowTermModal(true);
+    setTermPlan(null);
+    setTermPlanError(null);
+    setCommitProgress([]);
+    setLoadingTermPlan(true);
+    try {
+      const res = await fetch(
+        `/api/companies/${selectedCompanyId}/special-dates/term-preview`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setTermPlan(data);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setTermPlanError(err.error || "Failed to load term preview");
+      }
+    } catch (err) {
+      console.error("Term preview failed:", err);
+      setTermPlanError("Network error loading term preview");
+    } finally {
+      setLoadingTermPlan(false);
+    }
+  };
+
+  const handleCommitTerm = async () => {
+    if (!termPlan || !termPlan.canCommit) return;
+
+    setCommitting(true);
+    const initial: CommitProgress[] = termPlan.holidays.map((h, i) => ({
+      holidayName: h.name,
+      index: i,
+      total: termPlan.holidays.length,
+      status: "pending",
+      postsCreated: 0,
+      errors: [],
+    }));
+    setCommitProgress(initial);
+
+    for (let i = 0; i < termPlan.holidays.length; i++) {
+      const h = termPlan.holidays[i];
+      const isFinal = i === termPlan.holidays.length - 1;
+
+      setCommitProgress((prev) =>
+        prev.map((p, idx) =>
+          idx === i ? { ...p, status: "pending" } : p
+        )
+      );
+
+      try {
+        const res = await fetch(
+          `/api/companies/${selectedCompanyId}/special-dates/schedule-term`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              termId: termPlan.term.id,
+              holidayName: h.name,
+              holidayIsoDate: h.isoDate,
+              holidayDescription: h.description,
+              holidayTone: h.tone,
+              setId: h.setId,
+              isFinalHoliday: isFinal,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (res.ok) {
+          setCommitProgress((prev) =>
+            prev.map((p, idx) =>
+              idx === i
+                ? {
+                    ...p,
+                    status: data.errors && data.errors.length > 0 ? "error" : "success",
+                    postsCreated: (data.postsCreated || []).filter(
+                      (pc: any) => !pc.skipped
+                    ).length,
+                    errors: data.errors || [],
+                  }
+                : p
+            )
+          );
+        } else {
+          setCommitProgress((prev) =>
+            prev.map((p, idx) =>
+              idx === i
+                ? { ...p, status: "error", errors: [data.error || "Request failed"] }
+                : p
+            )
+          );
+        }
+      } catch (err) {
+        setCommitProgress((prev) =>
+          prev.map((p, idx) =>
+            idx === i ? { ...p, status: "error", errors: [String(err)] } : p
+          )
+        );
+      }
+    }
+
+    setCommitting(false);
+    // Refresh config so lastScheduledTermId is reflected
+    try {
+      const res = await fetch(`/api/companies/${selectedCompanyId}/special-dates`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) {
+          setConfig((prev) => ({
+            ...prev,
+            lastScheduledTermId: data.config.lastScheduledTermId ?? null,
+          }));
+        }
+      }
+    } catch {}
   };
 
   if (loadingCompanies) {
@@ -1028,7 +1201,7 @@ export default function SpecialDatesHubPage() {
                 Composition layout
               </label>
               <p className="text-xs text-[var(--text-tertiary)] mb-3">
-                8 layouts combine with 8 templates for 64 possible looks. Auto uses the built-in Full Hero. Ship B3b will auto-pick based on brand voice and holiday tone.
+                8 layouts combine with 8 templates for 64 possible looks. Auto uses the built-in Full Hero.
               </p>
               <div className="relative">
                 <select
@@ -1107,6 +1280,41 @@ export default function SpecialDatesHubPage() {
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
               Pexels photos appear behind the branded overlay. Only applies when a holiday is selected.
             </p>
+          </div>
+
+          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+              <CalendarCheck className="h-5 w-5" />
+              Schedule this term
+            </h2>
+            <p className="text-sm text-[var(--text-tertiary)] mb-4">
+              Generate branded posts and images for every holiday in the current school
+              term. Each post is scheduled for 08:00 on the holiday and linked to the
+              compatible connected platforms.
+            </p>
+
+            {config.lastScheduledTermId && (
+              <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Term already scheduled. Re-running will skip existing posts.
+              </div>
+            )}
+
+            <button
+              onClick={openTermModal}
+              disabled={!config.logoMediaId || config.holidaySets.length === 0}
+              className="flex items-center gap-2 px-5 py-3 bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            >
+              <CalendarCheck className="h-5 w-5" />
+              Preview and schedule term
+            </button>
+            {(!config.logoMediaId || config.holidaySets.length === 0) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                {!config.logoMediaId
+                  ? "Upload a company logo first."
+                  : "Select at least one holiday calendar."}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -1200,6 +1408,294 @@ export default function SpecialDatesHubPage() {
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTermModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                <CalendarCheck className="h-5 w-5 text-brand-500" />
+                {termPlan ? `Schedule: ${termPlan.term.label}` : "Term Preview"}
+              </h2>
+              <button
+                onClick={() => !committing && setShowTermModal(false)}
+                disabled={committing}
+                className="p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingTermPlan && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+                </div>
+              )}
+
+              {termPlanError && (
+                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  {termPlanError}
+                </div>
+              )}
+
+              {termPlan && !committing && commitProgress.length === 0 && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
+                      <p className="text-xs uppercase tracking-wide text-[var(--text-tertiary)] mb-1">
+                        Term dates
+                      </p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        {new Date(termPlan.term.effectiveStartIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                        {" "}–{" "}
+                        {new Date(termPlan.term.effectiveEndIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                        {termPlan.term.daysRemaining} days remaining
+                        {termPlan.term.isMidTerm && " (mid-term setup — only remaining holidays)"}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
+                      <p className="text-xs uppercase tracking-wide text-[var(--text-tertiary)] mb-1">
+                        Total posts
+                      </p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        {termPlan.totalPosts} post{termPlan.totalPosts === 1 ? "" : "s"}
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                        {termPlan.holidays.length} holidays ×{" "}
+                        {termPlan.platforms.filter((p) => p.compatible).length} platform
+                        {termPlan.platforms.filter((p) => p.compatible).length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
+                      Holidays in this term ({termPlan.holidays.length})
+                    </p>
+                    {termPlan.holidays.length === 0 ? (
+                      <p className="text-sm text-[var(--text-tertiary)]">
+                        No holidays fall within this term.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1 max-h-64 overflow-y-auto">
+                        {termPlan.holidays.map((h) => (
+                          <li
+                            key={`${h.name}-${h.isoDate}`}
+                            className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-secondary)] text-sm"
+                          >
+                            <span className="text-[var(--text-primary)]">{h.name}</span>
+                            <span className="text-xs text-[var(--text-tertiary)]">
+                              {h.displayDate}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
+                      Target platforms
+                    </p>
+                    <ul className="space-y-1">
+                      {termPlan.platforms.map((p) => (
+                        <li
+                          key={p.id}
+                          className={cn(
+                            "flex items-center justify-between p-2 rounded-lg text-sm",
+                            p.compatible
+                              ? "bg-[var(--bg-secondary)]"
+                              : "bg-[var(--bg-primary)] opacity-60"
+                          )}
+                        >
+                          <span className="flex items-center gap-2 text-[var(--text-primary)]">
+                            {p.compatible ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-[var(--text-tertiary)]" />
+                            )}
+                            {p.label}
+                          </span>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {p.compatible ? "Will receive posts" : p.skipReason}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {!termPlan.canCommit && termPlan.blockReason && (
+                    <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      {termPlan.blockReason}
+                    </div>
+                  )}
+
+                  {termPlan.alreadyScheduled && termPlan.canCommit && (
+                    <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      This term was already scheduled. Re-running will skip existing posts.
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      onClick={() => setShowTermModal(false)}
+                      className="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCommitTerm}
+                      disabled={!termPlan.canCommit}
+                      className="px-5 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center gap-2"
+                    >
+                      <CalendarCheck className="h-4 w-4" />
+                      Schedule {termPlan.totalPosts} post{termPlan.totalPosts === 1 ? "" : "s"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {committing && (
+                <>
+                  <div className="mb-4">
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Scheduling holiday{" "}
+                      {commitProgress.filter((p) => p.status !== "pending").length + 1} of{" "}
+                      {commitProgress.length}...
+                    </p>
+                    <div className="w-full h-1.5 bg-[var(--bg-tertiary)] rounded-full mt-2 overflow-hidden">
+                      <div
+                        className="h-full bg-brand-500 transition-all"
+                        style={{
+                          width: `${
+                            (commitProgress.filter((p) => p.status !== "pending").length /
+                              Math.max(commitProgress.length, 1)) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2 max-h-96 overflow-y-auto">
+                    {commitProgress.map((p, i) => (
+                      <li
+                        key={i}
+                        className={cn(
+                          "flex items-start gap-3 p-3 rounded-lg border text-sm",
+                          p.status === "pending" &&
+                            "bg-[var(--bg-secondary)] border-[var(--border-default)]",
+                          p.status === "success" &&
+                            "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
+                          p.status === "error" &&
+                            "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800"
+                        )}
+                      >
+                        {p.status === "pending" && (
+                          <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)] flex-shrink-0 mt-0.5" />
+                        )}
+                        {p.status === "success" && (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        {p.status === "error" && (
+                          <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[var(--text-primary)] font-medium">
+                            {p.holidayName}
+                          </p>
+                          {p.status === "success" && (
+                            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                              {p.postsCreated} post{p.postsCreated === 1 ? "" : "s"} created
+                            </p>
+                          )}
+                          {p.status === "error" && p.errors.length > 0 && (
+                            <ul className="mt-1 space-y-0.5">
+                              {p.errors.map((e, ei) => (
+                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
+                                  {e}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {!committing && commitProgress.length > 0 && (
+                <>
+                  <div className="mb-4 p-4 rounded-lg bg-[var(--bg-secondary)]">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      Scheduling complete
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                      {commitProgress.filter((p) => p.status === "success").length} of{" "}
+                      {commitProgress.length} holidays processed successfully. Posts appear
+                      on the calendar.
+                    </p>
+                  </div>
+                  <ul className="space-y-2 max-h-96 overflow-y-auto mb-4">
+                    {commitProgress.map((p, i) => (
+                      <li
+                        key={i}
+                        className={cn(
+                          "flex items-start gap-3 p-3 rounded-lg border text-sm",
+                          p.status === "success" &&
+                            "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
+                          p.status === "error" &&
+                            "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800"
+                        )}
+                      >
+                        {p.status === "success" ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[var(--text-primary)] font-medium">
+                            {p.holidayName}
+                          </p>
+                          {p.status === "success" && (
+                            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                              {p.postsCreated} post{p.postsCreated === 1 ? "" : "s"} created
+                            </p>
+                          )}
+                          {p.errors.length > 0 && (
+                            <ul className="mt-1 space-y-0.5">
+                              {p.errors.map((e, ei) => (
+                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
+                                  {e}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setShowTermModal(false)}
+                      className="px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
