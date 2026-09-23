@@ -66,7 +66,7 @@ export async function GET(
 
   return NextResponse.json({
     config: config || {
-      enabled: false,
+      enabled: true,
       holidaySets: [],
       excludedHolidays: [],
       tagline: null,
@@ -114,7 +114,9 @@ export async function PUT(
   const config = await prisma.companySpecialDatesConfig.upsert({
     where: { companyId },
     update: {
-      enabled: Boolean(body.enabled),
+      // Always on. Reaching this endpoint implies the user is engaging with
+      // the feature — no separate enable step.
+      enabled: true,
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
       excludedHolidays: Array.isArray(body.excludedHolidays) ? body.excludedHolidays : [],
       logoMediaId: body.logoMediaId ?? null,
@@ -130,7 +132,7 @@ export async function PUT(
     },
     create: {
       companyId,
-      enabled: Boolean(body.enabled),
+      enabled: true,
       holidaySets: Array.isArray(body.holidaySets) ? body.holidaySets : [],
       excludedHolidays: Array.isArray(body.excludedHolidays) ? body.excludedHolidays : [],
       logoMediaId: body.logoMediaId ?? null,

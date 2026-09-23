@@ -1,10 +1,6 @@
 // apps/web/src/lib/special-dates/generate.ts
 // Shared media generation for Special Dates. Both the manual "generate"
 // endpoint and the term scheduler call `generateSpecialDateMedia`.
-//
-// Extracted from `api/companies/[id]/special-dates/generate-media/route.tsx`
-// so the term scheduler can invoke the same pipeline without an internal
-// HTTP round-trip.
 
 import { prisma } from "@/lib/db";
 import { UTApi } from "uploadthing/server";
@@ -61,12 +57,7 @@ export async function generateSpecialDateMedia(
       400
     );
   }
-  if (!config.enabled) {
-    throw new GenerateSpecialDateMediaError(
-      "Special dates feature not enabled",
-      400
-    );
-  }
+
   if (!config.logoMedia) {
     throw new GenerateSpecialDateMediaError(
       "Please upload a company logo first",

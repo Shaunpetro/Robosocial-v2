@@ -355,7 +355,9 @@ enum BulkScheduleStatus {
 model CompanySpecialDatesConfig {
   id               String   @id @default(cuid())
   companyId        String   @unique
-  enabled          Boolean  @default(false)
+  // `enabled` is always true once the user has touched this page. Kept on the
+  // model for legacy reasons and potential future use.
+  enabled          Boolean  @default(true)
   holidaySets      String[] @default([])
   excludedHolidays String[] @default([])
   logoMediaId      String?  @unique
