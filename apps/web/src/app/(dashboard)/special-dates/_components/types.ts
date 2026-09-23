@@ -1,5 +1,5 @@
 // apps/web/src/app/(dashboard)/special-dates/_components/types.ts
-// Shared types for the Special Dates hub. Split out of page.tsx during SD-3.
+// Shared types for the Special Dates hub.
 
 export interface Company {
     id: string;
@@ -136,6 +136,27 @@ export interface Company {
     }>;
   }
   
+  /**
+   * A single scheduled or published special-date post, as returned by
+   * GET /api/companies/[id]/special-dates/scheduled-posts
+   */
+  export interface ScheduledSpecialDatePost {
+    postId: string;
+    topic: string;
+    scheduledFor: string | null;
+    isoDate: string | null;
+    status: string;
+    content: string;
+    hashtags: string[];
+    platformId: string;
+    platformType: string;
+    platformLabel: string;
+    captionMax: number;
+    mediaId: string | null;
+    mediaUrl: string | null;
+    isPast: boolean;
+  }
+  
   export interface CommitProgress {
     holidayName: string;
     index: number;
@@ -154,3 +175,4 @@ export interface Company {
   
   export type SaveStatus = "idle" | "saving" | "saved" | "error";
   export type UploadStage = "idle" | "uploading";
+  export type ScheduledListTab = "upcoming" | "past" | "all";

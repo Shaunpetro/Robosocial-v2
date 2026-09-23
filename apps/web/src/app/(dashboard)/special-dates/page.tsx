@@ -16,6 +16,7 @@ import type {
   SaveStatus,
   SchedulableHoliday,
   SchedulableHolidaysResponse,
+  ScheduledSpecialDatePost,
   SidebarCompany,
   TermPlan,
   UpcomingHoliday,
@@ -34,6 +35,9 @@ import TermSchedulerCard from "./_components/TermSchedulerCard";
 import ManualSchedulerCard from "./_components/ManualSchedulerCard";
 import GeneratePreviewModal from "./_components/GeneratePreviewModal";
 import TermPreviewModal from "./_components/TermPreviewModal";
+import UpcomingSpecialDateCard from "./_components/UpcomingSpecialDateCard";
+import ScheduledSpecialDatesList from "./_components/ScheduledSpecialDatesList";
+import ScheduledPostEditModal from "./_components/ScheduledPostEditModal";
 import CalendarSelectorStep from "./_components/steps/CalendarSelectorStep";
 import CategoryFilterStep from "./_components/steps/CategoryFilterStep";
 import SpecialDatePickerStep from "./_components/steps/SpecialDatePickerStep";
@@ -92,6 +96,11 @@ export default function SpecialDatesHubPage() {
   const [schedulableError, setSchedulableError] = useState<string | null>(null);
   const [manualProgress, setManualProgress] = useState<Record<string, ManualProgress>>({});
   const [regeneratingPostIds, setRegeneratingPostIds] = useState<string[]>([]);
+
+  // SD-2b: scheduled posts list + edit modal
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledSpecialDatePost[]>([]);
+  const [loadingScheduled, setLoadingScheduled] = useState(false);
+  const [editingPost, setEditingPost] = useState<ScheduledSpecialDatePost | null>(null);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
@@ -223,6 +232,43 @@ export default function SpecialDatesHubPage() {
     if (!selectedCompanyId) return;
     refreshSchedulable();
   }, [selectedCompanyId, refreshSchedulable]);
+
+  // -------- scheduled posts (SD-2b) --------
+  const refreshScheduled = useCallback(async () => {
+    if (!selectedCompanyId) return;
+    setLoadingScheduled(true);
+    try {
+      const res = await fetch(
+        `/api/companies/${selectedCompanyId}/special-dates/scheduled-posts`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setScheduledPosts(data.posts || []);
+      } else {
+        setScheduledPosts([]);
+      }
+    } catch (err) {
+      console.error("Scheduled posts fetch failed:", err);
+      setScheduledPosts([]);
+    } finally {
+      setLoadingScheduled(false);
+    }
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    refreshScheduled();
+  }, [selectedCompanyId, refreshScheduled]);
+
+  const upcomingPost = (() => {
+    const future = scheduledPosts
+      .filter((p) => !p.isPast && p.scheduledFor)
+      .sort(
+        (a, b) =>
+          new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime()
+      );
+    return future[0] || null;
+  })();
 
   // -------- save --------
   const performSave = useCallback(async () => {
@@ -552,6 +598,7 @@ export default function SpecialDatesHubPage() {
       }
     } catch {}
     refreshSchedulable();
+    refreshScheduled();
   };
 
   // -------- manual scheduler --------
@@ -617,6 +664,7 @@ export default function SpecialDatesHubPage() {
 
     setTimeout(() => {
       refreshSchedulable();
+      refreshScheduled();
       setManualProgress((prev) => {
         const next = { ...prev };
         delete next[h.isoDate + h.name];
@@ -626,15 +674,15 @@ export default function SpecialDatesHubPage() {
   };
 
   const regenerateMediaForHoliday = async (h: SchedulableHoliday) => {
-    const scheduledPosts = h.scheduledPosts ?? [];
-    if (scheduledPosts.length === 0) return;
+    const scheduled = h.scheduledPosts ?? [];
+    if (scheduled.length === 0) return;
 
-    const postIds = scheduledPosts.map((p) => p.postId);
+    const postIds = scheduled.map((p) => p.postId);
     setRegeneratingPostIds((prev) => [...new Set([...prev, ...postIds])]);
 
     const errors: string[] = [];
 
-    for (const sp of scheduledPosts) {
+    for (const sp of scheduled) {
       try {
         const res = await fetch(`/api/posts/${sp.postId}/regenerate-media`, {
           method: "POST",
@@ -671,6 +719,7 @@ export default function SpecialDatesHubPage() {
     }
 
     await refreshSchedulable();
+    await refreshScheduled();
   };
 
   // -------- derived --------
@@ -743,6 +792,11 @@ export default function SpecialDatesHubPage() {
         </div>
       ) : (
         <>
+          <UpcomingSpecialDateCard
+            post={upcomingPost}
+            onPreview={(p) => setEditingPost(p)}
+          />
+
           <CalendarSelectorStep
             availableSets={availableSets}
             selectedSetIds={config.holidaySets}
@@ -820,6 +874,12 @@ export default function SpecialDatesHubPage() {
             onRegenerateMedia={regenerateMediaForHoliday}
           />
 
+          <ScheduledSpecialDatesList
+            posts={scheduledPosts}
+            loading={loadingScheduled}
+            onPreview={(p) => setEditingPost(p)}
+          />
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowPreviewModal(true)}
@@ -854,41 +914,9 @@ export default function SpecialDatesHubPage() {
     </div>
   );
 
-  // Wrap in the sidebar layout once we have company data
-  if (!sidebarCompany) {
-    return (
-      <>
-        {content}
-        <GeneratePreviewModal
-          isOpen={showPreviewModal}
-          selectedHoliday={selectedHoliday}
-          generatedMediaUrl={generatedMediaUrl}
-          generating={generating}
-          hasLogo={!!config.logoMediaId}
-          onClose={() => setShowPreviewModal(false)}
-          onGenerate={handleGenerateMedia}
-        />
-        <TermPreviewModal
-          isOpen={showTermModal}
-          termPlan={termPlan}
-          loading={loadingTermPlan}
-          error={termPlanError}
-          committing={committing}
-          commitProgress={commitProgress}
-          onClose={() => setShowTermModal(false)}
-          onCommit={handleCommitTerm}
-        />
-      </>
-    );
-  }
-
-  return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      <CompanySidebar company={sidebarCompany} />
-      <main className="flex-1 overflow-y-auto bg-[var(--bg-primary)]">
-        {content}
-      </main>
-
+  // Modals rendered regardless of layout branch
+  const modals = (
+    <>
       <GeneratePreviewModal
         isOpen={showPreviewModal}
         selectedHoliday={selectedHoliday}
@@ -898,7 +926,6 @@ export default function SpecialDatesHubPage() {
         onClose={() => setShowPreviewModal(false)}
         onGenerate={handleGenerateMedia}
       />
-
       <TermPreviewModal
         isOpen={showTermModal}
         termPlan={termPlan}
@@ -909,6 +936,39 @@ export default function SpecialDatesHubPage() {
         onClose={() => setShowTermModal(false)}
         onCommit={handleCommitTerm}
       />
+      <ScheduledPostEditModal
+        isOpen={!!editingPost}
+        post={editingPost}
+        onClose={() => setEditingPost(null)}
+        onSaved={() => {
+          refreshScheduled();
+          refreshSchedulable();
+        }}
+        onDeleted={() => {
+          setEditingPost(null);
+          refreshScheduled();
+          refreshSchedulable();
+        }}
+      />
+    </>
+  );
+
+  if (!sidebarCompany) {
+    return (
+      <>
+        {content}
+        {modals}
+      </>
+    );
+  }
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)]">
+      <CompanySidebar company={sidebarCompany} />
+      <main className="flex-1 overflow-y-auto bg-[var(--bg-primary)]">
+        {content}
+      </main>
+      {modals}
     </div>
   );
 }
