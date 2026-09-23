@@ -37,7 +37,8 @@ export const {
           email: user.email,
           name: user.name,
           role: user.role,
-          licenseId: user.licenseId,   // â† added
+          licenseId: user.licenseId,
+          suspended: user.suspended,
         };
       },
     }),
@@ -47,9 +48,9 @@ export const {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
-        token.licenseId = (user as any).licenseId;   // â† added
+        token.licenseId = (user as any).licenseId;
+        token.suspended = (user as any).suspended;
       }
-      // Allow updating the token after licence activation
       if (trigger === "update" && session?.licenseId) {
         token.licenseId = session.licenseId;
       }
@@ -59,14 +60,16 @@ export const {
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
-        (session.user as any).licenseId = token.licenseId;   // â† added
+        (session.user as any).licenseId = token.licenseId;
+        (session.user as any).suspended = token.suspended;
       }
       return session;
     },
   },
   session: {
     strategy: "jwt",
-    maxAge: 3 * 60 * 60, // 3 hours
+    maxAge: 3 * 60 * 60,       // 3 hours absolute
+    updateAge: 30 * 60,        // refresh every 30 minutes
   },
   pages: {
     signIn: "/login",

@@ -15,11 +15,10 @@ export default function LoginPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
-  // Completely wipe any existing session before allowing a new login
+  // Wipe any existing session before allowing a new login.
   useEffect(() => {
     const clearSession = async () => {
-      await signOut({ redirect: false }); // invalidate server session
-      // Then clear all related cookies as a safety net
+      await signOut({ redirect: false });
       const cookies = document.cookie.split(";");
       for (const cookie of cookies) {
         const eqPos = cookie.indexOf("=");
@@ -69,7 +68,7 @@ export default function LoginPage() {
         className="absolute top-4 right-4 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-700 dark:text-gray-200 hover:shadow-lg transition"
         aria-label="Switch theme"
       >
-        {theme === "light" ? "â˜€ï¸" : theme === "dark" ? "ðŸŒ™" : "ðŸ’»"}
+        {theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "💻"}
       </button>
 
       <form

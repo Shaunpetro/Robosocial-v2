@@ -47,13 +47,12 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      {/* Theme toggle button */}
       <button
         onClick={cycleTheme}
         className="absolute top-4 right-4 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md text-gray-700 dark:text-gray-200 hover:shadow-lg transition"
         aria-label="Switch theme"
       >
-        {theme === "light" ? "â˜€ï¸" : theme === "dark" ? "ðŸŒ™" : "ðŸ’»"}
+        {theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "💻"}
       </button>
 
       <form

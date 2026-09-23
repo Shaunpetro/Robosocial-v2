@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canCreateCompany } from "@/lib/access";
 
 export async function GET() {
   try {
@@ -21,7 +22,6 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Global admins see every company; regular users see only their memberships
     const whereClause =
       user.role === "ADMIN"
         ? {}
@@ -67,6 +67,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Enforce the license's maxCompanies cap before touching the DB.
+    const capCheck = await canCreateCompany(user.id);
+    if (!capCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: capCheck.reason || "Company limit reached",
+          used: capCheck.used,
+          limit: capCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, website, industry, description } = body;
 
@@ -77,7 +90,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create company + membership atomically so the owner never loses access
     const company = await prisma.$transaction(async (tx) => {
       const created = await tx.company.create({
         data: {
@@ -100,7 +112,6 @@ export async function POST(request: Request) {
       return created;
     });
 
-    // Return with includes for the UI
     const fullCompany = await prisma.company.findUnique({
       where: { id: company.id },
       include: {

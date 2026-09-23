@@ -41,14 +41,18 @@ enum UserRole {
 // ============================================
 
 model License {
-  id                 String        @id @default(cuid())
-  customerName       String
-  licenseKeyHash     String        @unique
-  maxSocialAccounts  Int           @default(5)
-  status             LicenseStatus @default(ACTIVE)
-  expiresAt          DateTime
-  fromEmail          String?
-  keyPreview         String?
+  id                     String        @id @default(cuid())
+  customerName           String
+  licenseKeyHash         String        @unique
+  // Deprecated — kept for backwards compatibility. Do not read.
+  maxSocialAccounts      Int           @default(5)
+  // Active entitlements:
+  maxCompanies           Int           @default(5)
+  maxPlatformsPerCompany Int           @default(3)
+  status                 LicenseStatus @default(ACTIVE)
+  expiresAt              DateTime
+  fromEmail              String?
+  keyPreview             String?
 
   users User[]
 

@@ -37,7 +37,9 @@ export async function validateLicense(licenseKey: string) {
 
 export async function createLicense(input: {
   customerName: string;
-  maxSocialAccounts: number;
+  maxSocialAccounts?: number;
+  maxCompanies?: number;
+  maxPlatformsPerCompany?: number;
   monthsValid: number;
   githubPAT?: string;
   fromEmail?: string;
@@ -67,7 +69,10 @@ export async function createLicense(input: {
     data: {
       customerName: input.customerName,
       licenseKeyHash,
-      maxSocialAccounts: input.maxSocialAccounts,
+      // Deprecated but kept for schema compat
+      maxSocialAccounts: input.maxSocialAccounts ?? 5,
+      maxCompanies: input.maxCompanies ?? 5,
+      maxPlatformsPerCompany: input.maxPlatformsPerCompany ?? 3,
       expiresAt,
       status: "ACTIVE",
       fromEmail: input.fromEmail || null,
@@ -91,4 +96,16 @@ export async function revokeLicense(licenseKey: string) {
     }
   }
   return false;
+}
+
+/**
+ * Convenience fetch used by API routes that need to check entitlements
+ * before performing an action.
+ */
+export async function getLicenseForUserEmail(email: string) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { license: true },
+  });
+  return user?.license || null;
 }

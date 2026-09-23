@@ -1,24 +1,44 @@
 ﻿// apps/web/src/app/api/platforms/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { PLATFORMS } from "@/lib/platforms";
-
-const TEMP_USER_ID = "temp-user-001"; // now used only for ownerId comparison below
+import { canAddPlatform } from "@/lib/access";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId");
 
-    const where: Record<string, unknown> = {};
-
+    // If a specific company is requested, verify membership
     if (companyId) {
-      where.companyId = companyId;
-    } else {
-      where.company = {
-        ownerId: TEMP_USER_ID,   // changed from userId
-      };
+      const hasAccess =
+        user.role === "ADMIN" ||
+        user.memberships.some((m) => m.companyId === companyId);
+      if (!hasAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
+
+    const where: Record<string, unknown> = companyId
+      ? { companyId }
+      : user.role === "ADMIN"
+      ? {}
+      : { companyId: { in: user.memberships.map((m) => m.companyId) } };
 
     const platforms = await prisma.platform.findMany({
       where,
@@ -33,7 +53,6 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Transform to match expected frontend format
     const connections = platforms.map((p) => {
       const connectionData = p.connectionData as Record<string, unknown> | null;
       return {
@@ -63,6 +82,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const { platform, accountName, companyId } = body;
 
@@ -87,6 +120,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Membership check — replaces the old TEMP_USER_ID comparison.
+    const hasAccess =
+      user.role === "ADMIN" ||
+      user.memberships.some((m) => m.companyId === companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const platformConfig = PLATFORMS[platform];
     if (!platformConfig) {
       return NextResponse.json(
@@ -103,25 +144,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    if (company.ownerId !== TEMP_USER_ID) {   // changed from userId
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    // Enforce the license's maxPlatformsPerCompany cap.
+    const capCheck = await canAddPlatform(companyId);
+    if (!capCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: capCheck.reason || "Platform limit reached",
+          used: capCheck.used,
+          limit: capCheck.limit,
+        },
+        { status: 403 }
+      );
     }
 
-    // Convert platform string to PlatformType enum
-    const platformType = platform.toUpperCase() as "LINKEDIN" | "FACEBOOK" | "TWITTER" | "INSTAGRAM" | "WORDPRESS";
+    const platformType = platform.toUpperCase() as
+      | "LINKEDIN"
+      | "FACEBOOK"
+      | "TWITTER"
+      | "INSTAGRAM"
+      | "WORDPRESS";
 
     const existing = await prisma.platform.findFirst({
-      where: {
-        type: platformType,
-        companyId,
-      },
+      where: { type: platformType, companyId },
     });
 
     if (existing) {
       return NextResponse.json(
-        {
-          error: `${platformConfig.name} is already connected to this company`,
-        },
+        { error: `${platformConfig.name} is already connected to this company` },
         { status: 409 }
       );
     }
@@ -144,15 +193,11 @@ export async function POST(request: NextRequest) {
       },
       include: {
         company: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
     });
 
-    // Transform to match expected frontend format
     const connection = {
       id: newPlatform.id,
       platform: newPlatform.type.toLowerCase(),
