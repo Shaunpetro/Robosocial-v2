@@ -22,6 +22,10 @@ export async function GET(
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     select: {
+      id: true,
+      name: true,
+      industry: true,
+      logoUrl: true,
       website: true,
       socialLinks: true,
       socialHandles: true,
@@ -29,8 +33,12 @@ export async function GET(
       contactPhone: true,
       contactWhatsapp: true,
       brandColors: true,
-      name: true,
-      logoUrl: true,
+      platforms: {
+        select: { id: true, type: true, name: true },
+      },
+      intelligence: {
+        select: { id: true, onboardingCompleted: true },
+      },
     },
   });
 

@@ -30,12 +30,22 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPOSITIONS } from "@/lib/templates/compositions";
+import CompanySidebar from "@/components/layout/CompanySidebar";
 
 interface Company {
   id: string;
   name: string;
   logoUrl: string | null;
   website: string | null;
+}
+
+interface SidebarCompany {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  industry: string | null;
+  platforms: Array<{ id: string; type: string; platformName: string }>;
+  intelligence: { id: string; onboardingCompleted: boolean } | null;
 }
 
 interface HolidaySet {
@@ -218,6 +228,7 @@ export default function SpecialDatesHubPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState(initialCompanyId);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingConfig, setLoadingConfig] = useState(false);
+  const [sidebarCompany, setSidebarCompany] = useState<SidebarCompany | null>(null);
 
   const [config, setConfig] = useState<Config>({
     enabled: false,
@@ -253,7 +264,6 @@ export default function SpecialDatesHubPage() {
   const [editingHandles, setEditingHandles] = useState(false);
   const [showAllHolidays, setShowAllHolidays] = useState(false);
 
-  // Term scheduling state
   const [showTermModal, setShowTermModal] = useState(false);
   const [termPlan, setTermPlan] = useState<TermPlan | null>(null);
   const [loadingTermPlan, setLoadingTermPlan] = useState(false);
@@ -261,7 +271,6 @@ export default function SpecialDatesHubPage() {
   const [committing, setCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState<CommitProgress[]>([]);
 
-  // Manual scheduling state
   const [schedulable, setSchedulable] = useState<SchedulableHolidaysResponse | null>(null);
   const [loadingSchedulable, setLoadingSchedulable] = useState(false);
   const [schedulableError, setSchedulableError] = useState<string | null>(null);
@@ -330,6 +339,23 @@ export default function SpecialDatesHubPage() {
           setGeneratedMediaUrl(data.config?.generatedMediaUrl || null);
           setAllHolidays(data.upcomingHolidays || []);
           setSelectedHoliday(null);
+
+          // Build the sidebar company shape from the same fetch
+          if (data.company) {
+            setSidebarCompany({
+              id: data.company.id,
+              name: data.company.name,
+              logoUrl: data.company.logoUrl,
+              industry: data.company.industry ?? null,
+              platforms: (data.company.platforms || []).map((p: any) => ({
+                id: p.id,
+                type: p.type,
+                platformName: p.name,
+              })),
+              intelligence: data.company.intelligence || null,
+            });
+          }
+
           if (data.config?.logoMediaId) {
             try {
               const mediaRes = await fetch(`/api/media/${data.config.logoMediaId}`);
@@ -352,7 +378,6 @@ export default function SpecialDatesHubPage() {
     fetchConfig();
   }, [selectedCompanyId]);
 
-  // Load schedulable holidays whenever company or relevant config changes
   const refreshSchedulable = useCallback(async () => {
     if (!selectedCompanyId) return;
     setLoadingSchedulable(true);
@@ -366,7 +391,7 @@ export default function SpecialDatesHubPage() {
         setSchedulable(data);
       } else {
         const err = await res.json().catch(() => ({}));
-        setSchedulableError(err.error || "Failed to load holidays");
+        setSchedulableError(err.error || "Failed to load special dates");
       }
     } catch (err) {
       console.error("Schedulable fetch failed:", err);
@@ -621,8 +646,6 @@ export default function SpecialDatesHubPage() {
     updateBrandInfo({ socialHandles: nextHandles });
   };
 
-  // ---------- Term modal ----------
-
   const openTermModal = async () => {
     setShowTermModal(true);
     setTermPlan(null);
@@ -733,8 +756,6 @@ export default function SpecialDatesHubPage() {
     refreshSchedulable();
   };
 
-  // ---------- Manual scheduler ----------
-
   const scheduleOneHoliday = async (h: SchedulableHoliday) => {
     setManualProgress((prev) => ({
       ...prev,
@@ -795,7 +816,6 @@ export default function SpecialDatesHubPage() {
       }));
     }
 
-    // Give the user a beat to see the result, then refresh the list
     setTimeout(() => {
       refreshSchedulable();
       setManualProgress((prev) => {
@@ -888,7 +908,8 @@ export default function SpecialDatesHubPage() {
 
   const visiblePlatforms = editingHandles ? ALL_PLATFORMS : detectedPlatforms;
 
-  return (
+  // Two-column layout with sidebar when a company is loaded.
+  const content = (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -1141,7 +1162,7 @@ export default function SpecialDatesHubPage() {
                   ))}
                   {Object.keys(groupedByMonth).length === 0 && (
                     <p className="text-sm text-[var(--text-tertiary)]">
-                      No holidays match the selected filters.
+                      No dates match the selected filters.
                     </p>
                   )}
                 </div>
@@ -1479,20 +1500,20 @@ export default function SpecialDatesHubPage() {
               </label>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              Pexels photos appear behind the branded overlay. Only applies when a holiday is selected.
+              Pexels photos appear behind the branded overlay. Only applies when a date is selected.
             </p>
           </div>
 
-          {/* ---------- Term scheduler ---------- */}
+          {/* Term scheduler */}
           <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <CalendarCheck className="h-5 w-5" />
               Schedule the full term
             </h2>
             <p className="text-sm text-[var(--text-tertiary)] mb-4">
-              Generate branded posts and images for every holiday in the current school
+              Generate branded posts and images for every special date in the current school
               term. Best used near the start of a term, so the whole term is planned
-              ahead. Each post is scheduled for 08:00 on the holiday.
+              ahead. Each post is scheduled for 08:00 on the special date.
             </p>
 
             {config.lastScheduledTermId && (
@@ -1519,19 +1540,19 @@ export default function SpecialDatesHubPage() {
             )}
           </div>
 
-          {/* ---------- Manual scheduler ---------- */}
+          {/* Manual scheduler */}
           {schedulable && schedulable.window && (
             <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
               <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
                 <Send className="h-5 w-5" />
-                Schedule individual holidays
+                Schedule individual special dates
               </h2>
               <p className="text-sm text-[var(--text-tertiary)] mb-4">
-                Schedule one holiday at a time within the current window — up to{" "}
+                Schedule one special date at a time within the current window — up to{" "}
                 {schedulable.window.termLabel
                   ? `the end of ${schedulable.window.termLabel}`
                   : "the next term starts"}
-                . Ideal when the term is almost over and there's just a few dates left.
+                . Ideal when the term is almost over and there are just a few dates left.
               </p>
 
               <div className="mb-4 flex flex-wrap gap-3 text-xs text-[var(--text-tertiary)]">
@@ -1568,7 +1589,7 @@ export default function SpecialDatesHubPage() {
 
               {!loadingSchedulable && schedulable.holidays.length === 0 && (
                 <p className="text-sm text-[var(--text-tertiary)]">
-                  No holidays in the current window. Enable more calendars above or check
+                  No special dates in the current window. Enable more calendars above or check
                   excluded dates.
                 </p>
               )}
@@ -1624,7 +1645,7 @@ export default function SpecialDatesHubPage() {
                             {progress.postsCreated === 1 ? "" : "s"} created
                           </span>
                         ) : allScheduled ? (
-                          <span className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
                             <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Scheduled
@@ -1634,17 +1655,23 @@ export default function SpecialDatesHubPage() {
                                 type="button"
                                 onClick={() => regenerateMediaForHoliday(h)}
                                 disabled={anyRegenerating}
-                                title="Regenerate image"
-                                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-500 hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50"
+                                title="Generate a new image for this post"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] text-xs font-medium hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
                               >
                                 {anyRegenerating ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    Generating...
+                                  </>
                                 ) : (
-                                  <RefreshCw className="h-3.5 w-3.5" />
+                                  <>
+                                    <RefreshCw className="h-3.5 w-3.5" />
+                                    New image
+                                  </>
                                 )}
                               </button>
                             )}
-                          </span>
+                          </div>
                         ) : (
                           <button
                             onClick={() => scheduleOneHoliday(h)}
@@ -1705,8 +1732,22 @@ export default function SpecialDatesHubPage() {
           </div>
         </>
       )}
+    </div>
+  );
 
-      {/* Generate preview modal (unchanged) */}
+  // Only wrap in the sidebar layout once we have company data (avoids a flash)
+  if (!sidebarCompany) {
+    return content;
+  }
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)]">
+      <CompanySidebar company={sidebarCompany} />
+      <main className="flex-1 overflow-y-auto bg-[var(--bg-primary)]">
+        {content}
+      </main>
+
+      {/* Modals — kept outside the sidebar/main flex so they cover the full viewport */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -1771,7 +1812,6 @@ export default function SpecialDatesHubPage() {
         </div>
       )}
 
-      {/* Term scheduler modal (unchanged structure) */}
       {showTermModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -1812,12 +1852,12 @@ export default function SpecialDatesHubPage() {
                       </p>
                       <p className="text-sm font-medium text-[var(--text-primary)]">
                         {new Date(termPlan.term.effectiveStartIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                        {" "}–{" "}
+                        {" – "}
                         {new Date(termPlan.term.effectiveEndIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
                       <p className="text-xs text-[var(--text-tertiary)] mt-1">
                         {termPlan.term.daysRemaining} days remaining
-                        {termPlan.term.isMidTerm && " (mid-term setup — only remaining holidays)"}
+                        {termPlan.term.isMidTerm && " (mid-term setup — only remaining dates)"}
                       </p>
                     </div>
                     <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
@@ -1828,7 +1868,7 @@ export default function SpecialDatesHubPage() {
                         {termPlan.totalPosts} post{termPlan.totalPosts === 1 ? "" : "s"}
                       </p>
                       <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                        {termPlan.holidays.length} holidays ×{" "}
+                        {termPlan.holidays.length} dates ×{" "}
                         {termPlan.platforms.filter((p) => p.compatible).length} platform
                         {termPlan.platforms.filter((p) => p.compatible).length === 1 ? "" : "s"}
                       </p>
@@ -1837,11 +1877,11 @@ export default function SpecialDatesHubPage() {
 
                   <div className="mb-6">
                     <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
-                      Holidays in this term ({termPlan.holidays.length})
+                      Special dates in this term ({termPlan.holidays.length})
                     </p>
                     {termPlan.holidays.length === 0 ? (
                       <p className="text-sm text-[var(--text-tertiary)]">
-                        No holidays fall within this term.
+                        No special dates fall within this term.
                       </p>
                     ) : (
                       <ul className="space-y-1 max-h-64 overflow-y-auto">
@@ -1928,7 +1968,7 @@ export default function SpecialDatesHubPage() {
                 <>
                   <div className="mb-4">
                     <p className="text-sm text-[var(--text-secondary)]">
-                      Scheduling holiday{" "}
+                      Scheduling{" "}
                       {commitProgress.filter((p) => p.status !== "pending").length + 1} of{" "}
                       {commitProgress.length}...
                     </p>
@@ -2002,7 +2042,7 @@ export default function SpecialDatesHubPage() {
                     </p>
                     <p className="text-xs text-[var(--text-tertiary)] mt-1">
                       {commitProgress.filter((p) => p.status === "success").length} of{" "}
-                      {commitProgress.length} holidays processed successfully. Posts appear
+                      {commitProgress.length} processed successfully. Posts appear
                       on the calendar.
                     </p>
                   </div>

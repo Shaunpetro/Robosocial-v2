@@ -64,7 +64,6 @@ function UserDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Loading state
   if (status === "loading") {
     return (
       <div className="w-9 h-9 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
@@ -141,7 +140,7 @@ function UserDropdown() {
                 className="flex items-center gap-2 px-4 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors w-full justify-center"
               >
                 <LogOut size={16} />
-                Sign Out &amp; Reâ€‘login
+                Sign Out & Re-login
               </button>
               <p className="text-xs text-[var(--text-tertiary)] mt-2 text-center">
                 This should restore your profile data.
@@ -154,21 +153,42 @@ function UserDropdown() {
   );
 }
 
+/**
+ * Active-state resolver that ignores query strings (so `/special-dates?companyId=x`
+ * matches an href of `/special-dates`) and treats `/companies` distinctly from
+ * its sub-pages.
+ */
+function isNavActive(pathname: string, href: string): boolean {
+  const hrefPath = href.split("?")[0];
+
+  if (hrefPath === "/companies") {
+    // Only active on the list page or on the company overview page — not on
+    // sub-pages like /calendar, /media, /settings.
+    return pathname === "/companies" || /^\/companies\/[^/]+$/.test(pathname);
+  }
+
+  return pathname === hrefPath || pathname.startsWith(hrefPath + "/");
+}
+
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [helpOpen, setHelpOpen] = useState(false);
   const { selectedCompanyId } = useCompany();
 
+  // Header nav: Special Dates lives in the sidebar now.
+  // Calendar and Media are company-scoped when a company is selected.
   const navItems = useMemo(() => {
-    const specialDatesHref = selectedCompanyId
-      ? `/special-dates?companyId=${selectedCompanyId}`
-      : "/special-dates";
+    const calendarHref = selectedCompanyId
+      ? `/companies/${selectedCompanyId}/calendar`
+      : "/calendar";
+    const mediaHref = selectedCompanyId
+      ? `/companies/${selectedCompanyId}/media`
+      : "/media";
 
     return [
       { label: "Companies", href: "/companies", icon: Building2 },
-      { label: "Calendar", href: "/calendar", icon: CalendarDays },
-      { label: "Special Dates", href: specialDatesHref, icon: Star },
-      { label: "Media", href: "/media", icon: ImageIcon },
+      { label: "Calendar", href: calendarHref, icon: CalendarDays },
+      { label: "Media", href: mediaHref, icon: ImageIcon },
     ];
   }, [selectedCompanyId]);
 
@@ -198,7 +218,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Top Navigation */}
       <header className="h-16 glass sticky top-0 z-40">
         <div className="h-full max-w-[1800px] mx-auto px-4 flex items-center justify-between">
-          {/* Left: Logo + Global Nav */}
           <div className="flex items-center gap-6">
             <Link href="/companies" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-white shadow-lg group-hover:shadow-xl transition-shadow">
@@ -218,11 +237,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
             <div className="divider-vertical hidden md:block" />
 
-            {/* Global Nav */}
             <nav className="hidden md:flex items-center gap-1">
               {navItems.map(({ label, href, icon: Icon }) => {
-                const isActive =
-                  pathname === href || pathname.startsWith(href + "/");
+                const isActive = isNavActive(pathname, href);
                 return (
                   <Link
                     key={label}
@@ -242,11 +259,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
 
-          {/* Right: Actions */}
           <div className="flex items-center gap-3">
             <div className="divider-vertical" />
 
-            {/* Help */}
             <button
               onClick={() => setHelpOpen(true)}
               className="p-2 rounded-xl transition-all duration-200 hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] relative group"
@@ -258,10 +273,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               </span>
             </button>
 
-            {/* Theme toggle */}
             <ThemeToggle />
-
-            {/* User Dropdown */}
             <UserDropdown />
           </div>
         </div>
@@ -271,8 +283,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t border-[var(--border-default)] bg-[var(--bg-primary)]/90 backdrop-blur-xl">
         <div className="flex items-center justify-around h-14">
           {navItems.map(({ label, href, icon: Icon }) => {
-            const isActive =
-              pathname === href || pathname.startsWith(href + "/");
+            const isActive = isNavActive(pathname, href);
             return (
               <Link
                 key={label}
@@ -299,10 +310,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="pb-16 md:pb-0">{children}</main>
 
-      {/* Help Modal */}
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
