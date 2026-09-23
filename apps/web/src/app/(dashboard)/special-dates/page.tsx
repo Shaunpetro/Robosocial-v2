@@ -1,223 +1,42 @@
 // apps/web/src/app/(dashboard)/special-dates/page.tsx
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  Loader2,
-  Save,
-  CalendarDays,
-  Upload,
-  X,
-  Image as ImageIcon,
-  Wand2,
-  AlertCircle,
-  Globe,
-  Share2,
-  Palette,
-  Building2,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  Sparkles,
-  Pencil,
-  Layers,
-  Star,
-  CalendarCheck,
-  Send,
-  RefreshCw,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { COMPOSITIONS } from "@/lib/templates/compositions";
+import { Building2, CalendarDays, Loader2, Save, Wand2 } from "lucide-react";
 import CompanySidebar from "@/components/layout/CompanySidebar";
 
-interface Company {
-  id: string;
-  name: string;
-  logoUrl: string | null;
-  website: string | null;
-}
+import type {
+  BrandInfo,
+  CommitProgress,
+  Company,
+  Config,
+  HolidaySet,
+  ManualProgress,
+  SaveStatus,
+  SchedulableHoliday,
+  SchedulableHolidaysResponse,
+  SidebarCompany,
+  TermPlan,
+  UpcomingHoliday,
+  UploadStage,
+} from "./_components/types";
+import {
+  ALL_PLATFORMS,
+  DEFAULT_ENABLED_CATEGORIES,
+} from "./_components/constants";
 
-interface SidebarCompany {
-  id: string;
-  name: string;
-  logoUrl: string | null;
-  industry: string | null;
-  platforms: Array<{ id: string; type: string; platformName: string }>;
-  intelligence: { id: string; onboardingCompleted: boolean } | null;
-}
-
-interface HolidaySet {
-  id: string;
-  label: string;
-  description: string;
-}
-
-interface UpcomingHoliday {
-  name: string;
-  date: string;
-  isoDate: string;
-  description: string;
-  setId: string;
-  categories: string[];
-  major: boolean;
-  tone?: string;
-  hashtags?: string[];
-}
-
-interface Config {
-  enabled: boolean;
-  holidaySets: string[];
-  excludedHolidays: string[];
-  logoMediaId?: string | null;
-  generatedMediaId?: string | null;
-  templateId?: string | null;
-  compositionId?: string | null;
-  logoPosition?: "top" | "center" | "bottom";
-  showWebsite?: boolean;
-  showHandles?: boolean;
-  tagline?: string | null;
-  dedication?: string | null;
-  useStockBackgrounds?: boolean;
-  lastScheduledTermId?: string | null;
-}
-
-interface BrandInfo {
-  website?: string | null;
-  socialLinks?: Record<string, string> | null;
-  socialHandles?: Record<string, string> | null;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  contactWhatsapp?: string | null;
-  brandColors?: Record<string, string> | null;
-}
-
-interface TermPlan {
-  term: {
-    id: string;
-    label: string;
-    startIso: string;
-    endIso: string;
-    effectiveStartIso: string;
-    effectiveEndIso: string;
-    daysRemaining: number;
-    isMidTerm: boolean;
-  };
-  holidays: Array<{
-    name: string;
-    isoDate: string;
-    displayDate: string;
-    description: string;
-    tone: string;
-    setId: string;
-    categories: string[];
-  }>;
-  platforms: Array<{
-    id: string;
-    type: string;
-    label: string;
-    name: string;
-    compatible: boolean;
-    skipReason?: string;
-  }>;
-  totalPosts: number;
-  canCommit: boolean;
-  blockReason?: string;
-  alreadyScheduled: boolean;
-  lastScheduledTermId: string | null;
-}
-
-interface ScheduledPostRef {
-  postId: string;
-  platformId: string;
-  platformLabel: string;
-  status: string;
-  mediaId: string | null;
-  mediaUrl: string | null;
-}
-
-interface SchedulableHoliday {
-  name: string;
-  isoDate: string;
-  displayDate: string;
-  description: string;
-  tone: string;
-  setId: string;
-  categories: string[];
-  alreadyScheduledPlatforms: string[];
-  scheduledPosts: ScheduledPostRef[];
-}
-
-interface SchedulableHolidaysResponse {
-  window: {
-    startIso: string;
-    endIso: string;
-    daysRemaining: number;
-    isShortWindow: boolean;
-    termLabel: string | null;
-    isBetweenTerms: boolean;
-  };
-  holidays: SchedulableHoliday[];
-  compatiblePlatforms: Array<{
-    id: string;
-    type: string;
-    label: string;
-    name: string;
-  }>;
-}
-
-interface CommitProgress {
-  holidayName: string;
-  index: number;
-  total: number;
-  status: "pending" | "success" | "error";
-  postsCreated: number;
-  errors: string[];
-}
-
-interface ManualProgress {
-  holidayName: string;
-  status: "pending" | "success" | "error";
-  postsCreated: number;
-  errors: string[];
-}
-
-const TEMPLATES = [
-  { id: "clean-corporate", label: "Clean", bg: "bg-white border border-gray-200" },
-  { id: "bold-gradient", label: "Gradient", bg: "bg-gradient-to-r from-purple-500 to-pink-500" },
-  { id: "minimalist-dark", label: "Dark", bg: "bg-gray-900" },
-  { id: "professional-blue", label: "Blue", bg: "bg-[#0A66C2]" },
-  { id: "earthy-sa", label: "Earthy", bg: "bg-gradient-to-r from-amber-700 to-amber-900" },
-  { id: "modern-split", label: "Split", bg: "bg-gradient-to-r from-slate-800 to-slate-600" },
-  { id: "tech-grid", label: "Tech", bg: "bg-slate-900 border border-cyan-500/40" },
-  { id: "playful", label: "Playful", bg: "bg-gradient-to-r from-pink-400 to-orange-400" },
-];
-
-const LOGO_POSITIONS = [
-  { id: "top", label: "Top" },
-  { id: "center", label: "Center" },
-  { id: "bottom", label: "Bottom" },
-] as const;
-
-const CATEGORIES: { id: string; label: string; description: string }[] = [
-  { id: "public", label: "Public holidays", description: "National days off" },
-  { id: "awareness", label: "Awareness days", description: "Health, environment, social causes" },
-  { id: "cultural", label: "Cultural moments", description: "Heritage, community, seasonal" },
-  { id: "religious", label: "Religious observances", description: "Faith-based celebrations" },
-  { id: "commercial", label: "Commercial moments", description: "Gift-giving and retail days" },
-];
-
-const ALL_PLATFORMS = [
-  "linkedin",
-  "facebook",
-  "twitter",
-  "instagram",
-  "youtube",
-  "tiktok",
-  "pinterest",
-  "threads",
-];
+import CompanySelector from "./_components/CompanySelector";
+import SaveStatusIndicator from "./_components/SaveStatusIndicator";
+import BrandKitSection from "./_components/BrandKitSection";
+import TemplateStyleSection from "./_components/TemplateStyleSection";
+import TermSchedulerCard from "./_components/TermSchedulerCard";
+import ManualSchedulerCard from "./_components/ManualSchedulerCard";
+import GeneratePreviewModal from "./_components/GeneratePreviewModal";
+import TermPreviewModal from "./_components/TermPreviewModal";
+import CalendarSelectorStep from "./_components/steps/CalendarSelectorStep";
+import CategoryFilterStep from "./_components/steps/CategoryFilterStep";
+import SpecialDatePickerStep from "./_components/steps/SpecialDatePickerStep";
 
 export default function SpecialDatesHubPage() {
   const router = useRouter();
@@ -243,27 +62,23 @@ export default function SpecialDatesHubPage() {
   const [availableSets, setAvailableSets] = useState<HolidaySet[]>([]);
   const [allHolidays, setAllHolidays] = useState<UpcomingHoliday[]>([]);
   const [selectedHoliday, setSelectedHoliday] = useState<UpcomingHoliday | null>(null);
-  const [enabledCategories, setEnabledCategories] = useState<string[]>([
-    "public",
-    "awareness",
-    "cultural",
-    "religious",
-    "commercial",
-  ]);
+  const [enabledCategories, setEnabledCategories] = useState<string[]>(
+    DEFAULT_ENABLED_CATEGORIES
+  );
   const [brandInfo, setBrandInfo] = useState<BrandInfo>({});
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [generatedMediaUrl, setGeneratedMediaUrl] = useState<string | null>(null);
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [uploadStage, setUploadStage] = useState<"idle" | "uploading">("idle");
+  const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
   const [scraping, setScraping] = useState(false);
   const [scrapeStep, setScrapeStep] = useState<string>("");
   const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [editingHandles, setEditingHandles] = useState(false);
-  const [showAllHolidays, setShowAllHolidays] = useState(false);
 
+  // Term scheduling state
   const [showTermModal, setShowTermModal] = useState(false);
   const [termPlan, setTermPlan] = useState<TermPlan | null>(null);
   const [loadingTermPlan, setLoadingTermPlan] = useState(false);
@@ -271,13 +86,13 @@ export default function SpecialDatesHubPage() {
   const [committing, setCommitting] = useState(false);
   const [commitProgress, setCommitProgress] = useState<CommitProgress[]>([]);
 
+  // Manual scheduler state
   const [schedulable, setSchedulable] = useState<SchedulableHolidaysResponse | null>(null);
   const [loadingSchedulable, setLoadingSchedulable] = useState(false);
   const [schedulableError, setSchedulableError] = useState<string | null>(null);
   const [manualProgress, setManualProgress] = useState<Record<string, ManualProgress>>({});
   const [regeneratingPostIds, setRegeneratingPostIds] = useState<string[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
 
@@ -286,6 +101,7 @@ export default function SpecialDatesHubPage() {
     stateRef.current = { config, brandInfo, selectedCompanyId };
   }, [config, brandInfo, selectedCompanyId]);
 
+  // -------- companies --------
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
@@ -304,8 +120,10 @@ export default function SpecialDatesHubPage() {
       }
     };
     fetchCompanies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // -------- config --------
   useEffect(() => {
     if (!selectedCompanyId) return;
     setLoadingConfig(true);
@@ -340,7 +158,6 @@ export default function SpecialDatesHubPage() {
           setAllHolidays(data.upcomingHolidays || []);
           setSelectedHoliday(null);
 
-          // Build the sidebar company shape from the same fetch
           if (data.company) {
             setSidebarCompany({
               id: data.company.id,
@@ -378,6 +195,7 @@ export default function SpecialDatesHubPage() {
     fetchConfig();
   }, [selectedCompanyId]);
 
+  // -------- schedulable --------
   const refreshSchedulable = useCallback(async () => {
     if (!selectedCompanyId) return;
     setLoadingSchedulable(true);
@@ -406,6 +224,7 @@ export default function SpecialDatesHubPage() {
     refreshSchedulable();
   }, [selectedCompanyId, refreshSchedulable]);
 
+  // -------- save --------
   const performSave = useCallback(async () => {
     const { config: c, brandInfo: b, selectedCompanyId: cid } = stateRef.current;
     if (!cid) return;
@@ -463,6 +282,7 @@ export default function SpecialDatesHubPage() {
     config.useStockBackgrounds,
   ]);
 
+  // -------- handlers --------
   const updateConfig = (updates: Partial<Config>) => {
     setConfig((prev) => ({ ...prev, ...updates }));
   };
@@ -500,29 +320,7 @@ export default function SpecialDatesHubPage() {
     });
   };
 
-  const filteredHolidays = useMemo(() => {
-    return allHolidays.filter((h) =>
-      h.categories.some((c) => enabledCategories.includes(c))
-    );
-  }, [allHolidays, enabledCategories]);
-
-  const quickPicks = useMemo(() => {
-    return filteredHolidays.filter((h) => h.major).slice(0, 3);
-  }, [filteredHolidays]);
-
-  const groupedByMonth = useMemo(() => {
-    const groups: Record<string, UpcomingHoliday[]> = {};
-    for (const h of filteredHolidays) {
-      const monthKey = h.date.split(" ").slice(1).join(" ");
-      if (!groups[monthKey]) groups[monthKey] = [];
-      groups[monthKey].push(h);
-    }
-    return groups;
-  }, [filteredHolidays]);
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleLogoUpload = async (file: File) => {
     if (file.type !== "image/png" && file.type !== "image/jpeg") {
       alert("Only PNG or JPG images are accepted for the logo.");
       return;
@@ -549,7 +347,6 @@ export default function SpecialDatesHubPage() {
       alert("Logo upload failed");
     } finally {
       setUploadStage("idle");
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -646,6 +443,7 @@ export default function SpecialDatesHubPage() {
     updateBrandInfo({ socialHandles: nextHandles });
   };
 
+  // -------- term modal --------
   const openTermModal = async () => {
     setShowTermModal(true);
     setTermPlan(null);
@@ -756,6 +554,7 @@ export default function SpecialDatesHubPage() {
     refreshSchedulable();
   };
 
+  // -------- manual scheduler --------
   const scheduleOneHoliday = async (h: SchedulableHoliday) => {
     setManualProgress((prev) => ({
       ...prev,
@@ -874,6 +673,15 @@ export default function SpecialDatesHubPage() {
     await refreshSchedulable();
   };
 
+  // -------- derived --------
+  const detectedPlatforms = ALL_PLATFORMS.filter(
+    (p) =>
+      (brandInfo.socialLinks && brandInfo.socialLinks[p]) ||
+      (brandInfo.socialHandles && brandInfo.socialHandles[p] !== undefined)
+  );
+  const visiblePlatforms = editingHandles ? ALL_PLATFORMS : detectedPlatforms;
+
+  // -------- early returns --------
   if (loadingCompanies) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -900,15 +708,14 @@ export default function SpecialDatesHubPage() {
     );
   }
 
-  const detectedPlatforms = ALL_PLATFORMS.filter(
-    (p) =>
-      (brandInfo.socialLinks && brandInfo.socialLinks[p]) ||
-      (brandInfo.socialHandles && brandInfo.socialHandles[p] !== undefined)
-  );
+  const termDisabled = !config.logoMediaId || config.holidaySets.length === 0;
+  const termDisabledReason = !config.logoMediaId
+    ? "Upload a company logo first."
+    : config.holidaySets.length === 0
+    ? "Select at least one holiday calendar."
+    : null;
 
-  const visiblePlatforms = editingHandles ? ALL_PLATFORMS : detectedPlatforms;
-
-  // Two-column layout with sidebar when a company is loaded.
+  // -------- main render --------
   const content = (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
@@ -921,44 +728,14 @@ export default function SpecialDatesHubPage() {
             </p>
           </div>
         </div>
-        <div className="text-xs text-[var(--text-tertiary)]">
-          {saveStatus === "saving" && (
-            <span className="flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Saving...
-            </span>
-          )}
-          {saveStatus === "saved" && (
-            <span className="flex items-center gap-1 text-green-600">
-              <CheckCircle2 className="h-3 w-3" /> Saved
-            </span>
-          )}
-          {saveStatus === "error" && (
-            <span className="flex items-center gap-1 text-red-600">
-              <AlertCircle className="h-3 w-3" /> Save failed
-            </span>
-          )}
-        </div>
+        <SaveStatusIndicator status={saveStatus} />
       </div>
 
-      <div className="mb-8">
-        <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-          Select Organization
-        </label>
-        <div className="relative">
-          <select
-            value={selectedCompanyId}
-            onChange={handleCompanyChange}
-            className="w-full appearance-none px-4 py-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-primary)] pr-10 focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer"
-          >
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-tertiary)] pointer-events-none" />
-        </div>
-      </div>
+      <CompanySelector
+        companies={companies}
+        selectedCompanyId={selectedCompanyId}
+        onChange={handleCompanyChange}
+      />
 
       {loadingConfig ? (
         <div className="flex items-center justify-center py-12">
@@ -966,740 +743,82 @@ export default function SpecialDatesHubPage() {
         </div>
       ) : (
         <>
-          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Layers className="h-5 w-5 text-brand-500" />
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                Step 1: Which calendars should we watch?
-              </h2>
-            </div>
-            <p className="text-sm text-[var(--text-tertiary)] mb-4">
-              Pick the holiday calendars that matter to your business and audience.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {availableSets.map((set) => (
-                <button
-                  key={set.id}
-                  onClick={() => toggleSet(set.id)}
-                  className={cn(
-                    "flex items-start gap-3 p-4 rounded-xl border text-left transition-all",
-                    config.holidaySets.includes(set.id)
-                      ? "border-brand-500 bg-brand-500/10"
-                      : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5",
-                      config.holidaySets.includes(set.id)
-                        ? "bg-brand-500 border-brand-500"
-                        : "border-[var(--border-default)]"
-                    )}
-                  >
-                    {config.holidaySets.includes(set.id) && (
-                      <CheckCircle2 className="h-4 w-4 text-white" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-[var(--text-primary)]">{set.label}</p>
-                    <p className="text-xs text-[var(--text-tertiary)] mt-1">{set.description}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <CalendarSelectorStep
+            availableSets={availableSets}
+            selectedSetIds={config.holidaySets}
+            onToggleSet={toggleSet}
+          />
 
           {config.holidaySets.length > 0 && (
-            <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-              <div className="flex items-center gap-2 mb-1">
-                <Star className="h-5 w-5 text-brand-500" />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                  Step 2: What kinds of days?
-                </h2>
-              </div>
-              <p className="text-sm text-[var(--text-tertiary)] mb-4">
-                Filter the kinds of days you want to appear in your picker below.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => toggleCategory(cat.id)}
-                    title={cat.description}
-                    className={cn(
-                      "px-3 py-2 rounded-lg border text-sm transition-all",
-                      enabledCategories.includes(cat.id)
-                        ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400"
-                        : "border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-secondary)]"
-                    )}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <CategoryFilterStep
+              enabledCategories={enabledCategories}
+              onToggleCategory={toggleCategory}
+            />
           )}
 
           {config.holidaySets.length > 0 && (
-            <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="h-5 w-5 text-brand-500" />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                  Step 3: Which dates to feature?
-                </h2>
-              </div>
-              <p className="text-sm text-[var(--text-tertiary)] mb-4">
-                Toggle off any dates you do not want. Toggle back on to include them again.
-              </p>
-
-              {quickPicks.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)] mb-2">
-                    Quick picks: next major moments
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {quickPicks.map((h) => {
-                      const isExcluded = config.excludedHolidays.includes(h.name);
-                      const isSelected = selectedHoliday?.name === h.name;
-                      return (
-                        <button
-                          key={h.name}
-                          onClick={() => setSelectedHoliday(isSelected ? null : h)}
-                          className={cn(
-                            "px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2",
-                            isSelected
-                              ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400"
-                              : isExcluded
-                              ? "border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-tertiary)] line-through"
-                              : "border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)]"
-                          )}
-                        >
-                          <Star className="h-3.5 w-3.5" />
-                          <span>{h.name}</span>
-                          <span className="text-xs opacity-70">{h.date}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowAllHolidays(!showAllHolidays)}
-                className="text-sm text-brand-600 dark:text-brand-400 flex items-center gap-1 hover:underline"
-              >
-                {showAllHolidays ? "Hide" : "Show"} all upcoming dates
-                <ChevronRight
-                  className={cn(
-                    "h-4 w-4 transition-transform",
-                    showAllHolidays && "rotate-90"
-                  )}
-                />
-              </button>
-
-              {showAllHolidays && (
-                <div className="mt-4 space-y-6 max-h-[500px] overflow-y-auto pr-2">
-                  {Object.entries(groupedByMonth).map(([month, items]) => (
-                    <div key={month}>
-                      <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)] mb-2">
-                        {month}
-                      </p>
-                      <div className="space-y-1">
-                        {items.map((h) => {
-                          const isExcluded = config.excludedHolidays.includes(h.name);
-                          const isSelected = selectedHoliday?.name === h.name;
-                          return (
-                            <div
-                              key={`${h.name}-${h.isoDate}`}
-                              className={cn(
-                                "flex items-center gap-3 p-2 rounded-lg transition-colors",
-                                isSelected ? "bg-brand-500/10" : "hover:bg-[var(--bg-secondary)]"
-                              )}
-                            >
-                              <button
-                                onClick={() => toggleHoliday(h.name)}
-                                className="flex-shrink-0"
-                                title={isExcluded ? "Include this date" : "Exclude this date"}
-                              >
-                                <div
-                                  className={cn(
-                                    "w-5 h-5 rounded border-2 flex items-center justify-center",
-                                    !isExcluded
-                                      ? "bg-brand-500 border-brand-500"
-                                      : "border-[var(--border-default)]"
-                                  )}
-                                >
-                                  {!isExcluded && (
-                                    <CheckCircle2 className="h-4 w-4 text-white" />
-                                  )}
-                                </div>
-                              </button>
-                              <button
-                                onClick={() =>
-                                  setSelectedHoliday(isSelected ? null : h)
-                                }
-                                className="flex-1 text-left"
-                              >
-                                <span
-                                  className={cn(
-                                    "text-sm",
-                                    isExcluded
-                                      ? "text-[var(--text-tertiary)] line-through"
-                                      : "text-[var(--text-primary)]"
-                                  )}
-                                >
-                                  {h.name}
-                                </span>
-                                <span className="text-xs text-[var(--text-tertiary)] ml-2">
-                                  {h.date}
-                                </span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  {Object.keys(groupedByMonth).length === 0 && (
-                    <p className="text-sm text-[var(--text-tertiary)]">
-                      No dates match the selected filters.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            <SpecialDatePickerStep
+              allHolidays={allHolidays}
+              enabledCategories={enabledCategories}
+              excludedHolidays={config.excludedHolidays}
+              selectedHoliday={selectedHoliday}
+              onSelectHoliday={setSelectedHoliday}
+              onToggleExclude={toggleHoliday}
+            />
           )}
 
-          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-              <Palette className="h-5 w-5" />
-              Brand Kit
-            </h2>
+          <BrandKitSection
+            tagline={config.tagline ?? null}
+            dedication={config.dedication ?? null}
+            website={brandInfo.website ?? null}
+            contactEmail={brandInfo.contactEmail ?? null}
+            contactPhone={brandInfo.contactPhone ?? null}
+            contactWhatsapp={brandInfo.contactWhatsapp ?? null}
+            socialLinks={brandInfo.socialLinks ?? null}
+            socialHandles={brandInfo.socialHandles ?? null}
+            logoPreview={logoPreview}
+            uploadStage={uploadStage}
+            scraping={scraping}
+            scrapeStep={scrapeStep}
+            scrapeError={scrapeError}
+            editingHandles={editingHandles}
+            visiblePlatforms={visiblePlatforms}
+            onLogoUpload={handleLogoUpload}
+            onRemoveLogo={handleRemoveLogo}
+            onScrapeWebsite={handleScrapeWebsite}
+            onUpdateConfig={updateConfig}
+            onUpdateBrandInfo={updateBrandInfo}
+            onHandleChange={handleHandleChange}
+            onToggleEditingHandles={() => setEditingHandles((v) => !v)}
+          />
 
-            <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Company Logo</p>
-              <div className="flex items-start gap-4">
-                <div className="w-24 h-24 rounded-xl border border-[var(--border-default)] flex items-center justify-center bg-[var(--bg-secondary)] overflow-hidden">
-                  {logoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
-                  ) : (
-                    <CalendarDays className="h-8 w-8 text-[var(--text-tertiary)]" />
-                  )}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                    id="logo-upload-hub"
-                  />
-                  <label
-                    htmlFor="logo-upload-hub"
-                    className={cn(
-                      "inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-colors",
-                      uploadStage !== "idle"
-                        ? "bg-brand-500/60 text-white cursor-wait"
-                        : "bg-brand-500 text-white hover:bg-brand-600"
-                    )}
-                  >
-                    {uploadStage === "uploading" ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        Upload Logo
-                      </>
-                    )}
-                  </label>
-                  {logoPreview && uploadStage === "idle" && (
-                    <button
-                      onClick={handleRemoveLogo}
-                      className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          <TemplateStyleSection
+            templateId={config.templateId ?? null}
+            compositionId={config.compositionId ?? null}
+            logoPosition={config.logoPosition ?? "top"}
+            showWebsite={config.showWebsite ?? true}
+            showHandles={config.showHandles ?? true}
+            useStockBackgrounds={config.useStockBackgrounds ?? false}
+            onUpdate={updateConfig}
+          />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Tagline <span className="text-[var(--text-tertiary)]">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={config.tagline ?? ""}
-                  onChange={(e) => updateConfig({ tagline: e.target.value })}
-                  placeholder="e.g., Engineering Excellence Since 2008"
-                  maxLength={80}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                />
-                <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                  Appears under the company name
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Fallback dedication <span className="text-[var(--text-tertiary)]">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={config.dedication ?? ""}
-                  onChange={(e) => updateConfig({ dedication: e.target.value })}
-                  placeholder="Leave empty to auto-generate per holiday"
-                  maxLength={100}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                />
-                <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                  If empty, a unique line is generated for each holiday
-                </p>
-              </div>
-            </div>
+          <TermSchedulerCard
+            disabled={termDisabled}
+            disabledReason={termDisabledReason}
+            alreadyScheduled={!!config.lastScheduledTermId}
+            onOpenPreview={openTermModal}
+          />
 
-            <div className="mb-6">
-              <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Website</p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={brandInfo.website || ""}
-                  onChange={(e) => updateBrandInfo({ website: e.target.value })}
-                  placeholder="https://yourcompany.com"
-                  className="flex-1 px-4 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/50"
-                />
-                <button
-                  onClick={handleScrapeWebsite}
-                  disabled={scraping}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50 whitespace-nowrap"
-                >
-                  {scraping ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Globe className="h-4 w-4" />
-                  )}
-                  {scraping ? scrapeStep || "Scraping..." : "Scrape"}
-                </button>
-              </div>
-              {scrapeError && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-300 text-sm flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  {scrapeError}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={brandInfo.contactEmail ?? ""}
-                  onChange={(e) => updateBrandInfo({ contactEmail: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={brandInfo.contactPhone ?? ""}
-                  onChange={(e) => updateBrandInfo({ contactPhone: e.target.value })}
-                  placeholder="012 345 6789"
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  WhatsApp
-                </label>
-                <input
-                  type="tel"
-                  value={brandInfo.contactWhatsapp ?? ""}
-                  onChange={(e) => updateBrandInfo({ contactWhatsapp: e.target.value })}
-                  placeholder="012 345 6789"
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium flex items-center gap-2 text-[var(--text-primary)]">
-                  <Share2 className="h-4 w-4" />
-                  Social Handles
-                </p>
-                <button
-                  onClick={() => setEditingHandles(!editingHandles)}
-                  className="text-xs flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:underline"
-                >
-                  <Pencil className="h-3 w-3" />
-                  {editingHandles ? "Done" : "Edit or Add"}
-                </button>
-              </div>
-              {visiblePlatforms.length === 0 ? (
-                <p className="text-sm text-[var(--text-tertiary)]">
-                  No social handles detected. Click Edit to add manually.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {visiblePlatforms.map((platform) => {
-                    const handle = (brandInfo.socialHandles || {})[platform] ?? "";
-                    const url = (brandInfo.socialLinks || {})[platform] || "";
-                    return (
-                      <div
-                        key={platform}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-secondary)]"
-                      >
-                        <span className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)] w-20 flex-shrink-0">
-                          {platform}
-                        </span>
-                        {editingHandles ? (
-                          <input
-                            type="text"
-                            value={handle}
-                            onChange={(e) => handleHandleChange(platform, e.target.value)}
-                            placeholder="handle (without @)"
-                            className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm"
-                          />
-                        ) : (
-                          <span className="text-sm text-[var(--text-primary)] truncate flex-1">
-                            {handle ? `@${handle}` : "(no handle)"}
-                          </span>
-                        )}
-                        {!editingHandles && url && (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[var(--text-tertiary)] hover:text-brand-500"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-              Template Style
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-              {TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  onClick={() => updateConfig({ templateId: tpl.id })}
-                  className={cn(
-                    "p-2 rounded-xl border text-left transition-all",
-                    config.templateId === tpl.id
-                      ? "border-brand-500 bg-brand-500/10"
-                      : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
-                  )}
-                >
-                  <div className={cn("w-full h-14 rounded-md mb-2", tpl.bg)} />
-                  <p className="text-xs font-medium text-[var(--text-primary)]">{tpl.label}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="mb-6 pt-4 border-t border-[var(--border-subtle)]">
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
-                Composition layout
-              </label>
-              <p className="text-xs text-[var(--text-tertiary)] mb-3">
-                8 layouts combine with 8 templates for 64 possible looks. Auto uses the built-in Full Hero.
-              </p>
-              <div className="relative">
-                <select
-                  value={config.compositionId ?? ""}
-                  onChange={(e) =>
-                    updateConfig({ compositionId: e.target.value || null })
-                  }
-                  className="w-full appearance-none px-4 py-2.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer"
-                >
-                  <option value="">Auto (Full Hero)</option>
-                  {COMPOSITIONS.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)] pointer-events-none" />
-              </div>
-              {config.compositionId && (
-                <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                  {COMPOSITIONS.find((c) => c.id === config.compositionId)?.description}
-                </p>
-              )}
-            </div>
-
-            <h3 className="text-sm font-medium text-[var(--text-primary)] mb-2">Logo position</h3>
-            <div className="flex flex-wrap gap-3 mb-4">
-              {LOGO_POSITIONS.map((pos) => (
-                <button
-                  key={pos.id}
-                  onClick={() => updateConfig({ logoPosition: pos.id })}
-                  className={cn(
-                    "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
-                    config.logoPosition === pos.id
-                      ? "border-brand-500 bg-brand-500/10"
-                      : "border-[var(--border-default)] bg-[var(--bg-primary)] hover:border-[var(--border-hover)]"
-                  )}
-                >
-                  {pos.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--text-tertiary)] mb-4">
-              Honoured by Full Hero and Vignette. Other compositions use fixed layouts.
-            </p>
-
-            <div className="flex flex-wrap gap-4 text-sm mb-3">
-              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <input
-                  type="checkbox"
-                  checked={config.showWebsite ?? true}
-                  onChange={(e) => updateConfig({ showWebsite: e.target.checked })}
-                />
-                Show website
-              </label>
-              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <input
-                  type="checkbox"
-                  checked={config.showHandles ?? true}
-                  onChange={(e) => updateConfig({ showHandles: e.target.checked })}
-                />
-                Show social handles
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-4 text-sm pt-3 border-t border-[var(--border-subtle)]">
-              <label className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <input
-                  type="checkbox"
-                  checked={config.useStockBackgrounds ?? false}
-                  onChange={(e) => updateConfig({ useStockBackgrounds: e.target.checked })}
-                />
-                Use stock photo backgrounds for holidays
-              </label>
-            </div>
-            <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              Pexels photos appear behind the branded overlay. Only applies when a date is selected.
-            </p>
-          </div>
-
-          {/* Term scheduler */}
-          <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-              <CalendarCheck className="h-5 w-5" />
-              Schedule the full term
-            </h2>
-            <p className="text-sm text-[var(--text-tertiary)] mb-4">
-              Generate branded posts and images for every special date in the current school
-              term. Best used near the start of a term, so the whole term is planned
-              ahead. Each post is scheduled for 08:00 on the special date.
-            </p>
-
-            {config.lastScheduledTermId && (
-              <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" />
-                Term already scheduled. Re-running will skip existing posts.
-              </div>
-            )}
-
-            <button
-              onClick={openTermModal}
-              disabled={!config.logoMediaId || config.holidaySets.length === 0}
-              className="flex items-center gap-2 px-5 py-3 bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
-            >
-              <CalendarCheck className="h-5 w-5" />
-              Preview full term
-            </button>
-            {(!config.logoMediaId || config.holidaySets.length === 0) && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                {!config.logoMediaId
-                  ? "Upload a company logo first."
-                  : "Select at least one holiday calendar."}
-              </p>
-            )}
-          </div>
-
-          {/* Manual scheduler */}
-          {schedulable && schedulable.window && (
-            <div className="bg-[var(--bg-elevated)] rounded-2xl p-6 border border-[var(--border-default)] mb-6">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-                <Send className="h-5 w-5" />
-                Schedule individual special dates
-              </h2>
-              <p className="text-sm text-[var(--text-tertiary)] mb-4">
-                Schedule one special date at a time within the current window — up to{" "}
-                {schedulable.window.termLabel
-                  ? `the end of ${schedulable.window.termLabel}`
-                  : "the next term starts"}
-                . Ideal when the term is almost over and there are just a few dates left.
-              </p>
-
-              <div className="mb-4 flex flex-wrap gap-3 text-xs text-[var(--text-tertiary)]">
-                <span className="flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  Window:{" "}
-                  {new Date(schedulable.window.startIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
-                  {" – "}
-                  {new Date(schedulable.window.endIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
-                </span>
-                <span>
-                  {schedulable.window.daysRemaining} day
-                  {schedulable.window.daysRemaining === 1 ? "" : "s"} remaining
-                </span>
-                {schedulable.compatiblePlatforms.length > 0 && (
-                  <span>
-                    Targets: {schedulable.compatiblePlatforms.map((p) => p.label).join(", ")}
-                  </span>
-                )}
-              </div>
-
-              {loadingSchedulable && (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
-                </div>
-              )}
-
-              {schedulableError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-start gap-2 mb-3">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  {schedulableError}
-                </div>
-              )}
-
-              {!loadingSchedulable && schedulable.holidays.length === 0 && (
-                <p className="text-sm text-[var(--text-tertiary)]">
-                  No special dates in the current window. Enable more calendars above or check
-                  excluded dates.
-                </p>
-              )}
-
-              {!loadingSchedulable && schedulable.holidays.length > 0 && (
-                <ul className="space-y-2">
-                  {schedulable.holidays.map((h) => {
-                    const key = h.isoDate + h.name;
-                    const progress = manualProgress[key];
-                    const scheduledPosts = h.scheduledPosts ?? [];
-                    const allScheduled =
-                      schedulable.compatiblePlatforms.length > 0 &&
-                      h.alreadyScheduledPlatforms.length >= schedulable.compatiblePlatforms.length;
-                    const anyRegenerating = scheduledPosts.some((sp) =>
-                      regeneratingPostIds.includes(sp.postId)
-                    );
-
-                    return (
-                      <li
-                        key={key}
-                        className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--bg-secondary)]"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[var(--text-primary)]">
-                            {h.name}
-                          </p>
-                          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                            {h.displayDate}
-                            {h.alreadyScheduledPlatforms.length > 0 && (
-                              <> · Scheduled on {h.alreadyScheduledPlatforms.join(", ")}</>
-                            )}
-                          </p>
-                          {progress?.status === "error" && progress.errors.length > 0 && (
-                            <ul className="mt-1 space-y-0.5">
-                              {progress.errors.map((e, ei) => (
-                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
-                                  {e}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-
-                        {progress?.status === "pending" ? (
-                          <span className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Scheduling...
-                          </span>
-                        ) : progress?.status === "success" ? (
-                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            {progress.postsCreated} post
-                            {progress.postsCreated === 1 ? "" : "s"} created
-                          </span>
-                        ) : allScheduled ? (
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Scheduled
-                            </span>
-                            {scheduledPosts.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => regenerateMediaForHoliday(h)}
-                                disabled={anyRegenerating}
-                                title="Generate a new image for this post"
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[var(--text-secondary)] text-xs font-medium hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
-                              >
-                                {anyRegenerating ? (
-                                  <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    Generating...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="h-3.5 w-3.5" />
-                                    New image
-                                  </>
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => scheduleOneHoliday(h)}
-                            disabled={
-                              !config.logoMediaId ||
-                              schedulable.compatiblePlatforms.length === 0
-                            }
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            Schedule
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {(!config.logoMediaId || schedulable.compatiblePlatforms.length === 0) && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">
-                  {!config.logoMediaId
-                    ? "Upload a company logo first."
-                    : "Connect a compatible platform (LinkedIn, Facebook, or X) to schedule."}
-                </p>
-              )}
-            </div>
-          )}
+          <ManualSchedulerCard
+            schedulable={schedulable}
+            loading={loadingSchedulable}
+            error={schedulableError}
+            manualProgress={manualProgress}
+            regeneratingPostIds={regeneratingPostIds}
+            hasLogo={!!config.logoMediaId}
+            onScheduleOne={scheduleOneHoliday}
+            onRegenerateMedia={regenerateMediaForHoliday}
+          />
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -1735,9 +854,32 @@ export default function SpecialDatesHubPage() {
     </div>
   );
 
-  // Only wrap in the sidebar layout once we have company data (avoids a flash)
+  // Wrap in the sidebar layout once we have company data
   if (!sidebarCompany) {
-    return content;
+    return (
+      <>
+        {content}
+        <GeneratePreviewModal
+          isOpen={showPreviewModal}
+          selectedHoliday={selectedHoliday}
+          generatedMediaUrl={generatedMediaUrl}
+          generating={generating}
+          hasLogo={!!config.logoMediaId}
+          onClose={() => setShowPreviewModal(false)}
+          onGenerate={handleGenerateMedia}
+        />
+        <TermPreviewModal
+          isOpen={showTermModal}
+          termPlan={termPlan}
+          loading={loadingTermPlan}
+          error={termPlanError}
+          committing={committing}
+          commitProgress={commitProgress}
+          onClose={() => setShowTermModal(false)}
+          onCommit={handleCommitTerm}
+        />
+      </>
+    );
   }
 
   return (
@@ -1747,358 +889,26 @@ export default function SpecialDatesHubPage() {
         {content}
       </main>
 
-      {/* Modals — kept outside the sidebar/main flex so they cover the full viewport */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                {selectedHoliday
-                  ? `Preview: ${selectedHoliday.name}`
-                  : "Preview: Base Image"}
-              </h2>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="w-full aspect-[1200/630] bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-default)] overflow-hidden flex items-center justify-center mb-4">
-                {generatedMediaUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={generatedMediaUrl}
-                    alt="Generated"
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <div className="text-center p-6">
-                    <ImageIcon className="h-12 w-12 mx-auto text-[var(--text-tertiary)] mb-2" />
-                    <p className="text-sm text-[var(--text-tertiary)]">
-                      No image generated yet
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={handleGenerateMedia}
-                  disabled={generating || !config.logoMediaId}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                >
-                  {generating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="h-4 w-4" />
-                  )}
-                  {generating ? "Generating..." : generatedMediaUrl ? "Regenerate" : "Generate"}
-                </button>
-                {generatedMediaUrl && (
-                  <a
-                    href={generatedMediaUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-[var(--border-default)] rounded-xl text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    View Full Size
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <GeneratePreviewModal
+        isOpen={showPreviewModal}
+        selectedHoliday={selectedHoliday}
+        generatedMediaUrl={generatedMediaUrl}
+        generating={generating}
+        hasLogo={!!config.logoMediaId}
+        onClose={() => setShowPreviewModal(false)}
+        onGenerate={handleGenerateMedia}
+      />
 
-      {showTermModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-default)] max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <CalendarCheck className="h-5 w-5 text-brand-500" />
-                {termPlan ? `Schedule: ${termPlan.term.label}` : "Term Preview"}
-              </h2>
-              <button
-                onClick={() => !committing && setShowTermModal(false)}
-                disabled={committing}
-                className="p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] disabled:opacity-50"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {loadingTermPlan && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-                </div>
-              )}
-
-              {termPlanError && (
-                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  {termPlanError}
-                </div>
-              )}
-
-              {termPlan && !committing && commitProgress.length === 0 && (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
-                      <p className="text-xs uppercase tracking-wide text-[var(--text-tertiary)] mb-1">
-                        Term dates
-                      </p>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">
-                        {new Date(termPlan.term.effectiveStartIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                        {" – "}
-                        {new Date(termPlan.term.effectiveEndIso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                      <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                        {termPlan.term.daysRemaining} days remaining
-                        {termPlan.term.isMidTerm && " (mid-term setup — only remaining dates)"}
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-[var(--bg-secondary)]">
-                      <p className="text-xs uppercase tracking-wide text-[var(--text-tertiary)] mb-1">
-                        Total posts
-                      </p>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">
-                        {termPlan.totalPosts} post{termPlan.totalPosts === 1 ? "" : "s"}
-                      </p>
-                      <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                        {termPlan.holidays.length} dates ×{" "}
-                        {termPlan.platforms.filter((p) => p.compatible).length} platform
-                        {termPlan.platforms.filter((p) => p.compatible).length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
-                      Special dates in this term ({termPlan.holidays.length})
-                    </p>
-                    {termPlan.holidays.length === 0 ? (
-                      <p className="text-sm text-[var(--text-tertiary)]">
-                        No special dates fall within this term.
-                      </p>
-                    ) : (
-                      <ul className="space-y-1 max-h-64 overflow-y-auto">
-                        {termPlan.holidays.map((h) => (
-                          <li
-                            key={`${h.name}-${h.isoDate}`}
-                            className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-secondary)] text-sm"
-                          >
-                            <span className="text-[var(--text-primary)]">{h.name}</span>
-                            <span className="text-xs text-[var(--text-tertiary)]">
-                              {h.displayDate}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div className="mb-6">
-                    <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
-                      Target platforms
-                    </p>
-                    <ul className="space-y-1">
-                      {termPlan.platforms.map((p) => (
-                        <li
-                          key={p.id}
-                          className={cn(
-                            "flex items-center justify-between p-2 rounded-lg text-sm",
-                            p.compatible
-                              ? "bg-[var(--bg-secondary)]"
-                              : "bg-[var(--bg-primary)] opacity-60"
-                          )}
-                        >
-                          <span className="flex items-center gap-2 text-[var(--text-primary)]">
-                            {p.compatible ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4 text-[var(--text-tertiary)]" />
-                            )}
-                            {p.label}
-                          </span>
-                          <span className="text-xs text-[var(--text-tertiary)]">
-                            {p.compatible ? "Will receive posts" : p.skipReason}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {!termPlan.canCommit && termPlan.blockReason && (
-                    <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      {termPlan.blockReason}
-                    </div>
-                  )}
-
-                  {termPlan.alreadyScheduled && termPlan.canCommit && (
-                    <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      This term was already scheduled. Re-running will skip existing posts.
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={() => setShowTermModal(false)}
-                      className="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
-                    >
-                      {termPlan.canCommit ? "Cancel" : "Close"}
-                    </button>
-                    <button
-                      onClick={handleCommitTerm}
-                      disabled={!termPlan.canCommit}
-                      className="px-5 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center gap-2"
-                    >
-                      <CalendarCheck className="h-4 w-4" />
-                      Schedule {termPlan.totalPosts} post{termPlan.totalPosts === 1 ? "" : "s"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {committing && (
-                <>
-                  <div className="mb-4">
-                    <p className="text-sm text-[var(--text-secondary)]">
-                      Scheduling{" "}
-                      {commitProgress.filter((p) => p.status !== "pending").length + 1} of{" "}
-                      {commitProgress.length}...
-                    </p>
-                    <div className="w-full h-1.5 bg-[var(--bg-tertiary)] rounded-full mt-2 overflow-hidden">
-                      <div
-                        className="h-full bg-brand-500 transition-all"
-                        style={{
-                          width: `${
-                            (commitProgress.filter((p) => p.status !== "pending").length /
-                              Math.max(commitProgress.length, 1)) *
-                            100
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <ul className="space-y-2 max-h-96 overflow-y-auto">
-                    {commitProgress.map((p, i) => (
-                      <li
-                        key={i}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-lg border text-sm",
-                          p.status === "pending" &&
-                            "bg-[var(--bg-secondary)] border-[var(--border-default)]",
-                          p.status === "success" &&
-                            "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
-                          p.status === "error" &&
-                            "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800"
-                        )}
-                      >
-                        {p.status === "pending" && (
-                          <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)] flex-shrink-0 mt-0.5" />
-                        )}
-                        {p.status === "success" && (
-                          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        )}
-                        {p.status === "error" && (
-                          <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[var(--text-primary)] font-medium">
-                            {p.holidayName}
-                          </p>
-                          {p.status === "success" && (
-                            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                              {p.postsCreated} post{p.postsCreated === 1 ? "" : "s"} created
-                            </p>
-                          )}
-                          {p.status === "error" && p.errors.length > 0 && (
-                            <ul className="mt-1 space-y-0.5">
-                              {p.errors.map((e, ei) => (
-                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
-                                  {e}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-
-              {!committing && commitProgress.length > 0 && (
-                <>
-                  <div className="mb-4 p-4 rounded-lg bg-[var(--bg-secondary)]">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      Scheduling complete
-                    </p>
-                    <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                      {commitProgress.filter((p) => p.status === "success").length} of{" "}
-                      {commitProgress.length} processed successfully. Posts appear
-                      on the calendar.
-                    </p>
-                  </div>
-                  <ul className="space-y-2 max-h-96 overflow-y-auto mb-4">
-                    {commitProgress.map((p, i) => (
-                      <li
-                        key={i}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-lg border text-sm",
-                          p.status === "success" &&
-                            "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
-                          p.status === "error" &&
-                            "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800"
-                        )}
-                      >
-                        {p.status === "success" ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[var(--text-primary)] font-medium">
-                            {p.holidayName}
-                          </p>
-                          {p.status === "success" && (
-                            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                              {p.postsCreated} post{p.postsCreated === 1 ? "" : "s"} created
-                            </p>
-                          )}
-                          {p.errors.length > 0 && (
-                            <ul className="mt-1 space-y-0.5">
-                              {p.errors.map((e, ei) => (
-                                <li key={ei} className="text-xs text-red-600 dark:text-red-400">
-                                  {e}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setShowTermModal(false)}
-                      className="px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
-                    >
-                      Done
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <TermPreviewModal
+        isOpen={showTermModal}
+        termPlan={termPlan}
+        loading={loadingTermPlan}
+        error={termPlanError}
+        committing={committing}
+        commitProgress={commitProgress}
+        onClose={() => setShowTermModal(false)}
+        onCommit={handleCommitTerm}
+      />
     </div>
   );
 }
