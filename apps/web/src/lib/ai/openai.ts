@@ -1,5 +1,5 @@
 ﻿// apps/web/src/lib/ai/openai.ts
-// Using Groq (free Llama 3.1 8B instant) with Performance Analytics + Content Strategy Integration
+// Using Groq (gpt-oss-20b) with Performance Analytics + Content Strategy Integration
 // Enhanced with South African social voice engine (Magesi FC style, Nando's cheek, local brevity)
 // Now with competitor-aware generation, anti-repetition measures, and media attachment
 
@@ -12,12 +12,11 @@ import {
 import { getCompetitorInsights } from "./competitor-insights";
 import { attachMediaToPost } from "./media-selector";
 
-// Initialize Groq
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
 });
 
-// Platform-specific configurations (unchanged)
+// Platform-specific configurations
 const platformConfigs = {
   linkedin: {
     maxLength: 3000,
@@ -61,15 +60,15 @@ const platformConfigs = {
   },
 };
 
-// Tone descriptions (unchanged)
+// Tone descriptions
 const toneDescriptions: Record<string, string> = {
   professional: "formal, business-appropriate, credible, and expert",
   casual: "relaxed, approachable, friendly, and conversational",
   friendly: "warm, personable, inclusive, and engaging",
   authoritative: "confident, expert, thought-leader, and decisive",
-  cheeky: "witty, irreverent, bold, playfully disrespectful â€“ like a Nando's billboard",
+  cheeky: "witty, irreverent, bold, playfully disrespectful – like a Nando's billboard",
   banter: "casual roasting, friendly trash-talk, local street humour",
-  "ultra-short": "punchy 1-3 line statement, no explanations, maximum impact per word â€“ Magesi FC match-day energy",
+  "ultra-short": "punchy 1-3 line statement, no explanations, maximum impact per word – Magesi FC match-day energy",
   local: "authentic South African voice, mixed language (Zulu, Sesotho, Setswana), township swag, relatable",
 };
 
@@ -181,7 +180,11 @@ export async function generateSocialContent(
     previousHooks,
   });
 
-  const temperature = isBulkGeneration ? 0.9 : (tone === "ultra-short" || tone === "cheeky" ? 0.85 : 0.75);
+  const temperature = isBulkGeneration
+    ? 0.9
+    : tone === "ultra-short" || tone === "cheeky"
+    ? 0.85
+    : 0.75;
 
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -318,7 +321,7 @@ ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not in
 - Start with a strong hype line or local slang (e.g., "Eish, the boys...", "Sho, check...")
 - If the topic is football/culture/sport, tap into township/fan energy.
 - Mix languages naturally (Zulu, English, Sesotho, Afrikaans slang) where they feel authentic.
-- No hashtags, no long explanations â€“ just raw, instant emotion.
+- No hashtags, no long explanations – just raw, instant emotion.
 - The post should feel like it was typed on a phone in the moment.
 `;
   } else if (tone === "cheeky" || tone === "banter") {
@@ -326,8 +329,8 @@ ${includeHashtags ? `- Include ${config.hashtagCount} at the end` : "- Do not in
 **CHEEKY/BANTER MODE (NANDO'S STYLE):**
 - Use playful disrespect or a witty twist.
 - Throw in a cultural zinger (a current meme reference, a hilarious truth about SA life).
-- Keep it brief â€“ 1-4 lines maximum.
-- Emojis allowed if they amplify the cheek (ðŸ”¥, ðŸ˜­, ðŸ’€).
+- Keep it brief – 1-4 lines maximum.
+- Emojis allowed if they amplify the cheek (🔥, 😭, 💀).
 - If it doesn't make you smile or say "yoh!", rewrite it.
 `;
   }
@@ -354,15 +357,15 @@ function getSystemPrompt(): string {
   return `You are a South African social media creative director who has mastered the art of ultra-short, culturally loaded, thumb-stopping posts. You live for the raw, street-smart energy of Magesi Football Club and the fearless cheek of Nando's advertising.
 
 Your core principles:
-- **Brevity is power** â€“ if you can say it in one line, donâ€™t use two. Every word must earn its place.
-- **Cultural fluency** â€“ you naturally weave in South African slang (e.g., "sho", "eish", "danko", "tl tl", "siyavaya", "yoh", "sharp", "now now") and local references (Braamfontein, Soweto, load shedding, Uber to Alex) without sounding forced.
-- **Tone-switching** â€“ you can be cheeky like a Nando's billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
-- **Platform awareness** â€“ you know what works on Facebook (raw, 1-3 lines, easy to share) vs. LinkedIn (still professional but now more human).
-- **Never generic** â€“ no "Here at [Company] we believe...". You write as a real human posting from a phone.
+- **Brevity is power** – if you can say it in one line, don't use two. Every word must earn its place.
+- **Cultural fluency** – you naturally weave in South African slang (e.g., "sho", "eish", "danko", "tl tl", "siyavaya", "yoh", "sharp", "now now") and local references (Braamfontein, Soweto, load shedding, Uber to Alex) without sounding forced.
+- **Tone-switching** – you can be cheeky like a Nando's billboard, hype like a Magesi match-day post, or warm like a spaza shop owner. You match the exact requested tone.
+- **Platform awareness** – you know what works on Facebook (raw, 1-3 lines, easy to share) vs. LinkedIn (still professional but now more human).
+- **Never generic** – no "Here at [Company] we believe...". You write as a real human posting from a phone.
 
-When tones like 'cheeky', 'banter', 'ultra-short', or 'local' are requested, you MUST deliver a post that feels born on South African soil â€“ as if a super-creative friend from Joburg wrote it.
+When tones like 'cheeky', 'banter', 'ultra-short', or 'local' are requested, you MUST deliver a post that feels born on South African soil – as if a super-creative friend from Joburg wrote it.
 
-You output ONLY the final post text â€“ no meta commentary, no quotes, no "Here's your post".`;
+You output ONLY the final post text – no meta commentary, no quotes, no "Here's your post".`;
 }
 
 function cleanGeneratedContent(content: string): string {
@@ -492,6 +495,185 @@ export function validateContentLength(
   return { valid: true };
 }
 
+// ============================================================================
+// SHORT SPECIAL-DATE CAPTIONS
+// ============================================================================
+//
+// Special date captions must fit inside tight platform limits AND respect a
+// modern reader's attention span. Two lines plus hashtags. No paragraphs.
+// No "we're not just X, we're Y" flourishes. No "at [Company], we believe...".
+//
+// `generateShortSpecialDateCaption` produces this format. It is used both by
+// the scheduler (going forward) and by the "Regenerate caption" button on the
+// scheduled-post edit modal.
+
+const SHORT_CAPTION_TARGETS: Record<string, number> = {
+  linkedin: 150,
+  facebook: 140,
+  twitter: 190,
+  instagram: 160,
+  wordpress: 400,
+};
+
+export interface ShortCaptionResult {
+  content: string;
+  hashtags: string[];
+  characterCount: number;
+}
+
+export async function generateShortSpecialDateCaption(params: {
+  companyName: string;
+  companyIndustry?: string;
+  platform: "linkedin" | "twitter" | "facebook" | "instagram" | "wordpress";
+  dateName: string;
+  dateDescription: string;
+  tone?: string;
+  fallbackHashtags?: string[];
+}): Promise<ShortCaptionResult> {
+  const {
+    companyName,
+    companyIndustry,
+    platform,
+    dateName,
+    dateDescription,
+    tone = "warm",
+    fallbackHashtags = [],
+  } = params;
+
+  const targetChars = SHORT_CAPTION_TARGETS[platform] || 160;
+  const industryLine = companyIndustry ? `Industry: ${companyIndustry}` : "";
+
+  const prompt = `Write a SHORT social media caption for a special-date post.
+
+Company: ${companyName}
+${industryLine}
+Occasion: ${dateName}
+Significance: ${dateDescription}
+Tone: ${tone}
+Platform: ${platform.toUpperCase()}
+
+STRICT FORMAT:
+- Line 1: a warm one-line greeting that names the occasion. Under 80 characters.
+- Line 2: one concrete sentence connecting the company to the occasion. Under 100 characters.
+- Blank line, then 2 or 3 relevant hashtags on the final line.
+- Total body (lines 1–2) under ${targetChars} characters.
+
+RULES:
+- Two lines maximum before hashtags. No paragraphs.
+- Never write "we're not just X, we're Y".
+- Never open with "At [Company], we" or "Here at [Company]".
+- No numbered lists, no bullet points.
+- No em dashes.
+- If the tone is warm or celebratory, ONE emoji at the end of line 1 is allowed.
+- No filler. Every word must earn its place.
+
+Return ONLY the caption text, nothing else.`;
+
+  try {
+    const params: Record<string, unknown> = {
+      model: "openai/gpt-oss-20b",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write short, warm, specific social-media captions. Two lines plus hashtags. No paragraphs. No clichés. You never open with 'At [Company] we...' or use the 'not just X, but Y' construction.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.9,
+      max_completion_tokens: 1024,
+      reasoning_effort: "low",
+      include_reasoning: false,
+    };
+
+    const completion = await groq.chat.completions.create(params as any);
+    let content = completion.choices[0]?.message?.content?.trim() || "";
+    content = cleanGeneratedContent(content);
+
+    // Guard: if the model produced an essay, trim to two lines + hashtags.
+    content = enforceShortCaption(content);
+
+    const hashtagRegex = /#\w+/g;
+    let hashtags = (content.match(hashtagRegex) || []).map((t) => t.replace("#", ""));
+
+    // If the model dropped hashtags entirely, append the fallback set.
+    if (hashtags.length === 0 && fallbackHashtags.length > 0) {
+      const cleanFallback = fallbackHashtags
+        .map((h) => h.replace(/^#/, "").replace(/[^A-Za-z0-9]/g, ""))
+        .filter((h) => h.length > 0)
+        .slice(0, 3);
+      if (cleanFallback.length > 0) {
+        content = `${content}\n\n${cleanFallback.map((h) => `#${h}`).join(" ")}`;
+        hashtags = cleanFallback;
+      }
+    }
+
+    return {
+      content,
+      hashtags,
+      characterCount: content.length,
+    };
+  } catch (error) {
+    console.error("Short caption generation failed:", error);
+    // Deterministic fallback so the modal never breaks.
+    const greeting = `Happy ${dateName}.`;
+    const body = `Wishing our clients and community a wonderful ${dateName}.`;
+    const tags = fallbackHashtags
+      .map((h) => h.replace(/^#/, "").replace(/[^A-Za-z0-9]/g, ""))
+      .filter((h) => h.length > 0)
+      .slice(0, 3);
+    const tagLine = tags.length > 0 ? `\n\n${tags.map((t) => `#${t}`).join(" ")}` : "";
+    const content = `${greeting}\n${body}${tagLine}`;
+    return {
+      content,
+      hashtags: tags,
+      characterCount: content.length,
+    };
+  }
+}
+
+/**
+ * If the model returned something long-form despite the prompt, this trims it
+ * down to: two lines of body + one line of hashtags. Deterministic — no LLM
+ * call required. Anything past the second non-hashtag line is dropped.
+ */
+function enforceShortCaption(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) return trimmed;
+
+  // Pull hashtags off the end
+  const lines = trimmed.split(/\r?\n/);
+  const hashtagLines: string[] = [];
+  const bodyLines: string[] = [];
+
+  for (const line of lines) {
+    const stripped = line.trim();
+    if (!stripped) continue;
+    const isHashtagLine = /^#[^\s]+(\s+#[^\s]+)*$/.test(stripped);
+    if (isHashtagLine) {
+      hashtagLines.push(stripped);
+    } else {
+      bodyLines.push(stripped);
+    }
+  }
+
+  const limitedBody = bodyLines.slice(0, 2);
+  const limitedTags = hashtagLines.slice(0, 1);
+
+  if (limitedTags.length === 0) {
+    const inlineTags = trimmed.match(/#\w+/g);
+    if (inlineTags && inlineTags.length > 0) {
+      limitedTags.push(inlineTags.slice(0, 3).join(" "));
+    }
+  }
+
+  const parts = [limitedBody.join("\n")];
+  if (limitedTags.length > 0) {
+    parts.push(limitedTags[0]);
+  }
+  return parts.filter(Boolean).join("\n\n");
+}
+
 export async function generateSpecialDatePost(params: {
   companyId: string;
   companyName: string;
@@ -514,40 +696,28 @@ export async function generateSpecialDatePost(params: {
     dateDescription,
     hashtags,
     tone = "professional",
-    contentTypeContext,
   } = params;
 
-  const specialPrompt = `
-**SPECIAL DATE POST â€“ ${dateName}**
-Date significance: ${dateDescription}
-Hashtags to include: ${hashtags.join(', ')}
-Tone: ${tone}
-
-Create a post that acknowledges this day in a way that is authentic to ${companyName}.
-- Connect the day's theme to the company's values or industry (${companyIndustry || 'general'}).
-- Don't force a connection if it's not genuine; instead, share a thoughtful message.
-- Use the suggested hashtags naturally within the post or at the end.
-- Keep it appropriate for the ${platform} platform.
-
-${contentTypeContext || ''}
-`;
-
-  const result = await generateSocialContent({
-    companyId,
+  // Special-date posts use the short caption generator. The old
+  // paragraph-style prompt produced captions that vastly exceeded platform
+  // limits and were rejected by the scheduling modal.
+  const short = await generateShortSpecialDateCaption({
     companyName,
-    companyDescription: `${companyName} â€“ ${companyIndustry || 'business'}`,
     companyIndustry,
     platform,
-    platformId,
-    topic: specialPrompt,
-    tone: tone as any,
-    includeHashtags: true,
-    includeEmojis: platform === 'instagram' || platform === 'facebook',
-    useAnalytics: false,
+    dateName,
+    dateDescription,
+    tone,
+    fallbackHashtags: hashtags,
   });
 
   return {
-    ...result,
+    content: short.content,
+    hashtags: short.hashtags,
+    characterCount: short.characterCount,
+    platform,
+    analyticsUsed: false,
+    selectedMedia: null,
     specialDateId: `special-date:${dateName}`,
   };
 }

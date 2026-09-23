@@ -11,6 +11,7 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -49,7 +50,8 @@ export default function ScheduledPostEditModal({
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
+  const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [regeneratingCaption, setRegeneratingCaption] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -105,8 +107,8 @@ export default function ScheduledPostEditModal({
     }
   };
 
-  const handleRegenerate = async () => {
-    setRegenerating(true);
+  const handleRegenerateImage = async () => {
+    setRegeneratingImage(true);
     setError(null);
     try {
       const res = await fetch(`/api/posts/${post.postId}/regenerate-media`, {
@@ -125,7 +127,32 @@ export default function ScheduledPostEditModal({
     } catch (err) {
       setError(String(err));
     } finally {
-      setRegenerating(false);
+      setRegeneratingImage(false);
+    }
+  };
+
+  const handleRegenerateCaption = async () => {
+    setRegeneratingCaption(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/posts/${post.postId}/regenerate-caption`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setContent(data.content || content);
+        setHashtags(data.hashtags || []);
+        flashSuccess("New short caption written");
+        onSaved();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setError(err.error || "Failed to regenerate caption");
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setRegeneratingCaption(false);
     }
   };
 
@@ -214,16 +241,16 @@ export default function ScheduledPostEditModal({
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 <button
-                  onClick={handleRegenerate}
-                  disabled={regenerating || readOnly}
+                  onClick={handleRegenerateImage}
+                  disabled={regeneratingImage || readOnly}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border-default)] text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50 transition-colors"
                 >
-                  {regenerating ? (
+                  {regeneratingImage ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  {regenerating ? "Generating..." : "Regenerate image"}
+                  {regeneratingImage ? "Generating..." : "Regenerate image"}
                 </button>
                 {mediaUrl && (
                   <a
@@ -241,9 +268,25 @@ export default function ScheduledPostEditModal({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                  Caption ({content.length} / {post.captionMax})
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                    Caption ({content.length} / {post.captionMax})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateCaption}
+                    disabled={regeneratingCaption || readOnly}
+                    title="Rewrite as a short two-line caption"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 disabled:opacity-50 transition-colors"
+                  >
+                    {regeneratingCaption ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    {regeneratingCaption ? "Rewriting..." : "Regenerate caption"}
+                  </button>
+                </div>
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -259,7 +302,8 @@ export default function ScheduledPostEditModal({
                 {captionOver && (
                   <p className="text-xs text-red-600 mt-1">
                     Caption exceeds the platform limit by {content.length - post.captionMax}{" "}
-                    characters.
+                    characters. Click <strong>Regenerate caption</strong> to rewrite it as a
+                    short two-line caption.
                   </p>
                 )}
               </div>
