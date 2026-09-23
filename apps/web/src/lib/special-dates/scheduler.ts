@@ -34,6 +34,15 @@ export const COMPATIBLE_PLATFORMS: Record<string, { label: string; captionMax: n
 
 // ---------- Types ----------
 
+export interface ScheduledPostRef {
+  postId: string;
+  platformId: string;
+  platformLabel: string;
+  status: string;
+  mediaId: string | null;
+  mediaUrl: string | null;
+}
+
 export interface SchedulableHoliday {
   name: string;
   isoDate: string;
@@ -43,6 +52,7 @@ export interface SchedulableHoliday {
   setId: string;
   categories: string[];
   alreadyScheduledPlatforms: string[];
+  scheduledPosts: ScheduledPostRef[];
 }
 
 export interface SchedulableHolidaysResponse {
@@ -95,13 +105,14 @@ function dayBounds(isoDate: string): { start: Date; end: Date } {
   return { start, end };
 }
 
-// ---------- Schedulable holidays (used by both term preview and manual card) ----------
+// ---------- Schedulable holidays ----------
 
 /**
  * Returns every holiday in the CURRENT schedulable window that isn't
  * already scheduled for this company. Uses all enabled holiday sets —
  * public holidays, awareness days, cultural sets, everything the user
- * turned on in Step 1.
+ * turned on in Step 1. Includes the post IDs of any existing scheduled
+ * posts so the UI can offer regenerate/edit actions.
  */
 export async function getSchedulableHolidays(
   companyId: string
@@ -151,12 +162,32 @@ export async function getSchedulableHolidays(
         scheduledFor: { gte: start, lte: end },
         status: { not: "FAILED" },
       },
-      include: { platform: true },
+      include: {
+        platform: true,
+        postMedia: {
+          include: { media: true },
+          orderBy: { order: "asc" },
+          take: 1,
+        },
+      },
     });
 
     const alreadyScheduledPlatforms = existing.map(
       (p) => COMPATIBLE_PLATFORMS[p.platform.type]?.label || p.platform.type
     );
+
+    const scheduledPosts: ScheduledPostRef[] = existing.map((p) => {
+      const firstMedia = p.postMedia[0]?.media || null;
+      return {
+        postId: p.id,
+        platformId: p.platformId,
+        platformLabel:
+          COMPATIBLE_PLATFORMS[p.platform.type]?.label || p.platform.type,
+        status: p.status,
+        mediaId: firstMedia?.id || null,
+        mediaUrl: firstMedia?.url || null,
+      };
+    });
 
     holidays.push({
       name: entry.name,
@@ -171,6 +202,7 @@ export async function getSchedulableHolidays(
       setId,
       categories: entry.categories,
       alreadyScheduledPlatforms,
+      scheduledPosts,
     });
   }
 
@@ -188,7 +220,7 @@ export async function getSchedulableHolidays(
   };
 }
 
-// ---------- Term plan (existing — unchanged shape) ----------
+// ---------- Term plan ----------
 
 export interface TermPlanHoliday {
   name: string;
@@ -328,12 +360,6 @@ export async function buildTermPlan(
 
 // ---------- Core scheduling ----------
 
-/**
- * Schedules one holiday for all compatible platforms. Same logic whether
- * called from the term scheduler or the manual scheduler — the only
- * difference is bookkeeping (term scheduler touches lastScheduledTermId,
- * manual scheduler does not).
- */
 export async function scheduleHoliday(
   input: ScheduleHolidayInput
 ): Promise<ScheduleHolidayResult> {
@@ -393,7 +419,6 @@ export async function scheduleHoliday(
     year: "numeric",
   });
 
-  // 1. Generate media once for this holiday
   try {
     const media = await generateSpecialDateMedia({
       companyId,
@@ -413,7 +438,6 @@ export async function scheduleHoliday(
     return result;
   }
 
-  // 2. Per-platform: dedup, generate caption, create post
   const { start: dayStart, end: dayEnd } = dayBounds(holidayIsoDate);
 
   for (const platform of compatiblePlatforms) {
@@ -499,7 +523,7 @@ export async function scheduleHoliday(
   return result;
 }
 
-// ---------- Term commit (wrapper around scheduleHoliday) ----------
+// ---------- Term commit ----------
 
 export interface CommitHolidayInput extends ScheduleHolidayInput {
   termId: string;
@@ -518,7 +542,6 @@ export async function commitHolidayToTerm(
     setId: input.setId,
   });
 
-  // Only mark the term as scheduled after the final holiday commits cleanly.
   if (input.isFinalHoliday && result.errors.length === 0) {
     await prisma.companySpecialDatesConfig.update({
       where: { companyId: input.companyId },

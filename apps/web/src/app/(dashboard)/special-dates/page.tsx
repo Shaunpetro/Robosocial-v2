@@ -26,6 +26,7 @@ import {
   Star,
   CalendarCheck,
   Send,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPOSITIONS } from "@/lib/templates/compositions";
@@ -117,6 +118,15 @@ interface TermPlan {
   lastScheduledTermId: string | null;
 }
 
+interface ScheduledPostRef {
+  postId: string;
+  platformId: string;
+  platformLabel: string;
+  status: string;
+  mediaId: string | null;
+  mediaUrl: string | null;
+}
+
 interface SchedulableHoliday {
   name: string;
   isoDate: string;
@@ -126,6 +136,7 @@ interface SchedulableHoliday {
   setId: string;
   categories: string[];
   alreadyScheduledPlatforms: string[];
+  scheduledPosts: ScheduledPostRef[];
 }
 
 interface SchedulableHolidaysResponse {
@@ -255,6 +266,7 @@ export default function SpecialDatesHubPage() {
   const [loadingSchedulable, setLoadingSchedulable] = useState(false);
   const [schedulableError, setSchedulableError] = useState<string | null>(null);
   const [manualProgress, setManualProgress] = useState<Record<string, ManualProgress>>({});
+  const [regeneratingPostIds, setRegeneratingPostIds] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -792,6 +804,54 @@ export default function SpecialDatesHubPage() {
         return next;
       });
     }, 2200);
+  };
+
+  const regenerateMediaForHoliday = async (h: SchedulableHoliday) => {
+    const scheduledPosts = h.scheduledPosts ?? [];
+    if (scheduledPosts.length === 0) return;
+
+    const postIds = scheduledPosts.map((p) => p.postId);
+    setRegeneratingPostIds((prev) => [...new Set([...prev, ...postIds])]);
+
+    const errors: string[] = [];
+
+    for (const sp of scheduledPosts) {
+      try {
+        const res = await fetch(`/api/posts/${sp.postId}/regenerate-media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          errors.push(`${sp.platformLabel}: ${err.error || "Failed to regenerate"}`);
+        }
+      } catch (err) {
+        errors.push(`${sp.platformLabel}: ${String(err)}`);
+      }
+    }
+
+    setRegeneratingPostIds((prev) => prev.filter((id) => !postIds.includes(id)));
+
+    if (errors.length > 0) {
+      setManualProgress((prev) => ({
+        ...prev,
+        [h.isoDate + h.name]: {
+          holidayName: h.name,
+          status: "error",
+          postsCreated: 0,
+          errors,
+        },
+      }));
+      setTimeout(() => {
+        setManualProgress((prev) => {
+          const next = { ...prev };
+          delete next[h.isoDate + h.name];
+          return next;
+        });
+      }, 4000);
+    }
+
+    await refreshSchedulable();
   };
 
   if (loadingCompanies) {
@@ -1518,9 +1578,13 @@ export default function SpecialDatesHubPage() {
                   {schedulable.holidays.map((h) => {
                     const key = h.isoDate + h.name;
                     const progress = manualProgress[key];
+                    const scheduledPosts = h.scheduledPosts ?? [];
                     const allScheduled =
                       schedulable.compatiblePlatforms.length > 0 &&
                       h.alreadyScheduledPlatforms.length >= schedulable.compatiblePlatforms.length;
+                    const anyRegenerating = scheduledPosts.some((sp) =>
+                      regeneratingPostIds.includes(sp.postId)
+                    );
 
                     return (
                       <li
@@ -1560,9 +1624,26 @@ export default function SpecialDatesHubPage() {
                             {progress.postsCreated === 1 ? "" : "s"} created
                           </span>
                         ) : allScheduled ? (
-                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Scheduled
+                          <span className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Scheduled
+                            </span>
+                            {scheduledPosts.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => regenerateMediaForHoliday(h)}
+                                disabled={anyRegenerating}
+                                title="Regenerate image"
+                                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-500 hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50"
+                              >
+                                {anyRegenerating ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )}
                           </span>
                         ) : (
                           <button
