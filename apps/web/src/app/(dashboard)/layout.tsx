@@ -10,7 +10,6 @@ import {
   HelpCircle,
   Building2,
   CalendarDays,
-  Star,
   ImageIcon,
   User,
   LogOut,
@@ -21,6 +20,7 @@ import {
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { HelpModal } from "@/components/ui/HelpModal";
 import { CompanyProvider, useCompany } from "@/app/contexts/company-context";
+import LicenseGuard from "@/components/license-guard";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
@@ -153,17 +153,10 @@ function UserDropdown() {
   );
 }
 
-/**
- * Active-state resolver that ignores query strings (so `/special-dates?companyId=x`
- * matches an href of `/special-dates`) and treats `/companies` distinctly from
- * its sub-pages.
- */
 function isNavActive(pathname: string, href: string): boolean {
   const hrefPath = href.split("?")[0];
 
   if (hrefPath === "/companies") {
-    // Only active on the list page or on the company overview page — not on
-    // sub-pages like /calendar, /media, /settings.
     return pathname === "/companies" || /^\/companies\/[^/]+$/.test(pathname);
   }
 
@@ -175,8 +168,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const { selectedCompanyId } = useCompany();
 
-  // Header nav: Special Dates lives in the sidebar now.
-  // Calendar and Media are company-scoped when a company is selected.
   const navItems = useMemo(() => {
     const calendarHref = selectedCompanyId
       ? `/companies/${selectedCompanyId}/calendar`
@@ -208,14 +199,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      {/* Background gradient */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl" />
         <div className="absolute top-1/2 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 right-1/3 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Top Navigation */}
       <header className="h-16 glass sticky top-0 z-40">
         <div className="h-full max-w-[1800px] mx-auto px-4 flex items-center justify-between">
           <div className="flex items-center gap-6">
@@ -279,7 +268,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t border-[var(--border-default)] bg-[var(--bg-primary)]/90 backdrop-blur-xl">
         <div className="flex items-center justify-around h-14">
           {navItems.map(({ label, href, icon: Icon }) => {
@@ -310,7 +298,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <main className="pb-16 md:pb-0">{children}</main>
+      <main className="pb-16 md:pb-0">
+        <LicenseGuard>{children}</LicenseGuard>
+      </main>
 
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

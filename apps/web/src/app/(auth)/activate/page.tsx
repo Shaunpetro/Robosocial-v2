@@ -1,9 +1,10 @@
 ﻿// apps/web/src/app/(auth)/activate/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function ActivatePage() {
   const { data: session, status, update } = useSession();
@@ -12,11 +13,22 @@ export default function ActivatePage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  if (status === "loading") return <div className="p-8 text-center">Loading...</div>;
-  if (!session) {
-    router.push("/login");
-    return null;
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session) {
+      router.replace("/login?callbackUrl=/activate");
+    }
+  }, [session, status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
+      </div>
+    );
   }
+
+  if (!session) return null;
 
   const handleActivate = async () => {
     if (!key.trim()) {
@@ -33,7 +45,6 @@ export default function ActivatePage() {
       });
       if (res.ok) {
         const data = await res.json();
-        // Update the session so LicenseGuard sees the new licenseId
         await update({ licenseId: data.licenseId });
         router.push("/");
       } else {

@@ -3,49 +3,68 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function LicenseGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     if (status === "loading") return;
 
+    // No session — send to login with a return path
     if (!session) {
-      router.push("/login");
+      const url = new URL("/login", window.location.origin);
+      url.searchParams.set("callbackUrl", pathname);
+      router.replace(url.pathname + url.search);
       return;
     }
 
-    // If the user is suspended, block access
-    if ((session.user as any).suspended) {
-      router.push("/license-expired");
+    // Suspended — dead end
+    if ((session.user as any).suspended === true) {
+      router.replace("/license-expired");
       return;
     }
 
-    // If no licenseId at all, send to activation
+    // No license assigned yet — go activate
     if (!(session.user as any).licenseId) {
-      router.push("/activate");
+      router.replace("/activate");
       return;
     }
 
-    // Check the assigned licence's validity
-    fetch("/api/license/validate")
+    // Validate the assigned license against the server.
+    // On network error: fail closed. Do NOT grant access.
+    let cancelled = false;
+
+    fetch("/api/license/validate", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
+        if (cancelled) return;
         if (!data.valid) {
-          router.push("/license-expired");
+          router.replace("/license-expired");
+          return;
         }
         setChecking(false);
       })
-      .catch(() => setChecking(false)); // fail open on network error
-  }, [session, status, router]);
+      .catch(() => {
+        if (cancelled) return;
+        // Fail closed — network error means we cannot prove the license is
+        // valid, so treat it as invalid. The user retries by reloading.
+        router.replace("/license-expired");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, status, router, pathname]);
 
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Checking licence...</p>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
       </div>
     );
   }
