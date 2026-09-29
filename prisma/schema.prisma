@@ -97,6 +97,7 @@ model Company {
   specialDatesConfig  CompanySpecialDatesConfig?
   members             CompanyMember[]
   holidayDedications  HolidayDedication[]
+  appPromotionConfig  AppPromotionConfig?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -355,8 +356,6 @@ enum BulkScheduleStatus {
 model CompanySpecialDatesConfig {
   id               String   @id @default(cuid())
   companyId        String   @unique
-  // `enabled` is always true once the user has touched this page. Kept on the
-  // model for legacy reasons and potential future use.
   enabled          Boolean  @default(true)
   holidaySets      String[] @default([])
   excludedHolidays String[] @default([])
@@ -652,4 +651,78 @@ enum QueueStatus {
   REJECTED
   REGENERATING
   SCHEDULED
+}
+
+// ============================================
+// APP PROMOTION (CSHAD FEED BRIDGE)
+// ============================================
+//
+// Robosocial-owned channel. Posts curated CSHAD feed items to a single
+// Facebook Page. Enrolment is per-company for gating purposes, but the
+// Facebook Page itself is shared and configured via environment variables.
+//
+// See Ship AP-1/AP-2 handover for full context.
+
+model AppPromotionConfig {
+  id                String   @id @default(cuid())
+  companyId         String   @unique
+  enabled           Boolean  @default(false)
+  rotationStartedAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PromoSeenItem {
+  id           String         @id @default(cuid())
+  externalId   String
+  externalType PromoItemType
+  title        String
+  sourceUrl    String?
+  imageUrl     String?
+  sourceName   String?
+  publishedAt  DateTime?
+  firstSeenAt  DateTime       @default(now())
+  postedAt     DateTime?
+
+  postLogs PromoPostLog[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([externalId, externalType])
+  @@index([firstSeenAt, postedAt])
+}
+
+enum PromoItemType {
+  NEWS
+  TENDER
+  JOB
+  BURSARY
+}
+
+model PromoPostLog {
+  id             String          @id @default(cuid())
+  seenItemId     String
+  slotDate       DateTime        @db.Date
+  slotIndex      Int
+  facebookPostId String?
+  facebookUrl    String?
+  status         PromoPostStatus @default(PENDING)
+  errorMessage   String?
+  postedAt       DateTime?
+
+  seenItem PromoSeenItem @relation(fields: [seenItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([slotDate, slotIndex])
+}
+
+enum PromoPostStatus {
+  PENDING
+  POSTED
+  FAILED
+  DELETED
 }
