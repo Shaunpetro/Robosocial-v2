@@ -1,78 +1,115 @@
 // apps/web/src/lib/app-promotion/select.ts
-import type { PromoSeenItem } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { startOfSastToday } from "./schedule";
+import type { PromoItemType } from "./fetch-items";
 
-const TARGET_POSTS_PER_SLOT = 3;
+export interface SelectableItem {
+  id: string;
+  externalType: PromoItemType;
+  title: string;
+  sourceUrl: string | null;
+  imageUrl: string | null;
+  sourceName: string | null;
+  publishedAt: Date | null;
+}
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
+export interface SelectionResult {
+  selected: SelectableItem[];
+  poolSize: number;
+  reason?: string;
+}
+
+const DEFAULT_MAX_ITEMS = 3;
+
+function shuffle<T>(input: T[]): T[] {
+  const copy = [...input];
+  for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  return a;
+  return copy;
 }
 
 /**
- * Selects up to three items for a single slot from the given pool,
- * following the agreed priority order:
+ * Select up to `maxItems` items for a slot.
  *
- *   1. NEWS      — always included if available
- *   2. JOB       — always included if available
- *   3. TENDER or BURSARY — random pick between them
- *   4. Any remaining type — fill up to three
+ * Priority:
+ *   1. NEWS (always, if available)
+ *   2. JOB  (always, if available)
+ *   3. TENDER | BURSARY (random pick; fills remaining capacity)
+ *   4. Any remaining unposted item from the pool
  *
- * Items are removed from the pool as they are selected, so a single item
- * can never occupy two slots.
+ * Pool is restricted to items first seen today (SAST) that have not yet
+ * been posted. Items from previous days are intentionally excluded.
  */
-export function selectItemsForSlot(pool: PromoSeenItem[]): PromoSeenItem[] {
-  const selected: PromoSeenItem[] = [];
-  const remaining = [...pool];
+export async function selectItemsForSlot(
+  maxItems: number = DEFAULT_MAX_ITEMS
+): Promise<SelectionResult> {
+  const startOfToday = startOfSastToday();
 
-  const take = (
-    predicate: (item: PromoSeenItem) => boolean
-  ): PromoSeenItem | null => {
-    const idx = remaining.findIndex(predicate);
-    if (idx === -1) return null;
-    const [item] = remaining.splice(idx, 1);
-    return item;
+  const pool = await prisma.promoSeenItem.findMany({
+    where: {
+      postedAt: null,
+      firstSeenAt: { gte: startOfToday },
+    },
+    orderBy: { publishedAt: "desc" },
+    select: {
+      id: true,
+      externalType: true,
+      title: true,
+      sourceUrl: true,
+      imageUrl: true,
+      sourceName: true,
+      publishedAt: true,
+    },
+  });
+
+  if (pool.length === 0) {
+    return { selected: [], poolSize: 0, reason: "empty-pool" };
+  }
+
+  const selected: SelectableItem[] = [];
+  const used = new Set<string>();
+
+  const takeFirstOfType = (type: PromoItemType): boolean => {
+    const candidate = pool.find(
+      (item) => item.externalType === type && !used.has(item.id)
+    );
+    if (!candidate) return false;
+    selected.push(candidate);
+    used.add(candidate.id);
+    return true;
   };
 
-  // Priority 1: NEWS
-  const news = take((i) => i.externalType === "NEWS");
-  if (news) selected.push(news);
+  takeFirstOfType("NEWS");
 
-  // Priority 2: JOB
-  if (selected.length < TARGET_POSTS_PER_SLOT) {
-    const job = take((i) => i.externalType === "JOB");
-    if (job) selected.push(job);
+  if (selected.length < maxItems) {
+    takeFirstOfType("JOB");
   }
 
-  // Priority 3: TENDER or BURSARY (random)
-  if (selected.length < TARGET_POSTS_PER_SLOT) {
-    const opps = remaining.filter(
-      (i) => i.externalType === "TENDER" || i.externalType === "BURSARY"
+  if (selected.length < maxItems) {
+    const thirdTier = shuffle(
+      pool.filter(
+        (item) =>
+          !used.has(item.id) &&
+          (item.externalType === "TENDER" || item.externalType === "BURSARY")
+      )
     );
-    const shuffled = shuffle(opps);
-    for (const pick of shuffled) {
-      if (selected.length >= TARGET_POSTS_PER_SLOT) break;
-      const idx = remaining.findIndex((i) => i.id === pick.id);
-      if (idx !== -1) {
-        remaining.splice(idx, 1);
-        selected.push(pick);
-      }
+    for (const item of thirdTier) {
+      if (selected.length >= maxItems) break;
+      selected.push(item);
+      used.add(item.id);
     }
   }
 
-  // Fill from anything left, newest first
-  if (selected.length < TARGET_POSTS_PER_SLOT) {
-    const fillers = [...remaining].sort(
-      (a, b) =>
-        (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0)
-    );
-    while (selected.length < TARGET_POSTS_PER_SLOT && fillers.length > 0) {
-      selected.push(fillers.shift()!);
+  if (selected.length < maxItems) {
+    const fillers = pool.filter((item) => !used.has(item.id));
+    for (const item of fillers) {
+      if (selected.length >= maxItems) break;
+      selected.push(item);
+      used.add(item.id);
     }
   }
 
-  return selected;
+  return { selected, poolSize: pool.length };
 }

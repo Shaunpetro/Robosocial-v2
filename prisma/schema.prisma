@@ -707,6 +707,7 @@ model PromoPostLog {
   seenItemId     String
   slotDate       DateTime        @db.Date
   slotIndex      Int
+  scheduledFor   DateTime?
   facebookPostId String?
   facebookUrl    String?
   status         PromoPostStatus @default(PENDING)
@@ -718,6 +719,7 @@ model PromoPostLog {
   createdAt DateTime @default(now())
 
   @@index([slotDate, slotIndex])
+  @@index([status, scheduledFor])
 }
 
 enum PromoPostStatus {

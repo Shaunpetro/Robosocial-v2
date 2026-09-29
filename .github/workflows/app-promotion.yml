@@ -1,0 +1,59 @@
+name: App Promotion
+
+on:
+  schedule:
+    # plan-slot — 45 min after each CSHAD scrape start (06:00, 10:00, 14:00 UTC)
+    - cron: '45 6,10,14 * * *'
+    # execute-due — every 15 min during posting windows, with 15 min overrun
+    - cron: '*/15 7-9,11-13,15-17 * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'plan-slot or execute-due'
+        required: true
+        default: 'execute-due'
+        type: choice
+        options:
+          - execute-due
+          - plan-slot
+      slotIndex:
+        description: 'Slot index (1, 2, 3) — only for plan-slot'
+        required: false
+        default: '1'
+
+jobs:
+  plan-slot:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '45 6,10,14 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan-slot')
+    steps:
+      - name: Determine slot index
+        id: slot
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "index=${{ github.event.inputs.slotIndex }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H)
+            case "$HOUR" in
+              06) echo "index=1" >> $GITHUB_OUTPUT ;;
+              10) echo "index=2" >> $GITHUB_OUTPUT ;;
+              14) echo "index=3" >> $GITHUB_OUTPUT ;;
+              *)  echo "index=1" >> $GITHUB_OUTPUT ;;
+            esac
+          fi
+      - name: Call Robosocial plan-slot
+        run: |
+          echo "Planning slot ${{ steps.slot.outputs.index }}"
+          curl -sS -f -X POST "${{ secrets.ROBOSOCIAL_BASE_URL }}/api/app-promotion/plan-slot" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"slotIndex\": ${{ steps.slot.outputs.index }}}"
+
+  execute-due:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/15 7-9,11-13,15-17 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'execute-due')
+    steps:
+      - name: Call Robosocial execute-due
+        run: |
+          curl -sS -f -X POST "${{ secrets.ROBOSOCIAL_BASE_URL }}/api/app-promotion/execute-due" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

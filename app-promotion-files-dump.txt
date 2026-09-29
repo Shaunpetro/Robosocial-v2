@@ -1,0 +1,5688 @@
+﻿
+
+========== Platforms API route : apps/web/src/app/api/platforms/route.ts ==========
+
+
+// apps/web/src/app/api/platforms/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { PLATFORMS } from "@/lib/platforms";
+import { canAddPlatform } from "@/lib/access";
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    // If a specific company is requested, verify membership
+    if (companyId) {
+      const hasAccess =
+        user.role === "ADMIN" ||
+        user.memberships.some((m) => m.companyId === companyId);
+      if (!hasAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    const where: Record<string, unknown> = companyId
+      ? { companyId }
+      : user.role === "ADMIN"
+      ? {}
+      : { companyId: { in: user.memberships.map((m) => m.companyId) } };
+
+    const platforms = await prisma.platform.findMany({
+      where,
+      orderBy: { type: "asc" },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const connections = platforms.map((p) => {
+      const connectionData = p.connectionData as Record<string, unknown> | null;
+      return {
+        id: p.id,
+        platform: p.type.toLowerCase(),
+        accountName: p.username || p.name,
+        status: p.isConnected ? "connected" : "disconnected",
+        companyId: p.companyId,
+        company: p.company,
+        lastSyncAt: p.lastSyncAt,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        scopes: (connectionData?.scopes as string[]) || [],
+        expiresAt: connectionData?.expiresAt || null,
+      };
+    });
+
+    return NextResponse.json(connections);
+  } catch (error) {
+    console.error("Failed to fetch platform connections:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch platform connections" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { platform, accountName, companyId } = body;
+
+    if (!platform || !platform.trim()) {
+      return NextResponse.json(
+        { error: "Platform is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!accountName || !accountName.trim()) {
+      return NextResponse.json(
+        { error: "Account name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!companyId || !companyId.trim()) {
+      return NextResponse.json(
+        { error: "Company is required" },
+        { status: 400 }
+      );
+    }
+
+    // Membership check — replaces the old TEMP_USER_ID comparison.
+    const hasAccess =
+      user.role === "ADMIN" ||
+      user.memberships.some((m) => m.companyId === companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const platformConfig = PLATFORMS[platform];
+    if (!platformConfig) {
+      return NextResponse.json(
+        { error: `Unknown platform: ${platform}` },
+        { status: 400 }
+      );
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    }
+
+    // Enforce the license's maxPlatformsPerCompany cap.
+    const capCheck = await canAddPlatform(companyId);
+    if (!capCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: capCheck.reason || "Platform limit reached",
+          used: capCheck.used,
+          limit: capCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
+    const platformType = platform.toUpperCase() as
+      | "LINKEDIN"
+      | "FACEBOOK"
+      | "TWITTER"
+      | "INSTAGRAM"
+      | "WORDPRESS";
+
+    const existing = await prisma.platform.findFirst({
+      where: { type: platformType, companyId },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `${platformConfig.name} is already connected to this company` },
+        { status: 409 }
+      );
+    }
+
+    const connectionData = {
+      connectedVia: "manual",
+      connectedAt: new Date().toISOString(),
+      scopes: platformConfig.defaultScopes || [],
+    };
+
+    const newPlatform = await prisma.platform.create({
+      data: {
+        type: platformType,
+        name: platformConfig.name,
+        username: accountName.trim(),
+        isConnected: true,
+        connectionData,
+        lastSyncAt: new Date(),
+        companyId,
+      },
+      include: {
+        company: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const connection = {
+      id: newPlatform.id,
+      platform: newPlatform.type.toLowerCase(),
+      accountName: newPlatform.username || newPlatform.name,
+      status: newPlatform.isConnected ? "connected" : "disconnected",
+      companyId: newPlatform.companyId,
+      company: newPlatform.company,
+      lastSyncAt: newPlatform.lastSyncAt,
+      createdAt: newPlatform.createdAt,
+      updatedAt: newPlatform.updatedAt,
+      scopes: (connectionData?.scopes as string[]) || [],
+      expiresAt: null,
+    };
+
+    return NextResponse.json(connection, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create platform connection:", error);
+    return NextResponse.json(
+      { error: "Failed to create platform connection" },
+      { status: 500 }
+    );
+  }
+}
+
+
+========== Platforms API : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\verify\route.ts ==========
+
+
+// apps/web/src/app/api/platforms/verify/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { verifyFacebookToken } from "@/lib/publisher/facebook";
+import { verifyLinkedInToken } from "@/lib/publisher/linkedin";
+import { PlatformType } from "@prisma/client";
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "companyId query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const platforms = await prisma.platform.findMany({
+      where: { companyId, isConnected: true },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        connectionData: true,
+        updatedAt: true,
+      },
+    });
+
+    if (platforms.length === 0) {
+      return NextResponse.json({
+        companyId,
+        platforms: [],
+        message: "No connected platforms found",
+      });
+    }
+
+    const results = [];
+
+    for (const platform of platforms) {
+      const connectionData = (platform.connectionData || {}) as Record<string, unknown>;
+      let tokenValid = false;
+      let errorMessage: string | null = null;
+      let accountName: string | null = null;
+
+      if (platform.type === PlatformType.FACEBOOK) {
+        const pageAccessToken = (connectionData.pageAccessToken ||
+          connectionData.accessToken) as string | undefined;
+        const pageId = connectionData.pageId as string | undefined;
+
+        if (!pageAccessToken || !pageId) {
+          errorMessage = "Missing access token or page ID";
+        } else {
+          const verification = await verifyFacebookToken(pageAccessToken);
+          tokenValid = verification.valid;
+          if (!verification.valid) {
+            errorMessage = verification.error || "Token invalid";
+          } else if (verification.pageInfo) {
+            accountName = verification.pageInfo.name;
+          }
+        }
+      } else if (platform.type === PlatformType.LINKEDIN) {
+        const accessToken = connectionData.accessToken as string | undefined;
+        if (!accessToken) {
+          errorMessage = "Missing access token";
+        } else {
+          const verification = await verifyLinkedInToken(accessToken);
+          tokenValid = verification.valid;
+          if (!verification.valid) {
+            errorMessage = verification.error || "Token invalid";
+          } else if (verification.profile) {
+            accountName = verification.profile.name;
+          }
+        }
+      } else {
+        // Other platforms not yet implemented for verification
+        errorMessage = "Verification not implemented for this platform type";
+      }
+
+      results.push({
+        id: platform.id,
+        type: platform.type,
+        name: platform.name,
+        tokenValid,
+        accountName,
+        error: errorMessage,
+        lastUpdated: platform.updatedAt,
+      });
+    }
+
+    return NextResponse.json({
+      companyId,
+      platforms: results,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to verify platform tokens:", error);
+    return NextResponse.json(
+      { error: "Failed to verify platform tokens" },
+      { status: 500 }
+    );
+  }
+}
+
+
+========== Platforms API : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\[id]\route.ts ==========
+
+
+[NOT FOUND: C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\[id]\route.ts]
+
+
+========== Platforms API : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\route.ts ==========
+
+
+// apps/web/src/app/api/platforms/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { PLATFORMS } from "@/lib/platforms";
+import { canAddPlatform } from "@/lib/access";
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    // If a specific company is requested, verify membership
+    if (companyId) {
+      const hasAccess =
+        user.role === "ADMIN" ||
+        user.memberships.some((m) => m.companyId === companyId);
+      if (!hasAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    const where: Record<string, unknown> = companyId
+      ? { companyId }
+      : user.role === "ADMIN"
+      ? {}
+      : { companyId: { in: user.memberships.map((m) => m.companyId) } };
+
+    const platforms = await prisma.platform.findMany({
+      where,
+      orderBy: { type: "asc" },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const connections = platforms.map((p) => {
+      const connectionData = p.connectionData as Record<string, unknown> | null;
+      return {
+        id: p.id,
+        platform: p.type.toLowerCase(),
+        accountName: p.username || p.name,
+        status: p.isConnected ? "connected" : "disconnected",
+        companyId: p.companyId,
+        company: p.company,
+        lastSyncAt: p.lastSyncAt,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        scopes: (connectionData?.scopes as string[]) || [],
+        expiresAt: connectionData?.expiresAt || null,
+      };
+    });
+
+    return NextResponse.json(connections);
+  } catch (error) {
+    console.error("Failed to fetch platform connections:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch platform connections" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { platform, accountName, companyId } = body;
+
+    if (!platform || !platform.trim()) {
+      return NextResponse.json(
+        { error: "Platform is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!accountName || !accountName.trim()) {
+      return NextResponse.json(
+        { error: "Account name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!companyId || !companyId.trim()) {
+      return NextResponse.json(
+        { error: "Company is required" },
+        { status: 400 }
+      );
+    }
+
+    // Membership check — replaces the old TEMP_USER_ID comparison.
+    const hasAccess =
+      user.role === "ADMIN" ||
+      user.memberships.some((m) => m.companyId === companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const platformConfig = PLATFORMS[platform];
+    if (!platformConfig) {
+      return NextResponse.json(
+        { error: `Unknown platform: ${platform}` },
+        { status: 400 }
+      );
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    }
+
+    // Enforce the license's maxPlatformsPerCompany cap.
+    const capCheck = await canAddPlatform(companyId);
+    if (!capCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: capCheck.reason || "Platform limit reached",
+          used: capCheck.used,
+          limit: capCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
+    const platformType = platform.toUpperCase() as
+      | "LINKEDIN"
+      | "FACEBOOK"
+      | "TWITTER"
+      | "INSTAGRAM"
+      | "WORDPRESS";
+
+    const existing = await prisma.platform.findFirst({
+      where: { type: platformType, companyId },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `${platformConfig.name} is already connected to this company` },
+        { status: 409 }
+      );
+    }
+
+    const connectionData = {
+      connectedVia: "manual",
+      connectedAt: new Date().toISOString(),
+      scopes: platformConfig.defaultScopes || [],
+    };
+
+    const newPlatform = await prisma.platform.create({
+      data: {
+        type: platformType,
+        name: platformConfig.name,
+        username: accountName.trim(),
+        isConnected: true,
+        connectionData,
+        lastSyncAt: new Date(),
+        companyId,
+      },
+      include: {
+        company: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const connection = {
+      id: newPlatform.id,
+      platform: newPlatform.type.toLowerCase(),
+      accountName: newPlatform.username || newPlatform.name,
+      status: newPlatform.isConnected ? "connected" : "disconnected",
+      companyId: newPlatform.companyId,
+      company: newPlatform.company,
+      lastSyncAt: newPlatform.lastSyncAt,
+      createdAt: newPlatform.createdAt,
+      updatedAt: newPlatform.updatedAt,
+      scopes: (connectionData?.scopes as string[]) || [],
+      expiresAt: null,
+    };
+
+    return NextResponse.json(connection, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create platform connection:", error);
+    return NextResponse.json(
+      { error: "Failed to create platform connection" },
+      { status: 500 }
+    );
+  }
+}
+
+
+========== Platforms lib : apps/web/src/lib/platforms.ts ==========
+
+
+export interface PlatformConfig {
+  id: string;
+  name: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  description: string;
+  defaultScopes: string[];
+  accountPlaceholder: string;
+  oauthSupported: boolean;
+}
+
+export const PLATFORMS: Record<string, PlatformConfig> = {
+  linkedin: {
+    id: "linkedin",
+    name: "LinkedIn",
+    color: "text-[#0A66C2]",
+    bgColor: "bg-[#0A66C2]/10",
+    borderColor: "border-[#0A66C2]/20",
+    description: "Professional networking & B2B content",
+    defaultScopes: ["openid", "profile", "email", "w_member_social", "r_member_social"],
+    accountPlaceholder: "e.g. My Company Page",
+    oauthSupported: true,
+  },
+  twitter: {
+    id: "twitter",
+    name: "Twitter / X",
+    color: "text-[#1DA1F2]",
+    bgColor: "bg-[#1DA1F2]/10",
+    borderColor: "border-[#1DA1F2]/20",
+    description: "Microblogging & real-time engagement",
+    defaultScopes: ["tweet.read", "tweet.write", "users.read"],
+    accountPlaceholder: "e.g. @mycompany",
+    oauthSupported: false,
+  },
+  facebook: {
+    id: "facebook",
+    name: "Facebook",
+    color: "text-[#1877F2]",
+    bgColor: "bg-[#1877F2]/10",
+    borderColor: "border-[#1877F2]/20",
+    description: "Social networking & community engagement",
+    defaultScopes: [
+      "pages_manage_posts",
+      "pages_read_engagement",
+      "pages_show_list",
+    ],
+    accountPlaceholder: "e.g. My Business Page",
+    oauthSupported: true,
+  },
+  instagram: {
+    id: "instagram",
+    name: "Instagram",
+    color: "text-[#E4405F]",
+    bgColor: "bg-[#E4405F]/10",
+    borderColor: "border-[#E4405F]/20",
+    description: "Visual storytelling & brand showcase",
+    defaultScopes: ["instagram_basic", "instagram_content_publish"],
+    accountPlaceholder: "e.g. @mycompany",
+    oauthSupported: false,
+  },
+  wordpress: {
+    id: "wordpress",
+    name: "WordPress",
+    color: "text-[#21759B]",
+    bgColor: "bg-[#21759B]/10",
+    borderColor: "border-[#21759B]/20",
+    description: "Blog & long-form content publishing",
+    defaultScopes: ["posts", "media"],
+    accountPlaceholder: "e.g. myblog.wordpress.com",
+    oauthSupported: false,
+  },
+};
+
+export const PLATFORM_LIST = Object.values(PLATFORMS);
+
+export type PlatformId = keyof typeof PLATFORMS;
+
+export interface PlatformConnection {
+  id: string;
+  platform: string;
+  accountName: string;
+  status: string;
+  scopes: string[];
+  config: Record<string, unknown> | null;
+  expiresAt: string | null;
+  companyId: string;
+  company: {
+    id: string;
+    name: string;
+  };
+  createdAt?: string;
+}
+
+
+
+========== Facebook Graph API callers (pattern: graph\.facebook\.com) ==========
+
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\check\route.ts ---
+
+// apps/web/src/app/api/debug/check/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PlatformType } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
+
+const LINKEDIN_API_URL = 'https://api.linkedin.com/v2';
+const FB_GRAPH_URL = 'https://graph.facebook.com/v18.0';
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const testApi = searchParams.get('testApi') === 'true';
+
+  try {
+    const posts = await prisma.generatedPost.findMany({
+      where: { status: 'PUBLISHED' },
+      include: { platform: true },
+      orderBy: { publishedAt: 'desc' },
+      take: 10,
+    });
+
+    const results = [];
+
+    for (const post of posts) {
+      const postInfo: Record<string, unknown> = {
+        id: post.id,
+        platform: post.platform?.type,
+        externalPostId: post.externalPostId || 'MISSING!',
+        externalPostUrl: post.externalPostUrl || 'MISSING!',
+        publishedAt: post.publishedAt,
+        likes: post.likes,
+        comments: post.comments,
+        shares: post.shares,
+        impressions: post.impressions,
+        lastSyncedAt: post.lastSyncedAt,
+      };
+
+      // Test API calls if requested and post has externalPostId
+      if (testApi && post.externalPostId) {
+        const connectionData = post.platform?.connectionData as Record<string, unknown> | null;
+
+        if (connectionData) {
+          // FACEBOOK TEST
+          if (post.platform?.type === PlatformType.FACEBOOK) {
+            const token = (connectionData.pageAccessToken || connectionData.accessToken) as string;
+            if (token) {
+              try {
+                const url = `${FB_GRAPH_URL}/${post.externalPostId}?fields=id,shares,comments.summary(true),reactions.summary(true)&access_token=${token}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                postInfo.apiTest = {
+                  status: response.status,
+                  ok: response.ok,
+                  data: data,
+                  extractedMetrics: response.ok ? {
+                    reactions: data.reactions?.summary?.total_count || 0,
+                    comments: data.comments?.summary?.total_count || 0,
+                    shares: data.shares?.count || 0,
+                  } : null,
+                };
+              } catch (e) {
+                postInfo.apiTest = { error: String(e) };
+              }
+            }
+          }
+
+          // LINKEDIN TEST
+          if (post.platform?.type === PlatformType.LINKEDIN) {
+            const token = connectionData.accessToken as string;
+            if (token) {
+              try {
+                const encodedUrn = encodeURIComponent(post.externalPostId);
+                
+                // Get likes count
+                const likesUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/likes?count=0`;
+                const likesRes = await fetch(likesUrl, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-Restli-Protocol-Version': '2.0.0',
+                  },
+                });
+                const likesData = await likesRes.json();
+
+                // Get comments count
+                const commentsUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/comments?count=0`;
+                const commentsRes = await fetch(commentsUrl, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-Restli-Protocol-Version': '2.0.0',
+                  },
+                });
+                const commentsData = await commentsRes.json();
+
+                postInfo.apiTest = {
+                  likesStatus: likesRes.status,
+                  likesTotal: likesData.paging?.total || 0,
+                  likesData: likesData,
+                  commentsStatus: commentsRes.status,
+                  commentsTotal: commentsData.paging?.total || 0,
+                  commentsData: commentsData,
+                };
+              } catch (e) {
+                postInfo.apiTest = { error: String(e) };
+              }
+            }
+          }
+        }
+      }
+
+      results.push(postInfo);
+    }
+
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      testApi,
+      count: posts.length,
+      withExternalId: posts.filter(p => p.externalPostId).length,
+      withoutExternalId: posts.filter(p => !p.externalPostId).length,
+      posts: results,
+      hint: testApi ? 'API test results included' : 'Add ?testApi=true to test actual API calls',
+    });
+  } catch (error) {
+    return NextResponse.json({ 
+      error: String(error),
+    }, { status: 500 });
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\diagnose\route.ts ---
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+export async function GET() {
+  const results: Record<string, any> = {
+    timestamp: new Date().toISOString(),
+    database: {},
+    platforms: {},
+    linkedin: {},
+    facebook: {},
+    diagnosis: [],
+    fixes: [],
+  };
+
+  try {
+    // 1. Get all companies
+    const companies = await prisma.company.findMany({
+      select: { id: true, name: true },
+    });
+    results.database.companies = companies;
+
+    // 2. Get all platforms WITH connectionData
+    const platforms = await prisma.platform.findMany({
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        isConnected: true,
+        connectionData: true,
+        companyId: true,
+      },
+    });
+
+    results.platforms.count = platforms.length;
+    results.platforms.list = platforms.map((p) => {
+      const cd = (p.connectionData || {}) as Record<string, any>;
+      const safe: Record<string, any> = {
+        id: p.id,
+        type: p.type,
+        name: p.name,
+        isConnected: p.isConnected,
+        companyId: p.companyId,
+        connectionDataKeys: Object.keys(cd),
+      };
+      // Show token lengths without exposing full tokens
+      for (const [k, v] of Object.entries(cd)) {
+        const s = String(v || "");
+        if (k.toLowerCase().includes("token") || k.toLowerCase().includes("secret")) {
+          safe[`cd_${k}`] = s.length > 8
+            ? `${s.slice(0, 6)}...${s.slice(-4)} (${s.length} chars)`
+            : s.length > 0 ? "[SHORT]" : "[EMPTY]";
+        } else {
+          safe[`cd_${k}`] = v;
+        }
+      }
+      return safe;
+    });
+
+    // 3. Get published posts
+    const posts = await prisma.generatedPost.findMany({
+      where: { externalPostId: { not: null } },
+      select: {
+        id: true, platform: { select: { type: true, connectionData: true } },
+        externalPostId: true, likes: true, comments: true,
+        shares: true, impressions: true, lastSyncedAt: true,
+      },
+      orderBy: { publishedAt: "desc" },
+    });
+    results.database.publishedPosts = posts.map((p) => ({
+      id: p.id,
+      platform: p.platform.type,
+      externalPostId: p.externalPostId,
+      metrics: { likes: p.likes, comments: p.comments, shares: p.shares, impressions: p.impressions },
+      lastSyncedAt: p.lastSyncedAt,
+    }));
+
+    // 4. LINKEDIN TESTS
+    const liPlatform = platforms.find((p) => p.type === "LINKEDIN" && p.isConnected);
+    if (liPlatform) {
+      const cd = (liPlatform.connectionData || {}) as Record<string, any>;
+      const token = cd.accessToken as string;
+      const postingMode = cd.postingMode || "personal";
+      const orgId = cd.organizationId || cd.companyId || null;
+
+      results.linkedin.platformId = liPlatform.id;
+      results.linkedin.postingMode = postingMode;
+      results.linkedin.organizationId = orgId;
+      results.linkedin.hasToken = !!token;
+      results.linkedin.tokenLength = token?.length || 0;
+
+      if (token) {
+        // Test token validity
+        try {
+          const r = await fetch("https://api.linkedin.com/v2/me", {
+            headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+          });
+          const d = await r.json();
+          results.linkedin.tokenStatus = r.status;
+          results.linkedin.tokenValid = r.status === 200;
+          results.linkedin.profile = r.status === 200
+            ? { id: d.id, firstName: d.localizedFirstName, lastName: d.localizedLastName }
+            : d;
+          if (r.status === 200) results.diagnosis.push("✅ LinkedIn token is VALID");
+          else results.diagnosis.push(`❌ LinkedIn token returned ${r.status}`);
+        } catch (e: any) {
+          results.linkedin.tokenError = e.message;
+          results.diagnosis.push("❌ LinkedIn token test failed: " + e.message);
+        }
+
+        // Test userinfo (to check scopes)
+        try {
+          const r = await fetch("https://api.linkedin.com/v2/userinfo", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          results.linkedin.userinfoStatus = r.status;
+          results.linkedin.userinfo = await r.json();
+        } catch (e: any) {
+          results.linkedin.userinfoError = e.message;
+        }
+
+        // Test each LinkedIn post
+        const liPosts = posts.filter((p) => p.platform.type === "LINKEDIN").slice(0, 2);
+        results.linkedin.postTests = [];
+
+        for (const post of liPosts) {
+          const urn = post.externalPostId!;
+          const enc = encodeURIComponent(urn);
+          const t: Record<string, any> = {
+            urn,
+            currentMetrics: { likes: post.likes, impressions: post.impressions },
+          };
+
+          // Test 1: socialActions (base)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.socialActions = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.socialActionsErr = e.message; }
+
+          // Test 2: likes with count=0 (what your code does)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/likes?count=0`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.likesCount0 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.likesCount0Err = e.message; }
+
+          // Test 3: likes with count=1 (alternative approach)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/likes?count=1`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.likesCount1 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.likesCount1Err = e.message; }
+
+          // Test 4: comments with count=0
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/comments?count=0`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.commentsCount0 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.commentsCount0Err = e.message; }
+
+          // Test 5: ugcPosts endpoint (has socialDetail with counts)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/ugcPosts/${enc}`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.ugcPost = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.ugcPostErr = e.message; }
+
+          results.linkedin.postTests.push(t);
+        }
+
+        // Analysis
+        if (postingMode === "personal" || !postingMode) {
+          results.diagnosis.push("⚠️ LinkedIn posting mode is PERSONAL - impressions will ALWAYS be 0 (API limitation)");
+          results.fixes.push("LinkedIn impressions require a Company Page (organization posting mode)");
+        }
+      } else {
+        results.diagnosis.push("❌ LinkedIn platform found but NO accessToken in connectionData");
+      }
+    } else {
+      results.diagnosis.push("❌ No connected LinkedIn platform found");
+    }
+
+    // 5. FACEBOOK TESTS
+    const fbPlatform = platforms.find((p) => p.type === "FACEBOOK" && p.isConnected);
+    if (fbPlatform) {
+      const cd = (fbPlatform.connectionData || {}) as Record<string, any>;
+      const pageToken = (cd.pageAccessToken || cd.accessToken) as string;
+      const pageId = cd.pageId as string;
+
+      results.facebook.platformId = fbPlatform.id;
+      results.facebook.hasPageToken = !!pageToken;
+      results.facebook.tokenLength = pageToken?.length || 0;
+      results.facebook.pageId = pageId;
+      results.facebook.connectionDataKeys = Object.keys(cd);
+
+      if (pageToken) {
+        // Test token
+        try {
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${pageToken}`
+          );
+          const d = await r.json();
+          results.facebook.tokenStatus = r.status;
+          results.facebook.tokenValid = r.status === 200 && !d.error;
+          results.facebook.profile = d;
+          if (r.status === 200 && !d.error) {
+            results.diagnosis.push("✅ Facebook token is VALID");
+          } else {
+            results.diagnosis.push(`❌ Facebook token invalid: ${d.error?.message || r.status}`);
+          }
+        } catch (e: any) {
+          results.facebook.tokenError = e.message;
+          results.diagnosis.push("❌ Facebook token test failed: " + e.message);
+        }
+
+        // Debug token (shows permissions + expiry)
+        try {
+          const appToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/debug_token?input_token=${pageToken}&access_token=${appToken}`
+          );
+          const d = await r.json();
+          if (d?.data) {
+            results.facebook.tokenDebug = {
+              type: d.data.type,
+              app_id: d.data.app_id,
+              is_valid: d.data.is_valid,
+              expires: d.data.expires_at
+                ? new Date(d.data.expires_at * 1000).toISOString()
+                : "never",
+              scopes: d.data.scopes,
+            };
+            if (d.data.scopes) {
+              const hasReadInsights = d.data.scopes.includes("read_insights");
+              const hasPagesReadEngagement = d.data.scopes.includes("pages_read_engagement");
+              results.diagnosis.push(
+                hasReadInsights
+                  ? "✅ Facebook has read_insights permission"
+                  : "❌ Facebook MISSING read_insights permission"
+              );
+              results.diagnosis.push(
+                hasPagesReadEngagement
+                  ? "✅ Facebook has pages_read_engagement permission"  
+                  : "❌ Facebook MISSING pages_read_engagement permission"
+              );
+            }
+            if (d.data.expires_at) {
+              const expiresDate = new Date(d.data.expires_at * 1000);
+              const isExpired = expiresDate < new Date();
+              results.diagnosis.push(
+                isExpired
+                  ? `❌ Facebook token EXPIRED on ${expiresDate.toISOString()}`
+                  : `✅ Facebook token expires ${expiresDate.toISOString()}`
+              );
+            }
+          } else {
+            results.facebook.tokenDebug = d;
+          }
+        } catch (e: any) {
+          results.facebook.debugError = e.message;
+        }
+
+        // Test Facebook posts
+        const fbPosts = posts.filter((p) => p.platform.type === "FACEBOOK");
+        results.facebook.postTests = [];
+
+        for (const post of fbPosts) {
+          const pid = post.externalPostId!;
+          const t: Record<string, any> = {
+            externalId: pid,
+            lastSyncedAt: post.lastSyncedAt,
+          };
+
+          // Test basic post data (works with most tokens)
+          try {
+            const r = await fetch(
+              `https://graph.facebook.com/v21.0/${pid}?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&access_token=${pageToken}`
+            );
+            t.postData = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.postDataErr = e.message; }
+
+          // Test insights (requires read_insights)
+          try {
+            const r = await fetch(
+              `https://graph.facebook.com/v21.0/${pid}/insights?metric=post_impressions,post_engaged_users,post_reactions_by_type_total&access_token=${pageToken}`
+            );
+            t.insights = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.insightsErr = e.message; }
+
+          results.facebook.postTests.push(t);
+        }
+      } else {
+        results.diagnosis.push("❌ Facebook platform found but NO token in connectionData");
+        results.facebook.allConnectionData = Object.keys(cd);
+      }
+    } else {
+      results.diagnosis.push("❌ No connected Facebook platform found");
+    }
+
+    // 6. FINAL DIAGNOSIS
+    results.fixes.push(
+      "1. LinkedIn personal posts: impressions/shares are unavailable via API. Use Company Page for full metrics.",
+      "2. LinkedIn likes/comments: Check if socialActions endpoint returns data (see postTests above).",
+      "3. Facebook: Check token debug for permissions and expiry.",
+      "4. If Facebook insights return error, need read_insights + pages_read_engagement permissions."
+    );
+
+  } catch (e: any) {
+    results.criticalError = {
+      message: e.message,
+      stack: e.stack?.split("\n").slice(0, 5),
+    };
+  }
+
+  return NextResponse.json(results);
+}
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\sync-test\route.ts ---
+
+// apps/web/src/app/api/debug/sync-test/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PostStatus, PlatformType } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
+
+const LINKEDIN_API_URL = 'https://api.linkedin.com/v2';
+const FB_GRAPH_URL = 'https://graph.facebook.com/v18.0';
+
+export async function GET(request: NextRequest) {
+  const logs: string[] = [];
+  const log = (msg: string) => {
+    console.log(msg);
+    logs.push(`${new Date().toISOString().split('T')[1].split('.')[0]} - ${msg}`);
+  };
+
+  const results: Record<string, unknown> = {};
+
+  try {
+    log('=== SYNC TEST START ===');
+
+    // Get published posts with externalPostId
+    const posts = await prisma.generatedPost.findMany({
+      where: {
+        status: PostStatus.PUBLISHED,
+        externalPostId: { not: null },
+      },
+      include: { platform: true },
+      take: 5,
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    log(`Found ${posts.length} posts with externalPostId`);
+    results.postsFound = posts.length;
+
+    if (posts.length === 0) {
+      log('No posts to test!');
+      return NextResponse.json({ logs, results, error: 'No posts with externalPostId' });
+    }
+
+    // Test each post
+    for (const post of posts) {
+      const postResult: Record<string, unknown> = {
+        id: post.id,
+        platform: post.platform?.type,
+        externalPostId: post.externalPostId,
+      };
+
+      log(`\n--- Testing Post ${post.id} (${post.platform?.type}) ---`);
+      log(`External ID: ${post.externalPostId}`);
+
+      const connectionData = post.platform?.connectionData as Record<string, unknown> | null;
+
+      if (!connectionData) {
+        log('ERROR: No connection data');
+        postResult.error = 'No connection data';
+        results[post.id] = postResult;
+        continue;
+      }
+
+      // Test FACEBOOK
+      if (post.platform?.type === PlatformType.FACEBOOK) {
+        const pageAccessToken = (connectionData.pageAccessToken || connectionData.accessToken) as string;
+
+        log(`Token exists: ${!!pageAccessToken}, Length: ${pageAccessToken?.length || 0}`);
+        postResult.tokenExists = !!pageAccessToken;
+
+        if (pageAccessToken && post.externalPostId) {
+          // First, try to get basic post info
+          log('Fetching basic post info...');
+          try {
+            const basicUrl = `${FB_GRAPH_URL}/${post.externalPostId}?fields=id,message,created_time,shares,comments.summary(true),reactions.summary(true)&access_token=${pageAccessToken}`;
+            const basicResponse = await fetch(basicUrl);
+            const basicData = await basicResponse.json();
+
+            log(`Basic info status: ${basicResponse.status}`);
+            log(`Basic info response: ${JSON.stringify(basicData).substring(0, 500)}`);
+
+            postResult.basicInfo = {
+              status: basicResponse.status,
+              data: basicData,
+            };
+
+            // Extract metrics from basic info
+            if (basicResponse.ok) {
+              const shares = basicData.shares?.count || 0;
+              const comments = basicData.comments?.summary?.total_count || 0;
+              const reactions = basicData.reactions?.summary?.total_count || 0;
+
+              log(`Metrics from basic: reactions=${reactions}, comments=${comments}, shares=${shares}`);
+              postResult.extractedMetrics = { reactions, comments, shares };
+            }
+          } catch (e) {
+            log(`Basic info error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.basicInfoError = String(e);
+          }
+
+          // Try insights endpoint
+          log('Fetching insights...');
+          try {
+            const insightsUrl = `${FB_GRAPH_URL}/${post.externalPostId}/insights?metric=post_impressions,post_engaged_users&access_token=${pageAccessToken}`;
+            const insightsResponse = await fetch(insightsUrl);
+            const insightsData = await insightsResponse.json();
+
+            log(`Insights status: ${insightsResponse.status}`);
+            log(`Insights response: ${JSON.stringify(insightsData).substring(0, 500)}`);
+
+            postResult.insights = {
+              status: insightsResponse.status,
+              data: insightsData,
+            };
+          } catch (e) {
+            log(`Insights error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.insightsError = String(e);
+          }
+        }
+      }
+
+      // Test LINKEDIN
+      if (post.platform?.type === PlatformType.LINKEDIN) {
+        const accessToken = connectionData.accessToken as string;
+        const isOrgPost = connectionData.postingMode === 'organization';
+
+        log(`Token exists: ${!!accessToken}, Length: ${accessToken?.length || 0}`);
+        log(`Is org post: ${isOrgPost}`);
+        postResult.tokenExists = !!accessToken;
+        postResult.isOrgPost = isOrgPost;
+
+        if (accessToken && post.externalPostId) {
+          const postUrn = post.externalPostId;
+          const encodedUrn = encodeURIComponent(postUrn);
+
+          // Try socialActions for likes
+          log('Fetching LinkedIn likes...');
+          try {
+            const likesUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/likes?count=0`;
+            const likesResponse = await fetch(likesUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const likesData = await likesResponse.json();
+
+            log(`Likes status: ${likesResponse.status}`);
+            log(`Likes response: ${JSON.stringify(likesData).substring(0, 300)}`);
+
+            postResult.likes = {
+              status: likesResponse.status,
+              total: likesData.paging?.total || 0,
+              data: likesData,
+            };
+          } catch (e) {
+            log(`Likes error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.likesError = String(e);
+          }
+
+          // Try socialActions for comments
+          log('Fetching LinkedIn comments...');
+          try {
+            const commentsUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/comments?count=0`;
+            const commentsResponse = await fetch(commentsUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const commentsData = await commentsResponse.json();
+
+            log(`Comments status: ${commentsResponse.status}`);
+            log(`Comments response: ${JSON.stringify(commentsData).substring(0, 300)}`);
+
+            postResult.comments = {
+              status: commentsResponse.status,
+              total: commentsData.paging?.total || 0,
+              data: commentsData,
+            };
+          } catch (e) {
+            log(`Comments error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.commentsError = String(e);
+          }
+
+          // Try to get post directly
+          log('Fetching LinkedIn post directly...');
+          try {
+            const postUrl = `${LINKEDIN_API_URL}/ugcPosts/${encodedUrn}`;
+            const postResponse = await fetch(postUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const postData = await postResponse.json();
+
+            log(`Post fetch status: ${postResponse.status}`);
+            log(`Post response: ${JSON.stringify(postData).substring(0, 300)}`);
+
+            postResult.postFetch = {
+              status: postResponse.status,
+              data: postData,
+            };
+          } catch (e) {
+            log(`Post fetch error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.postFetchError = String(e);
+          }
+        }
+      }
+
+      results[post.id] = postResult;
+    }
+
+    log('\n=== SYNC TEST END ===');
+
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      logs,
+      results,
+    });
+  } catch (error) {
+    log(`FATAL ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      logs,
+      results,
+    }, { status: 500 });
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\generate\reconstruct\route.ts ---
+
+// apps/web/src/app/api/intelligence/reconstruct/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { analysePlatformPosts, type PlatformPost } from "@/lib/ai/analyze-posts";
+
+const CRON_SECRET = process.env.CRON_SECRET ?? "";
+
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const companyId = request.nextUrl.searchParams.get("companyId");
+  if (!companyId) {
+    return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+  }
+
+  try {
+    const platforms = await prisma.platform.findMany({
+      where: { companyId, isConnected: true },
+      include: { company: true },
+    });
+
+    const allPosts: PlatformPost[] = [];
+
+    for (const platform of platforms) {
+      const data = platform.connectionData as Record<string, any> | null;
+      if (!data) continue;
+
+      if (platform.type === "FACEBOOK") {
+        const pageId = data.pageId;
+        const accessToken = data.accessToken || data.userAccessToken;
+        if (pageId && accessToken) {
+          const posts = await fetchFacebookPosts(pageId, accessToken);
+          allPosts.push(...posts);
+        }
+      } else if (platform.type === "LINKEDIN") {
+        const accessToken = data.accessToken;
+        if (accessToken) {
+          const isOrg = data.postingMode === "organization";
+          const author = isOrg ? `urn:li:organization:${data.organizationId}` : `urn:li:person:${data.linkedinSub}`;
+          if (author) {
+            const posts = await fetchLinkedInPosts(accessToken, author);
+            allPosts.push(...posts);
+          }
+        }
+      }
+    }
+
+    if (allPosts.length === 0) {
+      return NextResponse.json({ success: false, error: "No posts fetched from connected platforms" }, { status: 404 });
+    }
+
+    const insights = await analysePlatformPosts(allPosts);
+
+    // Update CompanyIntelligence with learned fields
+    const existing = await prisma.companyIntelligence.findUnique({
+      where: { companyId },
+    });
+
+    const dataToUpdate = {
+      learnedBestDays: insights.bestDays,
+      learnedBestTimes: insights.bestTimes as any,
+      learnedBestPillars: insights.topContentTypes as any,
+      topPerformingTopics: insights.bestTopics as any,
+      topPerformingTypes: insights.topContentTypes as any,
+      avgEngagementRate: insights.avgEngagementRate,
+      lastIntelligenceUpdate: new Date(),
+    };
+
+    if (existing) {
+      await prisma.companyIntelligence.update({
+        where: { companyId },
+        data: dataToUpdate,
+      });
+    } else {
+      await prisma.companyIntelligence.create({
+        data: {
+          companyId,
+          ...dataToUpdate,
+        },
+      });
+    }
+
+    return NextResponse.json({ success: true, insights, postsAnalysed: allPosts.length });
+  } catch (error) {
+    console.error("[Intelligence Reconstruct] Error:", error);
+    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+  }
+}
+
+async function fetchFacebookPosts(pageId: string, accessToken: string): Promise<PlatformPost[]> {
+  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares,insights.metric(post_impressions)&access_token=${accessToken}&limit=30`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  const posts = data.data || [];
+  return posts
+    .filter((p: any) => p.message)
+    .map((p: any) => ({
+      id: p.id,
+      text: p.message || "",
+      createdAt: p.created_time,
+      likes: p.likes?.summary?.total_count || 0,
+      comments: p.comments?.summary?.total_count || 0,
+      shares: p.shares?.count || 0,
+      impressions: p.insights?.data?.[0]?.values?.[0]?.value || 0,
+    }));
+}
+
+async function fetchLinkedInPosts(accessToken: string, author: string): Promise<PlatformPost[]> {
+  const encodedAuthor = encodeURIComponent(author);
+  const url = `https://api.linkedin.com/v2/posts?q=author&author=${encodedAuthor}&count=30`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}`, "X-Restli-Protocol-Version": "2.0.0" },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const elements = data.elements || [];
+  return elements
+    .filter((p: any) => p.commentary)
+    .map((p: any) => ({
+      id: p.id,
+      text: p.commentary || "",
+      createdAt: p.created?.time || new Date().toISOString(),
+      likes: p.socialDetail?.totalSocialActivityCounts?.numLikes || 0,
+      comments: p.socialDetail?.totalSocialActivityCounts?.numComments || 0,
+      shares: p.socialDetail?.totalSocialActivityCounts?.numShares || 0,
+      impressions: p.socialDetail?.totalSocialActivityCounts?.numImpressions || 0,
+    }));
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\oauth\facebook.ts ---
+
+// apps/web/src/lib/oauth/facebook.ts
+
+const FB_API_VERSION = 'v21.0';
+const FB_AUTH_URL = `https://www.facebook.com/${FB_API_VERSION}/dialog/oauth`;
+const FB_TOKEN_URL = `https://graph.facebook.com/${FB_API_VERSION}/oauth/access_token`;
+const FB_GRAPH_URL = `https://graph.facebook.com/${FB_API_VERSION}`;
+
+// ============================================
+// PERMISSIONS CONFIGURATION
+// ============================================
+
+export const FACEBOOK_SCOPES_DEVELOPMENT = [
+  'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+].join(',');
+
+export const FACEBOOK_SCOPES_MINIMAL = [
+  'pages_show_list',
+  'public_profile',
+].join(',');
+
+export const FACEBOOK_SCOPES_PRODUCTION = [
+  'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+  'pages_read_user_content',
+].join(',');
+
+const USE_MINIMAL_SCOPES = false;
+
+export const FACEBOOK_SCOPES = USE_MINIMAL_SCOPES
+  ? FACEBOOK_SCOPES_MINIMAL
+  : FACEBOOK_SCOPES_PRODUCTION;
+
+// ============================================
+// URL HELPERS â€“ DYNAMIC, NO HARDCODED FALLBACK
+// ============================================
+
+function getAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  if (envUrl.endsWith('/')) return envUrl.slice(0, -1);
+  return envUrl;
+}
+
+export function getFacebookRedirectUri(): string {
+  const appUrl = getAppUrl();
+  if (appUrl) return `${appUrl}/api/auth/facebook/callback`;
+  return `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/facebook/callback`;
+}
+
+// ============================================
+// OAUTH STATE
+// ============================================
+
+export function encodeOAuthState(data: Record<string, string>): string {
+  return Buffer.from(JSON.stringify(data)).toString('base64url');
+}
+
+export function decodeOAuthState(state: string): Record<string, string> {
+  try {
+    return JSON.parse(Buffer.from(state, 'base64url').toString());
+  } catch {
+    throw new Error('Invalid OAuth state');
+  }
+}
+
+// ============================================
+// OAUTH FUNCTIONS
+// ============================================
+
+/**
+ * @param companyId
+ * @param postMode â€“ 'profile' | 'page' (ignored for Facebook; always page)
+ */
+export function getFacebookAuthUrl(companyId: string, postMode: 'profile' | 'page' = 'page'): string {
+  const redirectUri = getFacebookRedirectUri();
+
+  const state = encodeOAuthState({
+    companyId,
+    platform: 'facebook',
+    ts: Date.now().toString(),
+    redirectUri,
+  });
+
+  const params = new URLSearchParams({
+    client_id: process.env.FACEBOOK_APP_ID || '',
+    redirect_uri: redirectUri,
+    state,
+    scope: FACEBOOK_SCOPES,
+    response_type: 'code',
+  });
+
+  const authUrl = `${FB_AUTH_URL}?${params.toString()}`;
+  console.log('[Facebook OAuth] Auth URL:', authUrl);
+  return authUrl;
+}
+
+export async function exchangeFacebookCode(code: string, stateRedirectUri?: string): Promise<{
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}> {
+  const redirectUri = stateRedirectUri || getFacebookRedirectUri();
+
+  const params = new URLSearchParams({
+    client_id: process.env.FACEBOOK_APP_ID || '',
+    client_secret: process.env.FACEBOOK_APP_SECRET || '',
+    redirect_uri: redirectUri,
+    code,
+  });
+
+  const res = await fetch(`${FB_TOKEN_URL}?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message = (err as { error?: { message?: string } }).error?.message
+      || `Facebook token exchange failed (${res.status})`;
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export async function getLongLivedToken(shortToken: string): Promise<{
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}> {
+  const params = new URLSearchParams({
+    grant_type: 'fb_exchange_token',
+    client_id: process.env.FACEBOOK_APP_ID || '',
+    client_secret: process.env.FACEBOOK_APP_SECRET || '',
+    fb_exchange_token: shortToken,
+  });
+
+  const res = await fetch(`${FB_TOKEN_URL}?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message = (err as { error?: { message?: string } }).error?.message
+      || `Failed to get long-lived token (${res.status})`;
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+// ============================================
+// FACEBOOK PAGES
+// ============================================
+
+export interface FacebookPage {
+  id: string;
+  name: string;
+  access_token: string;
+  category: string;
+  tasks?: string[];
+}
+
+export async function getFacebookPages(userToken: string): Promise<FacebookPage[]> {
+  const params = new URLSearchParams({
+    access_token: userToken,
+    fields: 'id,name,access_token,category,tasks',
+  });
+
+  const res = await fetch(`${FB_GRAPH_URL}/me/accounts?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message = (err as { error?: { message?: string } }).error?.message
+      || `Failed to fetch Facebook pages (${res.status})`;
+    throw new Error(message);
+  }
+
+  const data = await res.json();
+  return (data as { data: FacebookPage[] }).data || [];
+}
+
+// ============================================
+// USER PROFILE
+// ============================================
+
+export interface FacebookUserProfile {
+  id: string;
+  name: string;
+  email?: string;
+  picture?: {
+    data: {
+      url: string;
+    };
+  };
+}
+
+export async function getFacebookUserProfile(userToken: string): Promise<FacebookUserProfile> {
+  const params = new URLSearchParams({
+    access_token: userToken,
+    fields: 'id,name,email,picture',
+  });
+
+  const res = await fetch(`${FB_GRAPH_URL}/me?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: { message?: string } }).error?.message || 'Failed to fetch user profile'
+    );
+  }
+  return res.json();
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\publisher\facebook.ts ---
+
+// apps/web/src/lib/publisher/facebook.ts
+
+const FB_API_VERSION = 'v21.0';
+const FB_GRAPH_URL = `https://graph.facebook.com/${FB_API_VERSION}`;
+
+export interface FacebookPostOptions {
+  pageAccessToken: string;
+  pageId: string;
+  content: string;
+  link?: string;
+  mediaUrls?: string[];
+}
+
+export interface FacebookPostResult {
+  success: boolean;
+  postId?: string;
+  postUrl?: string;
+  error?: string;
+}
+
+/**
+ * Create a post on a Facebook Page (with optional media)
+ */
+export async function createFacebookPost(options: FacebookPostOptions): Promise<FacebookPostResult> {
+  const { pageAccessToken, pageId, content, link, mediaUrls } = options;
+
+  console.log('[Facebook Publisher] Creating post:', {
+    pageId,
+    contentLength: content.length,
+    hasLink: !!link,
+    mediaCount: mediaUrls?.length || 0,
+  });
+
+  if (mediaUrls && mediaUrls.length > 0) {
+    const validMediaUrls = mediaUrls.filter(url => url && url.trim().length > 0);
+
+    if (validMediaUrls.length === 1) {
+      console.log('[Facebook Publisher] Single image detected, using photos endpoint');
+      return createFacebookPhotoPost({ ...options, photoUrl: validMediaUrls[0] });
+    } else if (validMediaUrls.length > 1) {
+      console.log('[Facebook Publisher] Multiple images detected:', validMediaUrls.length);
+      return createFacebookMultiPhotoPost({ ...options, photoUrls: validMediaUrls });
+    }
+  }
+
+  console.log('[Facebook Publisher] Creating text-only post');
+
+  const postData: Record<string, string> = {
+    message: content,
+    access_token: pageAccessToken,
+  };
+
+  if (link) {
+    postData.link = link;
+  }
+
+  try {
+    const response = await fetch(`${FB_GRAPH_URL}/${pageId}/feed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(postData),
+    });
+
+    const responseData = await response.json() as {
+      id?: string;
+      error?: { message?: string; code?: number; error_subcode?: number };
+    };
+
+    if (!response.ok) {
+      const errorMessage = responseData.error?.message || `Facebook API error (${response.status})`;
+      console.error('[Facebook Publisher] Post failed:', responseData.error);
+
+      if (response.status === 401 || responseData.error?.code === 190) {
+        return { success: false, error: 'Facebook access token expired. Please reconnect your account.' };
+      }
+      if (responseData.error?.code === 200) {
+        return { success: false, error: 'Insufficient permissions to post to this page.' };
+      }
+      if (response.status === 429 || responseData.error?.code === 32) {
+        return { success: false, error: 'Facebook rate limit reached. Please try again later.' };
+      }
+      return { success: false, error: errorMessage };
+    }
+
+    const postId = responseData.id;
+    if (!postId) {
+      return { success: false, error: 'Facebook did not return a post ID' };
+    }
+
+    const postUrl = `https://www.facebook.com/${postId.replace('_', '/posts/')}`;
+    console.log('[Facebook Publisher] Post created successfully:', postId);
+
+    return { success: true, postId, postUrl };
+  } catch (error) {
+    console.error('[Facebook Publisher] Post creation failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create Facebook post',
+    };
+  }
+}
+
+/**
+ * Create a post with a single photo on a Facebook Page
+ */
+export async function createFacebookPhotoPost(
+  options: FacebookPostOptions & { photoUrl: string }
+): Promise<FacebookPostResult> {
+  const { pageAccessToken, pageId, content, photoUrl } = options;
+  console.log('[Facebook Publisher] Creating photo post:', { pageId, photoUrl });
+
+  try {
+    const response = await fetch(`${FB_GRAPH_URL}/${pageId}/photos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        url: photoUrl,
+        caption: content,
+        access_token: pageAccessToken,
+      }),
+    });
+
+    const responseData = await response.json() as {
+      id?: string; post_id?: string;
+      error?: { message?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      console.error('[Facebook Publisher] Photo post failed:', responseData.error);
+      return {
+        success: false,
+        error: responseData.error?.message || `Facebook API error (${response.status})`,
+      };
+    }
+
+    const postId = responseData.post_id || responseData.id;
+    console.log('[Facebook Publisher] Photo post created successfully:', postId);
+
+    return {
+      success: true,
+      postId,
+      postUrl: postId ? `https://www.facebook.com/${postId.replace('_', '/posts/')}` : undefined,
+    };
+  } catch (error) {
+    console.error('[Facebook Publisher] Photo post creation failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create Facebook photo post',
+    };
+  }
+}
+
+/**
+ * Create a post with multiple photos on a Facebook Page
+ */
+export async function createFacebookMultiPhotoPost(
+  options: FacebookPostOptions & { photoUrls: string[] }
+): Promise<FacebookPostResult> {
+  const { pageAccessToken, pageId, content, photoUrls } = options;
+  console.log('[Facebook Publisher] Creating multi-photo post:', { pageId, photoCount: photoUrls.length });
+
+  try {
+    const uploadedPhotoIds: string[] = [];
+
+    for (const photoUrl of photoUrls) {
+      console.log('[Facebook Publisher] Uploading unpublished photo:', photoUrl);
+      const uploadResponse = await fetch(`${FB_GRAPH_URL}/${pageId}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          url: photoUrl,
+          published: 'false',
+          access_token: pageAccessToken,
+        }),
+      });
+
+      const uploadData = await uploadResponse.json() as { id?: string; error?: { message?: string } };
+      if (!uploadResponse.ok || !uploadData.id) {
+        console.error('[Facebook Publisher] Failed to upload photo:', uploadData.error);
+        continue;
+      }
+      uploadedPhotoIds.push(uploadData.id);
+      console.log('[Facebook Publisher] Photo uploaded:', uploadData.id);
+    }
+
+    if (uploadedPhotoIds.length === 0) {
+      console.warn('[Facebook Publisher] All photo uploads failed, creating text-only post');
+      return createFacebookPost({ pageAccessToken, pageId, content });
+    }
+
+    const postData: Record<string, string> = {
+      message: content,
+      access_token: pageAccessToken,
+    };
+    uploadedPhotoIds.forEach((photoId, index) => {
+      postData[`attached_media[${index}]`] = JSON.stringify({ media_fbid: photoId });
+    });
+
+    console.log('[Facebook Publisher] Creating feed post with', uploadedPhotoIds.length, 'attached photos');
+
+    const response = await fetch(`${FB_GRAPH_URL}/${pageId}/feed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(postData),
+    });
+
+    const responseData = await response.json() as {
+      id?: string; error?: { message?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      console.error('[Facebook Publisher] Multi-photo post failed:', responseData.error);
+      return {
+        success: false,
+        error: responseData.error?.message || `Facebook API error (${response.status})`,
+      };
+    }
+
+    const postId = responseData.id;
+    console.log('[Facebook Publisher] Multi-photo post created successfully:', postId);
+
+    return {
+      success: true,
+      postId,
+      postUrl: postId ? `https://www.facebook.com/${postId.replace('_', '/posts/')}` : undefined,
+    };
+  } catch (error) {
+    console.error('[Facebook Publisher] Multi-photo post creation failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create Facebook multi-photo post',
+    };
+  }
+}
+
+/**
+ * Verify Facebook page access token is still valid
+ */
+export async function verifyFacebookToken(pageAccessToken: string): Promise<{
+  valid: boolean;
+  pageInfo?: { id: string; name: string };
+  error?: string;
+}> {
+  try {
+    const response = await fetch(
+      `${FB_GRAPH_URL}/me?access_token=${pageAccessToken}&fields=id,name`
+    );
+    const responseData = await response.json() as {
+      id?: string; name?: string;
+      error?: { message?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      return { valid: false, error: responseData.error?.message || 'Token verification failed' };
+    }
+    return {
+      valid: true,
+      pageInfo: { id: responseData.id || '', name: responseData.name || '' },
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : 'Token verification failed',
+    };
+  }
+}
+
+/**
+ * Get page insights/metrics for a Facebook post
+ * 
+ * Strategy:
+ * 1. Try the /insights endpoint (requires read_insights permission) for impressions
+ * 2. ALWAYS get post data (likes, comments, shares) from the post endpoint
+ *    which works with pages_read_engagement permission
+ * 3. Merge results from both
+ */
+export async function getFacebookPostInsights(
+  pageAccessToken: string,
+  postId: string
+): Promise<{
+  success: boolean;
+  metrics?: {
+    impressions: number;
+    reach: number;
+    engagement: number;
+    reactions: number;
+    comments: number;
+    shares: number;
+  };
+  error?: string;
+}> {
+  console.log('[Facebook Insights] Fetching insights for post:', postId);
+
+  const metrics = {
+    impressions: 0,
+    reach: 0,
+    engagement: 0,
+    reactions: 0,
+    comments: 0,
+    shares: 0,
+  };
+
+  // ===== Strategy 1: Try insights endpoint (for impressions/reach) =====
+  // This requires read_insights permission - may fail, that's OK
+  try {
+    const insightsResponse = await fetch(
+      `${FB_GRAPH_URL}/${postId}/insights?metric=post_impressions,post_impressions_unique,post_engaged_users&access_token=${pageAccessToken}`
+    );
+
+    if (insightsResponse.ok) {
+      const insightsData = await insightsResponse.json() as {
+        data: Array<{
+          name: string;
+          values: Array<{ value: number | Record<string, number> }>;
+        }>;
+      };
+
+      for (const insight of insightsData.data) {
+        const value = insight.values[0]?.value;
+        switch (insight.name) {
+          case 'post_impressions':
+            metrics.impressions = typeof value === 'number' ? value : 0;
+            break;
+          case 'post_impressions_unique':
+            metrics.reach = typeof value === 'number' ? value : 0;
+            break;
+          case 'post_engaged_users':
+            metrics.engagement = typeof value === 'number' ? value : 0;
+            break;
+        }
+      }
+      console.log('[Facebook Insights] Got insights data:', {
+        impressions: metrics.impressions,
+        reach: metrics.reach,
+        engagement: metrics.engagement,
+      });
+    } else {
+      console.warn('[Facebook Insights] Insights endpoint not available (likely missing read_insights permission). Using post data fallback for engagement metrics.');
+    }
+  } catch (e) {
+    console.warn('[Facebook Insights] Insights endpoint failed:', e instanceof Error ? e.message : e);
+  }
+
+  // ===== Strategy 2: Get post data (likes, comments, shares) =====
+  // This works with pages_read_engagement permission (which we have!)
+  try {
+    const postResponse = await fetch(
+      `${FB_GRAPH_URL}/${postId}?fields=likes.summary(true),comments.summary(true),shares&access_token=${pageAccessToken}`
+    );
+
+    if (!postResponse.ok) {
+      const errorData = await postResponse.json() as { error?: { message?: string } };
+      const errorMsg = errorData.error?.message || `HTTP ${postResponse.status}`;
+      console.error('[Facebook Insights] Post data fetch failed:', errorMsg);
+
+      // If we got insights data earlier, still return what we have
+      if (metrics.impressions > 0 || metrics.engagement > 0) {
+        console.log('[Facebook Insights] Returning partial metrics from insights endpoint');
+        return { success: true, metrics };
+      }
+
+      return { success: false, error: errorMsg };
+    }
+
+    const postData = await postResponse.json() as {
+      likes?: { summary?: { total_count?: number } };
+      comments?: { summary?: { total_count?: number } };
+      shares?: { count?: number };
+    };
+
+    metrics.reactions = postData.likes?.summary?.total_count || 0;
+    metrics.comments = postData.comments?.summary?.total_count || 0;
+    metrics.shares = postData.shares?.count || 0;
+
+    // If we didn't get engagement from insights, calculate from post data
+    if (metrics.engagement === 0) {
+      metrics.engagement = metrics.reactions + metrics.comments + metrics.shares;
+    }
+
+    console.log('[Facebook Insights] Final metrics:', metrics);
+
+    return { success: true, metrics };
+  } catch (error) {
+    console.error('[Facebook Insights] Post data fetch failed:', error);
+
+    // If we got insights data earlier, still return what we have
+    if (metrics.impressions > 0 || metrics.engagement > 0) {
+      return { success: true, metrics };
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch post data',
+    };
+  }
+}
+
+
+
+========== connectionData users (pattern: connectionData) ==========
+
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\analytics\sync\route.ts ---
+
+// apps/web/src/app/api/analytics/sync/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PostStatus, PlatformType } from '@prisma/client';
+import { getFacebookPostInsights } from '@/lib/publisher/facebook';
+import { getLinkedInPostInsights } from '@/lib/publisher/linkedin';
+
+export const dynamic = 'force-dynamic';
+
+interface SyncResult {
+  postId: string;
+  platform: string;
+  success: boolean;
+  metrics?: {
+    likes: number;
+    comments: number;
+    shares: number;
+    impressions: number;
+  };
+  error?: string;
+}
+
+/**
+ * POST /api/analytics/sync
+ * Sync analytics for published posts from Facebook and LinkedIn
+ * 
+ * Body (optional):
+ * - companyId: string (required)
+ * - postIds: string[] (optional - sync specific posts, otherwise sync all)
+ * - forceRefresh: boolean (optional - sync even if recently synced)
+ */
+export async function POST(request: NextRequest) {
+  console.log('[Analytics Sync] Starting sync...');
+
+  try {
+    const body = await request.json();
+    const { companyId, postIds, forceRefresh = false } = body;
+
+    if (!companyId) {
+      return NextResponse.json(
+        { error: 'companyId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Calculate the "recently synced" threshold (don't re-sync within 5 minutes unless forced)
+    const recentThreshold = new Date(Date.now() - 5 * 60 * 1000);
+
+    // Build query for posts to sync
+    const whereClause: {
+      companyId: string;
+      status: PostStatus;
+      externalPostId: { not: null };
+      id?: { in: string[] };
+      OR?: Array<{ lastSyncedAt: null } | { lastSyncedAt: { lt: Date } }>;
+    } = {
+      companyId,
+      status: PostStatus.PUBLISHED,
+      externalPostId: { not: null },
+    };
+
+    // If specific post IDs provided, filter to those
+    if (postIds && postIds.length > 0) {
+      whereClause.id = { in: postIds };
+    }
+
+    // Unless force refresh, only sync posts not recently synced
+    if (!forceRefresh) {
+      whereClause.OR = [
+        { lastSyncedAt: null },
+        { lastSyncedAt: { lt: recentThreshold } },
+      ];
+    }
+
+    // Get posts to sync
+    const postsToSync = await prisma.generatedPost.findMany({
+      where: whereClause,
+      include: {
+        platform: true,
+      },
+      orderBy: {
+        publishedAt: 'desc',
+      },
+      take: 50, // Limit to prevent timeout
+    });
+
+    console.log(`[Analytics Sync] Found ${postsToSync.length} posts to sync`);
+
+    if (postsToSync.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No posts to sync',
+        synced: 0,
+        failed: 0,
+        results: [],
+      });
+    }
+
+    // Get platform connection data for each unique platform
+    const platformIds = [...new Set(postsToSync.map(p => p.platformId))];
+    const platforms = await prisma.platform.findMany({
+      where: {
+        id: { in: platformIds },
+        isConnected: true,
+      },
+    });
+
+    const platformMap = new Map(platforms.map(p => [p.id, p]));
+
+    // Sync each post
+    const results: SyncResult[] = [];
+    let synced = 0;
+    let failed = 0;
+
+    for (const post of postsToSync) {
+      const platform = platformMap.get(post.platformId);
+
+      if (!platform || !platform.connectionData) {
+        console.warn(`[Analytics Sync] Platform not found or not connected for post ${post.id}`);
+        results.push({
+          postId: post.id,
+          platform: post.platform.type,
+          success: false,
+          error: 'Platform not connected',
+        });
+        failed++;
+        continue;
+      }
+
+      const connectionData = platform.connectionData as Record<string, unknown>;
+      const externalPostId = post.externalPostId!;
+
+      console.log(`[Analytics Sync] Syncing post ${post.id} (${post.platform.type}): ${externalPostId}`);
+
+      try {
+        let metrics: {
+          likes: number;
+          comments: number;
+          shares: number;
+          impressions: number;
+        } | undefined;
+
+        switch (post.platform.type) {
+          case PlatformType.FACEBOOK: {
+            const pageAccessToken = (connectionData.pageAccessToken || connectionData.accessToken) as string;
+
+            if (!pageAccessToken) {
+              throw new Error('Facebook access token not found');
+            }
+
+            const fbResult = await getFacebookPostInsights(pageAccessToken, externalPostId);
+
+            if (fbResult.success && fbResult.metrics) {
+              metrics = {
+                likes: fbResult.metrics.reactions || 0,
+                comments: fbResult.metrics.comments || 0,
+                shares: fbResult.metrics.shares || 0,
+                impressions: fbResult.metrics.impressions || 0,
+              };
+            } else {
+              throw new Error(fbResult.error || 'Failed to fetch Facebook insights');
+            }
+            break;
+          }
+
+          case PlatformType.LINKEDIN: {
+            const accessToken = connectionData.accessToken as string;
+            const isOrgPost = (connectionData.postingMode === 'organization');
+
+            if (!accessToken) {
+              throw new Error('LinkedIn access token not found');
+            }
+
+            const liResult = await getLinkedInPostInsights(accessToken, externalPostId, isOrgPost);
+
+            if (liResult.success && liResult.metrics) {
+              metrics = {
+                likes: liResult.metrics.likes || 0,
+                comments: liResult.metrics.comments || 0,
+                shares: liResult.metrics.shares || 0,
+                impressions: liResult.metrics.impressions || 0,
+              };
+            } else {
+              throw new Error(liResult.error || 'Failed to fetch LinkedIn insights');
+            }
+            break;
+          }
+
+          default:
+            throw new Error(`Unsupported platform: ${post.platform.type}`);
+        }
+
+        // Update the post with new metrics
+        if (metrics) {
+          await prisma.generatedPost.update({
+            where: { id: post.id },
+            data: {
+              likes: metrics.likes,
+              comments: metrics.comments,
+              shares: metrics.shares,
+              impressions: metrics.impressions,
+              lastSyncedAt: new Date(),
+            },
+          });
+
+          console.log(`[Analytics Sync] âœ… Updated post ${post.id}:`, metrics);
+
+          results.push({
+            postId: post.id,
+            platform: post.platform.type,
+            success: true,
+            metrics,
+          });
+          synced++;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Analytics Sync] âŒ Failed to sync post ${post.id}:`, errorMessage);
+
+        results.push({
+          postId: post.id,
+          platform: post.platform.type,
+          success: false,
+          error: errorMessage,
+        });
+        failed++;
+      }
+    }
+
+    console.log(`[Analytics Sync] Completed: ${synced} synced, ${failed} failed`);
+
+    return NextResponse.json({
+      success: true,
+      message: `Synced ${synced} posts, ${failed} failed`,
+      synced,
+      failed,
+      total: postsToSync.length,
+      results,
+    });
+  } catch (error) {
+    console.error('[Analytics Sync] Fatal error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to sync analytics',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/analytics/sync
+ * Get sync status for a company's posts
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const companyId = searchParams.get('companyId');
+
+  if (!companyId) {
+    return NextResponse.json(
+      { error: 'companyId is required' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Get counts of posts by sync status
+    const [totalPublished, withExternalId, recentlySynced, neverSynced] = await Promise.all([
+      // Total published posts
+      prisma.generatedPost.count({
+        where: {
+          companyId,
+          status: PostStatus.PUBLISHED,
+        },
+      }),
+      // Posts with external ID (can be synced)
+      prisma.generatedPost.count({
+        where: {
+          companyId,
+          status: PostStatus.PUBLISHED,
+          externalPostId: { not: null },
+        },
+      }),
+      // Recently synced (within last hour)
+      prisma.generatedPost.count({
+        where: {
+          companyId,
+          status: PostStatus.PUBLISHED,
+          externalPostId: { not: null },
+          lastSyncedAt: {
+            gte: new Date(Date.now() - 60 * 60 * 1000),
+          },
+        },
+      }),
+      // Never synced
+      prisma.generatedPost.count({
+        where: {
+          companyId,
+          status: PostStatus.PUBLISHED,
+          externalPostId: { not: null },
+          lastSyncedAt: null,
+        },
+      }),
+    ]);
+
+    // Get last sync time
+    const lastSyncedPost = await prisma.generatedPost.findFirst({
+      where: {
+        companyId,
+        lastSyncedAt: { not: null },
+      },
+      orderBy: {
+        lastSyncedAt: 'desc',
+      },
+      select: {
+        lastSyncedAt: true,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      status: {
+        totalPublished,
+        syncable: withExternalId,
+        recentlySynced,
+        pendingSync: withExternalId - recentlySynced,
+        neverSynced,
+        lastSyncedAt: lastSyncedPost?.lastSyncedAt || null,
+      },
+    });
+  } catch (error) {
+    console.error('[Analytics Sync] Status check failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to get sync status' },
+      { status: 500 }
+    );
+  }
+}
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\callback\route.ts ---
+
+// apps/web/src/app/api/auth/facebook/callback/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import {
+  decodeOAuthState,
+  exchangeFacebookCode,
+  getLongLivedToken,
+  getFacebookPages,
+} from '@/lib/oauth/facebook';
+
+function getAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  let baseUrl = envUrl;
+  if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+  return baseUrl || '';
+}
+
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl();
+  const state = request.nextUrl.searchParams.get('state');
+  let companyId: string | null = null;
+
+  if (state) {
+    try {
+      const stateData = decodeOAuthState(state);
+      companyId = stateData.companyId || null;
+    } catch { /* invalid state */ }
+  }
+
+  try {
+    const code = request.nextUrl.searchParams.get('code');
+    const error = request.nextUrl.searchParams.get('error');
+    const errorReason = request.nextUrl.searchParams.get('error_reason');
+
+    if (error) {
+      const msg = encodeURIComponent(errorReason || error);
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId || ''}/platforms?error=facebook_denied&message=${msg}`, request.url)
+      );
+    }
+
+    if (!code || !state) {
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId || ''}/platforms?error=facebook_missing_params`, request.url)
+      );
+    }
+
+    const stateData = decodeOAuthState(state);
+    const { redirectUri: stateRedirectUri } = stateData;
+    companyId = stateData.companyId;
+
+    if (!companyId) {
+      return NextResponse.redirect(new URL(`/companies?error=facebook_invalid_state`, request.url));
+    }
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) {
+      return NextResponse.redirect(new URL(`/companies?error=company_not_found`, request.url));
+    }
+
+    const shortToken = await exchangeFacebookCode(code, stateRedirectUri);
+    const longLived = await getLongLivedToken(shortToken.access_token);
+    const pages = await getFacebookPages(longLived.access_token);
+
+    if (pages.length === 0) {
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId}/platforms?error=no_facebook_pages`, request.url)
+      );
+    }
+
+    // Single page â€“ connect directly
+    if (pages.length === 1) {
+      const page = pages[0];
+
+      const connectionData = {
+        accessToken: page.access_token,
+        userAccessToken: longLived.access_token,
+        expiresAt: new Date(Date.now() + (longLived.expires_in || 5184000) * 1000).toISOString(),
+        scopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
+        pageId: page.id,
+        pageName: page.name,
+        pageCategory: page.category,
+        connectedAt: new Date().toISOString(),
+      };
+
+      const existing = await prisma.platform.findFirst({
+        where: { type: 'FACEBOOK', companyId },
+      });
+
+      if (existing) {
+        await prisma.platform.update({
+          where: { id: existing.id },
+          data: { username: page.name, isConnected: true, connectionData, lastSyncAt: new Date() },
+        });
+      } else {
+        await prisma.platform.create({
+          data: {
+            type: 'FACEBOOK',
+            name: 'Facebook',
+            username: page.name,
+            isConnected: true,
+            connectionData,
+            lastSyncAt: new Date(),
+            companyId,
+          },
+        });
+      }
+
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId}/platforms?connected=facebook`, request.url)
+      );
+    }
+
+    // Multiple pages â€“ create pending connection for page selector
+    const connectionData = {
+      userAccessToken: longLived.access_token,
+      expiresAt: new Date(Date.now() + (longLived.expires_in || 5184000) * 1000).toISOString(),
+      scopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
+      pendingPageSelection: true,
+      availablePages: pages.map((p) => ({ id: p.id, name: p.name, category: p.category })),
+      connectedAt: new Date().toISOString(),
+    };
+
+    const existing = await prisma.platform.findFirst({
+      where: { type: 'FACEBOOK', companyId },
+    });
+
+    let platformId: string;
+    if (existing) {
+      await prisma.platform.update({
+        where: { id: existing.id },
+        data: { username: 'Pending page selection', isConnected: false, connectionData, lastSyncAt: new Date() },
+      });
+      platformId = existing.id;
+    } else {
+      const newPlatform = await prisma.platform.create({
+        data: {
+          type: 'FACEBOOK',
+          name: 'Facebook',
+          username: 'Pending page selection',
+          isConnected: false,
+          connectionData,
+          lastSyncAt: new Date(),
+          companyId,
+        },
+      });
+      platformId = newPlatform.id;
+    }
+
+    return NextResponse.redirect(
+      new URL(`/companies/${companyId}/platforms?pending_facebook=${platformId}`, request.url)
+    );
+  } catch (error) {
+    console.error('Facebook callback failed:', error);
+    const msg = encodeURIComponent(error instanceof Error ? error.message : 'Facebook connection failed');
+    return NextResponse.redirect(
+      new URL(`/companies/${companyId || ''}/platforms?error=facebook_callback_failed&message=${msg}`, request.url)
+    );
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\pages\route.ts ---
+
+// apps/web/src/app/api/auth/facebook/pages/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getFacebookPages } from '@/lib/oauth/facebook';
+import type { Prisma } from '@prisma/client';
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Types
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+interface FacebookConnectionData {
+  accessToken?: string;
+  userAccessToken?: string;
+  expiresAt?: string | number | null;
+  scopes?: string[] | string | null;
+  pageId?: string;
+  pageName?: string;
+  pageCategory?: string;
+  connectedAt?: string;
+  pendingPageSelection?: boolean;
+  availablePages?: Array<{ id: string; name: string; category: string }>;
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// GET: Fetch available pages for a pending connection
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+export async function GET(request: NextRequest) {
+  try {
+    const connectionId = request.nextUrl.searchParams.get('connectionId');
+
+    if (!connectionId) {
+      return NextResponse.json(
+        { error: 'Connection ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const platform = await prisma.platform.findUnique({
+      where: { id: connectionId },
+    });
+
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'Connection not found' },
+        { status: 404 }
+      );
+    }
+
+    const connectionData = platform.connectionData as FacebookConnectionData | null;
+
+    if (!connectionData?.pendingPageSelection) {
+      return NextResponse.json(
+        { error: 'Connection is not pending page selection' },
+        { status: 400 }
+      );
+    }
+
+    const pages = connectionData.availablePages || [];
+
+    return NextResponse.json({ pages });
+  } catch (error) {
+    console.error('Failed to fetch Facebook pages:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch Facebook pages' },
+      { status: 500 }
+    );
+  }
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// POST: Select a page to complete the connection
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { connectionId, pageId } = body;
+
+    if (!connectionId || !pageId) {
+      return NextResponse.json(
+        { error: 'Connection ID and Page ID are required' },
+        { status: 400 }
+      );
+    }
+
+    const platform = await prisma.platform.findUnique({
+      where: { id: connectionId },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'Connection not found' },
+        { status: 404 }
+      );
+    }
+
+    const connectionData = platform.connectionData as FacebookConnectionData | null;
+
+    if (!connectionData?.pendingPageSelection) {
+      return NextResponse.json(
+        { error: 'Connection is not pending page selection' },
+        { status: 400 }
+      );
+    }
+
+    const userToken = connectionData.userAccessToken;
+
+    if (!userToken) {
+      return NextResponse.json(
+        { error: 'User token not found. Please reconnect Facebook.' },
+        { status: 400 }
+      );
+    }
+
+    // Fetch fresh page data with access tokens
+    const pages = await getFacebookPages(userToken);
+    const selectedPage = pages.find((p) => p.id === pageId);
+
+    if (!selectedPage) {
+      return NextResponse.json(
+        { error: 'Selected page not found. You may not have admin access to this page.' },
+        { status: 404 }
+      );
+    }
+
+    // Build connection data as Prisma-compatible JSON
+    const updatedConnectionData: Prisma.InputJsonValue = {
+      accessToken: selectedPage.access_token,
+      userAccessToken: userToken,
+      expiresAt: connectionData.expiresAt ?? null,
+      scopes: connectionData.scopes ?? null,
+      pageId: selectedPage.id,
+      pageName: selectedPage.name,
+      pageCategory: selectedPage.category,
+      connectedAt: new Date().toISOString(),
+      pendingPageSelection: false,
+    };
+
+    const updatedPlatform = await prisma.platform.update({
+      where: { id: connectionId },
+      data: {
+        username: selectedPage.name,
+        isConnected: true,
+        connectionData: updatedConnectionData,
+        lastSyncAt: new Date(),
+      },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Transform to match expected frontend format
+    const connection = {
+      id: updatedPlatform.id,
+      platform: updatedPlatform.type.toLowerCase(),
+      accountName: updatedPlatform.username || updatedPlatform.name,
+      status: 'connected',
+      companyId: updatedPlatform.companyId,
+      company: updatedPlatform.company,
+      lastSyncAt: updatedPlatform.lastSyncAt,
+      createdAt: updatedPlatform.createdAt,
+      updatedAt: updatedPlatform.updatedAt,
+    };
+
+    return NextResponse.json(connection);
+  } catch (error) {
+    console.error('Failed to select Facebook page:', error);
+    return NextResponse.json(
+      { error: 'Failed to connect Facebook page' },
+      { status: 500 }
+    );
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\linkedin\callback\route.ts ---
+
+// apps/web/src/app/api/auth/linkedin/callback/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import {
+  decodeOAuthState,
+  exchangeLinkedInCode,
+  getLinkedInProfile,
+  getLinkedInOrganizations,
+  encodeOrganizations,
+} from '@/lib/oauth/linkedin';
+
+/**
+ * Get the base app URL, normalized (no trailing slash)
+ */
+function getAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const productionUrl = 'https://atgihubrobosocial.vercel.app';
+  let baseUrl = envUrl || productionUrl;
+  if (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
+  return baseUrl;
+}
+
+/**
+ * Build redirect URL to company platforms page
+ */
+function buildRedirectUrl(appUrl: string, companyId: string | null, params: string): string {
+  if (companyId) {
+    return `${appUrl}/companies/${companyId}/platforms?${params}`;
+  }
+  // Fallback to companies list if no companyId
+  return `${appUrl}/companies?error=missing_company`;
+}
+
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl();
+
+  // Extract state early to get companyId for error redirects
+  const state = request.nextUrl.searchParams.get('state');
+  let companyId: string | null = null;
+
+  if (state) {
+    try {
+      const stateData = decodeOAuthState(state);
+      companyId = stateData.companyId || null;
+    } catch {
+      // State decode failed, companyId stays null
+    }
+  }
+
+  try {
+    const code = request.nextUrl.searchParams.get('code');
+    const error = request.nextUrl.searchParams.get('error');
+    const errorDescription = request.nextUrl.searchParams.get('error_description');
+
+    if (error) {
+      console.error('LinkedIn OAuth error:', error, errorDescription);
+      const msg = encodeURIComponent(errorDescription || error);
+      return NextResponse.redirect(
+        new URL(buildRedirectUrl(appUrl, companyId, `error=linkedin_denied&message=${msg}`))
+      );
+    }
+
+    if (!code || !state) {
+      return NextResponse.redirect(
+        new URL(buildRedirectUrl(appUrl, companyId, 'error=linkedin_missing_params'))
+      );
+    }
+
+    const stateData = decodeOAuthState(state);
+    companyId = stateData.companyId;
+
+    if (!companyId) {
+      return NextResponse.redirect(
+        new URL(`${appUrl}/companies?error=linkedin_invalid_state`)
+      );
+    }
+
+    // Verify company exists
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      return NextResponse.redirect(
+        new URL(`${appUrl}/companies?error=company_not_found`)
+      );
+    }
+
+    // Exchange code for tokens
+    const tokenData = await exchangeLinkedInCode(code);
+    const profile = await getLinkedInProfile(tokenData.access_token);
+
+    // Fetch organizations the user can post to
+    const organizations = await getLinkedInOrganizations(tokenData.access_token);
+
+    console.log('[LinkedIn Callback] Profile:', profile.name);
+    console.log('[LinkedIn Callback] Organizations found:', organizations.length);
+
+    // Base connection data (will be updated with selection)
+    const baseConnectionData = {
+      accessToken: tokenData.access_token,
+      expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+      scopes: tokenData.scope.split(' '),
+      linkedinSub: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      picture: profile.picture || null,
+      connectedAt: new Date().toISOString(),
+      postingMode: 'personal' as const,
+      organizationId: null as string | null,
+      organizationName: null as string | null,
+    };
+
+    // If user has organizations, redirect to selection page
+    if (organizations.length > 0) {
+      const orgsForStorage = organizations.map(org => ({
+        id: org.id,
+        name: org.name,
+        vanityName: org.vanityName || null,
+        logoUrl: org.logoUrl || null,
+      }));
+
+      const existing = await prisma.platform.findFirst({
+        where: {
+          type: 'LINKEDIN',
+          companyId,
+        },
+      });
+
+      const pendingData = {
+        ...baseConnectionData,
+        pendingSelection: true,
+        availableOrganizations: orgsForStorage,
+      };
+
+      if (existing) {
+        await prisma.platform.update({
+          where: { id: existing.id },
+          data: {
+            username: profile.name || profile.email || 'LinkedIn Account',
+            isConnected: false,
+            connectionData: pendingData,
+            lastSyncAt: new Date(),
+          },
+        });
+      } else {
+        await prisma.platform.create({
+          data: {
+            type: 'LINKEDIN',
+            name: 'LinkedIn',
+            username: profile.name || profile.email || 'LinkedIn Account',
+            isConnected: false,
+            connectionData: pendingData,
+            lastSyncAt: new Date(),
+            companyId,
+          },
+        });
+      }
+
+      // Redirect to company-specific selection page
+      const orgsEncoded = encodeOrganizations(organizations);
+      return NextResponse.redirect(
+        new URL(`${appUrl}/companies/${companyId}/platforms/linkedin/select?orgs=${orgsEncoded}`)
+      );
+    }
+
+    // No organizations - connect as personal profile directly
+    const accountName = profile.name || profile.email || 'LinkedIn Account';
+
+    const connectionData = {
+      ...baseConnectionData,
+      postingMode: 'personal' as const,
+    };
+
+    const existing = await prisma.platform.findFirst({
+      where: {
+        type: 'LINKEDIN',
+        companyId,
+      },
+    });
+
+    if (existing) {
+      await prisma.platform.update({
+        where: { id: existing.id },
+        data: {
+          username: accountName,
+          isConnected: true,
+          connectionData,
+          lastSyncAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.platform.create({
+        data: {
+          type: 'LINKEDIN',
+          name: 'LinkedIn',
+          username: accountName,
+          isConnected: true,
+          connectionData,
+          lastSyncAt: new Date(),
+          companyId,
+        },
+      });
+    }
+
+    return NextResponse.redirect(
+      new URL(buildRedirectUrl(appUrl, companyId, 'connected=linkedin'))
+    );
+  } catch (error) {
+    console.error('LinkedIn callback failed:', error);
+    const msg = encodeURIComponent(
+      error instanceof Error ? error.message : 'LinkedIn connection failed'
+    );
+    return NextResponse.redirect(
+      new URL(buildRedirectUrl(appUrl, companyId, `error=linkedin_callback_failed&message=${msg}`))
+    );
+  }
+}
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\linkedin\complete\route.ts ---
+
+// apps/web/src/app/api/auth/linkedin/complete/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { companyId, selection, organizationId, organizationName } = body;
+
+    if (!companyId || !selection) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Find the pending LinkedIn platform connection
+    const platform = await prisma.platform.findFirst({
+      where: {
+        type: 'LINKEDIN',
+        companyId,
+      },
+    });
+
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'LinkedIn connection not found. Please try connecting again.' },
+        { status: 404 }
+      );
+    }
+
+    const existingData = platform.connectionData as Record<string, unknown> | null;
+
+    if (!existingData || !existingData.pendingSelection) {
+      return NextResponse.json(
+        { error: 'No pending connection found. Please reconnect LinkedIn.' },
+        { status: 400 }
+      );
+    }
+
+    // Build the final connection data with explicit typing
+    const isOrganization = selection !== 'personal' && organizationId;
+
+    const connectionData: Record<string, string | string[] | boolean | null> = {
+      accessToken: String(existingData.accessToken || ''),
+      expiresAt: String(existingData.expiresAt || ''),
+      scopes: Array.isArray(existingData.scopes) 
+        ? existingData.scopes.map(s => String(s)) 
+        : [],
+      linkedinSub: String(existingData.linkedinSub || ''),
+      email: String(existingData.email || ''),
+      name: String(existingData.name || ''),
+      picture: existingData.picture ? String(existingData.picture) : null,
+      connectedAt: String(existingData.connectedAt || new Date().toISOString()),
+      // Selection-specific fields
+      postingMode: isOrganization ? 'organization' : 'personal',
+      organizationId: isOrganization ? String(organizationId) : null,
+      organizationName: isOrganization ? String(organizationName) : null,
+    };
+
+    // Determine display name
+    const displayName = isOrganization
+      ? String(organizationName || 'LinkedIn Page')
+      : String(existingData.name || 'LinkedIn Profile');
+
+    // Update the platform record
+    await prisma.platform.update({
+      where: { id: platform.id },
+      data: {
+        username: displayName,
+        isConnected: true,
+        connectionData,
+        lastSyncAt: new Date(),
+      },
+    });
+
+    console.log('[LinkedIn Complete] Connection finalized:', {
+      mode: isOrganization ? 'organization' : 'personal',
+      name: displayName,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[LinkedIn Complete] Error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to complete connection' },
+      { status: 500 }
+    );
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\check\route.ts ---
+
+// apps/web/src/app/api/debug/check/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PlatformType } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
+
+const LINKEDIN_API_URL = 'https://api.linkedin.com/v2';
+const FB_GRAPH_URL = 'https://graph.facebook.com/v18.0';
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const testApi = searchParams.get('testApi') === 'true';
+
+  try {
+    const posts = await prisma.generatedPost.findMany({
+      where: { status: 'PUBLISHED' },
+      include: { platform: true },
+      orderBy: { publishedAt: 'desc' },
+      take: 10,
+    });
+
+    const results = [];
+
+    for (const post of posts) {
+      const postInfo: Record<string, unknown> = {
+        id: post.id,
+        platform: post.platform?.type,
+        externalPostId: post.externalPostId || 'MISSING!',
+        externalPostUrl: post.externalPostUrl || 'MISSING!',
+        publishedAt: post.publishedAt,
+        likes: post.likes,
+        comments: post.comments,
+        shares: post.shares,
+        impressions: post.impressions,
+        lastSyncedAt: post.lastSyncedAt,
+      };
+
+      // Test API calls if requested and post has externalPostId
+      if (testApi && post.externalPostId) {
+        const connectionData = post.platform?.connectionData as Record<string, unknown> | null;
+
+        if (connectionData) {
+          // FACEBOOK TEST
+          if (post.platform?.type === PlatformType.FACEBOOK) {
+            const token = (connectionData.pageAccessToken || connectionData.accessToken) as string;
+            if (token) {
+              try {
+                const url = `${FB_GRAPH_URL}/${post.externalPostId}?fields=id,shares,comments.summary(true),reactions.summary(true)&access_token=${token}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                postInfo.apiTest = {
+                  status: response.status,
+                  ok: response.ok,
+                  data: data,
+                  extractedMetrics: response.ok ? {
+                    reactions: data.reactions?.summary?.total_count || 0,
+                    comments: data.comments?.summary?.total_count || 0,
+                    shares: data.shares?.count || 0,
+                  } : null,
+                };
+              } catch (e) {
+                postInfo.apiTest = { error: String(e) };
+              }
+            }
+          }
+
+          // LINKEDIN TEST
+          if (post.platform?.type === PlatformType.LINKEDIN) {
+            const token = connectionData.accessToken as string;
+            if (token) {
+              try {
+                const encodedUrn = encodeURIComponent(post.externalPostId);
+                
+                // Get likes count
+                const likesUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/likes?count=0`;
+                const likesRes = await fetch(likesUrl, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-Restli-Protocol-Version': '2.0.0',
+                  },
+                });
+                const likesData = await likesRes.json();
+
+                // Get comments count
+                const commentsUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/comments?count=0`;
+                const commentsRes = await fetch(commentsUrl, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-Restli-Protocol-Version': '2.0.0',
+                  },
+                });
+                const commentsData = await commentsRes.json();
+
+                postInfo.apiTest = {
+                  likesStatus: likesRes.status,
+                  likesTotal: likesData.paging?.total || 0,
+                  likesData: likesData,
+                  commentsStatus: commentsRes.status,
+                  commentsTotal: commentsData.paging?.total || 0,
+                  commentsData: commentsData,
+                };
+              } catch (e) {
+                postInfo.apiTest = { error: String(e) };
+              }
+            }
+          }
+        }
+      }
+
+      results.push(postInfo);
+    }
+
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      testApi,
+      count: posts.length,
+      withExternalId: posts.filter(p => p.externalPostId).length,
+      withoutExternalId: posts.filter(p => !p.externalPostId).length,
+      posts: results,
+      hint: testApi ? 'API test results included' : 'Add ?testApi=true to test actual API calls',
+    });
+  } catch (error) {
+    return NextResponse.json({ 
+      error: String(error),
+    }, { status: 500 });
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\diagnose\route.ts ---
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+export async function GET() {
+  const results: Record<string, any> = {
+    timestamp: new Date().toISOString(),
+    database: {},
+    platforms: {},
+    linkedin: {},
+    facebook: {},
+    diagnosis: [],
+    fixes: [],
+  };
+
+  try {
+    // 1. Get all companies
+    const companies = await prisma.company.findMany({
+      select: { id: true, name: true },
+    });
+    results.database.companies = companies;
+
+    // 2. Get all platforms WITH connectionData
+    const platforms = await prisma.platform.findMany({
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        isConnected: true,
+        connectionData: true,
+        companyId: true,
+      },
+    });
+
+    results.platforms.count = platforms.length;
+    results.platforms.list = platforms.map((p) => {
+      const cd = (p.connectionData || {}) as Record<string, any>;
+      const safe: Record<string, any> = {
+        id: p.id,
+        type: p.type,
+        name: p.name,
+        isConnected: p.isConnected,
+        companyId: p.companyId,
+        connectionDataKeys: Object.keys(cd),
+      };
+      // Show token lengths without exposing full tokens
+      for (const [k, v] of Object.entries(cd)) {
+        const s = String(v || "");
+        if (k.toLowerCase().includes("token") || k.toLowerCase().includes("secret")) {
+          safe[`cd_${k}`] = s.length > 8
+            ? `${s.slice(0, 6)}...${s.slice(-4)} (${s.length} chars)`
+            : s.length > 0 ? "[SHORT]" : "[EMPTY]";
+        } else {
+          safe[`cd_${k}`] = v;
+        }
+      }
+      return safe;
+    });
+
+    // 3. Get published posts
+    const posts = await prisma.generatedPost.findMany({
+      where: { externalPostId: { not: null } },
+      select: {
+        id: true, platform: { select: { type: true, connectionData: true } },
+        externalPostId: true, likes: true, comments: true,
+        shares: true, impressions: true, lastSyncedAt: true,
+      },
+      orderBy: { publishedAt: "desc" },
+    });
+    results.database.publishedPosts = posts.map((p) => ({
+      id: p.id,
+      platform: p.platform.type,
+      externalPostId: p.externalPostId,
+      metrics: { likes: p.likes, comments: p.comments, shares: p.shares, impressions: p.impressions },
+      lastSyncedAt: p.lastSyncedAt,
+    }));
+
+    // 4. LINKEDIN TESTS
+    const liPlatform = platforms.find((p) => p.type === "LINKEDIN" && p.isConnected);
+    if (liPlatform) {
+      const cd = (liPlatform.connectionData || {}) as Record<string, any>;
+      const token = cd.accessToken as string;
+      const postingMode = cd.postingMode || "personal";
+      const orgId = cd.organizationId || cd.companyId || null;
+
+      results.linkedin.platformId = liPlatform.id;
+      results.linkedin.postingMode = postingMode;
+      results.linkedin.organizationId = orgId;
+      results.linkedin.hasToken = !!token;
+      results.linkedin.tokenLength = token?.length || 0;
+
+      if (token) {
+        // Test token validity
+        try {
+          const r = await fetch("https://api.linkedin.com/v2/me", {
+            headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+          });
+          const d = await r.json();
+          results.linkedin.tokenStatus = r.status;
+          results.linkedin.tokenValid = r.status === 200;
+          results.linkedin.profile = r.status === 200
+            ? { id: d.id, firstName: d.localizedFirstName, lastName: d.localizedLastName }
+            : d;
+          if (r.status === 200) results.diagnosis.push("✅ LinkedIn token is VALID");
+          else results.diagnosis.push(`❌ LinkedIn token returned ${r.status}`);
+        } catch (e: any) {
+          results.linkedin.tokenError = e.message;
+          results.diagnosis.push("❌ LinkedIn token test failed: " + e.message);
+        }
+
+        // Test userinfo (to check scopes)
+        try {
+          const r = await fetch("https://api.linkedin.com/v2/userinfo", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          results.linkedin.userinfoStatus = r.status;
+          results.linkedin.userinfo = await r.json();
+        } catch (e: any) {
+          results.linkedin.userinfoError = e.message;
+        }
+
+        // Test each LinkedIn post
+        const liPosts = posts.filter((p) => p.platform.type === "LINKEDIN").slice(0, 2);
+        results.linkedin.postTests = [];
+
+        for (const post of liPosts) {
+          const urn = post.externalPostId!;
+          const enc = encodeURIComponent(urn);
+          const t: Record<string, any> = {
+            urn,
+            currentMetrics: { likes: post.likes, impressions: post.impressions },
+          };
+
+          // Test 1: socialActions (base)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.socialActions = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.socialActionsErr = e.message; }
+
+          // Test 2: likes with count=0 (what your code does)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/likes?count=0`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.likesCount0 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.likesCount0Err = e.message; }
+
+          // Test 3: likes with count=1 (alternative approach)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/likes?count=1`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.likesCount1 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.likesCount1Err = e.message; }
+
+          // Test 4: comments with count=0
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/socialActions/${enc}/comments?count=0`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.commentsCount0 = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.commentsCount0Err = e.message; }
+
+          // Test 5: ugcPosts endpoint (has socialDetail with counts)
+          try {
+            const r = await fetch(`https://api.linkedin.com/v2/ugcPosts/${enc}`, {
+              headers: { Authorization: `Bearer ${token}`, "X-Restli-Protocol-Version": "2.0.0" },
+            });
+            t.ugcPost = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.ugcPostErr = e.message; }
+
+          results.linkedin.postTests.push(t);
+        }
+
+        // Analysis
+        if (postingMode === "personal" || !postingMode) {
+          results.diagnosis.push("⚠️ LinkedIn posting mode is PERSONAL - impressions will ALWAYS be 0 (API limitation)");
+          results.fixes.push("LinkedIn impressions require a Company Page (organization posting mode)");
+        }
+      } else {
+        results.diagnosis.push("❌ LinkedIn platform found but NO accessToken in connectionData");
+      }
+    } else {
+      results.diagnosis.push("❌ No connected LinkedIn platform found");
+    }
+
+    // 5. FACEBOOK TESTS
+    const fbPlatform = platforms.find((p) => p.type === "FACEBOOK" && p.isConnected);
+    if (fbPlatform) {
+      const cd = (fbPlatform.connectionData || {}) as Record<string, any>;
+      const pageToken = (cd.pageAccessToken || cd.accessToken) as string;
+      const pageId = cd.pageId as string;
+
+      results.facebook.platformId = fbPlatform.id;
+      results.facebook.hasPageToken = !!pageToken;
+      results.facebook.tokenLength = pageToken?.length || 0;
+      results.facebook.pageId = pageId;
+      results.facebook.connectionDataKeys = Object.keys(cd);
+
+      if (pageToken) {
+        // Test token
+        try {
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${pageToken}`
+          );
+          const d = await r.json();
+          results.facebook.tokenStatus = r.status;
+          results.facebook.tokenValid = r.status === 200 && !d.error;
+          results.facebook.profile = d;
+          if (r.status === 200 && !d.error) {
+            results.diagnosis.push("✅ Facebook token is VALID");
+          } else {
+            results.diagnosis.push(`❌ Facebook token invalid: ${d.error?.message || r.status}`);
+          }
+        } catch (e: any) {
+          results.facebook.tokenError = e.message;
+          results.diagnosis.push("❌ Facebook token test failed: " + e.message);
+        }
+
+        // Debug token (shows permissions + expiry)
+        try {
+          const appToken = `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`;
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/debug_token?input_token=${pageToken}&access_token=${appToken}`
+          );
+          const d = await r.json();
+          if (d?.data) {
+            results.facebook.tokenDebug = {
+              type: d.data.type,
+              app_id: d.data.app_id,
+              is_valid: d.data.is_valid,
+              expires: d.data.expires_at
+                ? new Date(d.data.expires_at * 1000).toISOString()
+                : "never",
+              scopes: d.data.scopes,
+            };
+            if (d.data.scopes) {
+              const hasReadInsights = d.data.scopes.includes("read_insights");
+              const hasPagesReadEngagement = d.data.scopes.includes("pages_read_engagement");
+              results.diagnosis.push(
+                hasReadInsights
+                  ? "✅ Facebook has read_insights permission"
+                  : "❌ Facebook MISSING read_insights permission"
+              );
+              results.diagnosis.push(
+                hasPagesReadEngagement
+                  ? "✅ Facebook has pages_read_engagement permission"  
+                  : "❌ Facebook MISSING pages_read_engagement permission"
+              );
+            }
+            if (d.data.expires_at) {
+              const expiresDate = new Date(d.data.expires_at * 1000);
+              const isExpired = expiresDate < new Date();
+              results.diagnosis.push(
+                isExpired
+                  ? `❌ Facebook token EXPIRED on ${expiresDate.toISOString()}`
+                  : `✅ Facebook token expires ${expiresDate.toISOString()}`
+              );
+            }
+          } else {
+            results.facebook.tokenDebug = d;
+          }
+        } catch (e: any) {
+          results.facebook.debugError = e.message;
+        }
+
+        // Test Facebook posts
+        const fbPosts = posts.filter((p) => p.platform.type === "FACEBOOK");
+        results.facebook.postTests = [];
+
+        for (const post of fbPosts) {
+          const pid = post.externalPostId!;
+          const t: Record<string, any> = {
+            externalId: pid,
+            lastSyncedAt: post.lastSyncedAt,
+          };
+
+          // Test basic post data (works with most tokens)
+          try {
+            const r = await fetch(
+              `https://graph.facebook.com/v21.0/${pid}?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&access_token=${pageToken}`
+            );
+            t.postData = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.postDataErr = e.message; }
+
+          // Test insights (requires read_insights)
+          try {
+            const r = await fetch(
+              `https://graph.facebook.com/v21.0/${pid}/insights?metric=post_impressions,post_engaged_users,post_reactions_by_type_total&access_token=${pageToken}`
+            );
+            t.insights = { status: r.status, body: await r.json() };
+          } catch (e: any) { t.insightsErr = e.message; }
+
+          results.facebook.postTests.push(t);
+        }
+      } else {
+        results.diagnosis.push("❌ Facebook platform found but NO token in connectionData");
+        results.facebook.allConnectionData = Object.keys(cd);
+      }
+    } else {
+      results.diagnosis.push("❌ No connected Facebook platform found");
+    }
+
+    // 6. FINAL DIAGNOSIS
+    results.fixes.push(
+      "1. LinkedIn personal posts: impressions/shares are unavailable via API. Use Company Page for full metrics.",
+      "2. LinkedIn likes/comments: Check if socialActions endpoint returns data (see postTests above).",
+      "3. Facebook: Check token debug for permissions and expiry.",
+      "4. If Facebook insights return error, need read_insights + pages_read_engagement permissions."
+    );
+
+  } catch (e: any) {
+    results.criticalError = {
+      message: e.message,
+      stack: e.stack?.split("\n").slice(0, 5),
+    };
+  }
+
+  return NextResponse.json(results);
+}
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\debug\sync-test\route.ts ---
+
+// apps/web/src/app/api/debug/sync-test/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { PostStatus, PlatformType } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
+
+const LINKEDIN_API_URL = 'https://api.linkedin.com/v2';
+const FB_GRAPH_URL = 'https://graph.facebook.com/v18.0';
+
+export async function GET(request: NextRequest) {
+  const logs: string[] = [];
+  const log = (msg: string) => {
+    console.log(msg);
+    logs.push(`${new Date().toISOString().split('T')[1].split('.')[0]} - ${msg}`);
+  };
+
+  const results: Record<string, unknown> = {};
+
+  try {
+    log('=== SYNC TEST START ===');
+
+    // Get published posts with externalPostId
+    const posts = await prisma.generatedPost.findMany({
+      where: {
+        status: PostStatus.PUBLISHED,
+        externalPostId: { not: null },
+      },
+      include: { platform: true },
+      take: 5,
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    log(`Found ${posts.length} posts with externalPostId`);
+    results.postsFound = posts.length;
+
+    if (posts.length === 0) {
+      log('No posts to test!');
+      return NextResponse.json({ logs, results, error: 'No posts with externalPostId' });
+    }
+
+    // Test each post
+    for (const post of posts) {
+      const postResult: Record<string, unknown> = {
+        id: post.id,
+        platform: post.platform?.type,
+        externalPostId: post.externalPostId,
+      };
+
+      log(`\n--- Testing Post ${post.id} (${post.platform?.type}) ---`);
+      log(`External ID: ${post.externalPostId}`);
+
+      const connectionData = post.platform?.connectionData as Record<string, unknown> | null;
+
+      if (!connectionData) {
+        log('ERROR: No connection data');
+        postResult.error = 'No connection data';
+        results[post.id] = postResult;
+        continue;
+      }
+
+      // Test FACEBOOK
+      if (post.platform?.type === PlatformType.FACEBOOK) {
+        const pageAccessToken = (connectionData.pageAccessToken || connectionData.accessToken) as string;
+
+        log(`Token exists: ${!!pageAccessToken}, Length: ${pageAccessToken?.length || 0}`);
+        postResult.tokenExists = !!pageAccessToken;
+
+        if (pageAccessToken && post.externalPostId) {
+          // First, try to get basic post info
+          log('Fetching basic post info...');
+          try {
+            const basicUrl = `${FB_GRAPH_URL}/${post.externalPostId}?fields=id,message,created_time,shares,comments.summary(true),reactions.summary(true)&access_token=${pageAccessToken}`;
+            const basicResponse = await fetch(basicUrl);
+            const basicData = await basicResponse.json();
+
+            log(`Basic info status: ${basicResponse.status}`);
+            log(`Basic info response: ${JSON.stringify(basicData).substring(0, 500)}`);
+
+            postResult.basicInfo = {
+              status: basicResponse.status,
+              data: basicData,
+            };
+
+            // Extract metrics from basic info
+            if (basicResponse.ok) {
+              const shares = basicData.shares?.count || 0;
+              const comments = basicData.comments?.summary?.total_count || 0;
+              const reactions = basicData.reactions?.summary?.total_count || 0;
+
+              log(`Metrics from basic: reactions=${reactions}, comments=${comments}, shares=${shares}`);
+              postResult.extractedMetrics = { reactions, comments, shares };
+            }
+          } catch (e) {
+            log(`Basic info error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.basicInfoError = String(e);
+          }
+
+          // Try insights endpoint
+          log('Fetching insights...');
+          try {
+            const insightsUrl = `${FB_GRAPH_URL}/${post.externalPostId}/insights?metric=post_impressions,post_engaged_users&access_token=${pageAccessToken}`;
+            const insightsResponse = await fetch(insightsUrl);
+            const insightsData = await insightsResponse.json();
+
+            log(`Insights status: ${insightsResponse.status}`);
+            log(`Insights response: ${JSON.stringify(insightsData).substring(0, 500)}`);
+
+            postResult.insights = {
+              status: insightsResponse.status,
+              data: insightsData,
+            };
+          } catch (e) {
+            log(`Insights error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.insightsError = String(e);
+          }
+        }
+      }
+
+      // Test LINKEDIN
+      if (post.platform?.type === PlatformType.LINKEDIN) {
+        const accessToken = connectionData.accessToken as string;
+        const isOrgPost = connectionData.postingMode === 'organization';
+
+        log(`Token exists: ${!!accessToken}, Length: ${accessToken?.length || 0}`);
+        log(`Is org post: ${isOrgPost}`);
+        postResult.tokenExists = !!accessToken;
+        postResult.isOrgPost = isOrgPost;
+
+        if (accessToken && post.externalPostId) {
+          const postUrn = post.externalPostId;
+          const encodedUrn = encodeURIComponent(postUrn);
+
+          // Try socialActions for likes
+          log('Fetching LinkedIn likes...');
+          try {
+            const likesUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/likes?count=0`;
+            const likesResponse = await fetch(likesUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const likesData = await likesResponse.json();
+
+            log(`Likes status: ${likesResponse.status}`);
+            log(`Likes response: ${JSON.stringify(likesData).substring(0, 300)}`);
+
+            postResult.likes = {
+              status: likesResponse.status,
+              total: likesData.paging?.total || 0,
+              data: likesData,
+            };
+          } catch (e) {
+            log(`Likes error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.likesError = String(e);
+          }
+
+          // Try socialActions for comments
+          log('Fetching LinkedIn comments...');
+          try {
+            const commentsUrl = `${LINKEDIN_API_URL}/socialActions/${encodedUrn}/comments?count=0`;
+            const commentsResponse = await fetch(commentsUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const commentsData = await commentsResponse.json();
+
+            log(`Comments status: ${commentsResponse.status}`);
+            log(`Comments response: ${JSON.stringify(commentsData).substring(0, 300)}`);
+
+            postResult.comments = {
+              status: commentsResponse.status,
+              total: commentsData.paging?.total || 0,
+              data: commentsData,
+            };
+          } catch (e) {
+            log(`Comments error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.commentsError = String(e);
+          }
+
+          // Try to get post directly
+          log('Fetching LinkedIn post directly...');
+          try {
+            const postUrl = `${LINKEDIN_API_URL}/ugcPosts/${encodedUrn}`;
+            const postResponse = await fetch(postUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+              },
+            });
+            const postData = await postResponse.json();
+
+            log(`Post fetch status: ${postResponse.status}`);
+            log(`Post response: ${JSON.stringify(postData).substring(0, 300)}`);
+
+            postResult.postFetch = {
+              status: postResponse.status,
+              data: postData,
+            };
+          } catch (e) {
+            log(`Post fetch error: ${e instanceof Error ? e.message : String(e)}`);
+            postResult.postFetchError = String(e);
+          }
+        }
+      }
+
+      results[post.id] = postResult;
+    }
+
+    log('\n=== SYNC TEST END ===');
+
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      logs,
+      results,
+    });
+  } catch (error) {
+    log(`FATAL ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      logs,
+      results,
+    }, { status: 500 });
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\generate\reconstruct\route.ts ---
+
+// apps/web/src/app/api/intelligence/reconstruct/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { analysePlatformPosts, type PlatformPost } from "@/lib/ai/analyze-posts";
+
+const CRON_SECRET = process.env.CRON_SECRET ?? "";
+
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const companyId = request.nextUrl.searchParams.get("companyId");
+  if (!companyId) {
+    return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+  }
+
+  try {
+    const platforms = await prisma.platform.findMany({
+      where: { companyId, isConnected: true },
+      include: { company: true },
+    });
+
+    const allPosts: PlatformPost[] = [];
+
+    for (const platform of platforms) {
+      const data = platform.connectionData as Record<string, any> | null;
+      if (!data) continue;
+
+      if (platform.type === "FACEBOOK") {
+        const pageId = data.pageId;
+        const accessToken = data.accessToken || data.userAccessToken;
+        if (pageId && accessToken) {
+          const posts = await fetchFacebookPosts(pageId, accessToken);
+          allPosts.push(...posts);
+        }
+      } else if (platform.type === "LINKEDIN") {
+        const accessToken = data.accessToken;
+        if (accessToken) {
+          const isOrg = data.postingMode === "organization";
+          const author = isOrg ? `urn:li:organization:${data.organizationId}` : `urn:li:person:${data.linkedinSub}`;
+          if (author) {
+            const posts = await fetchLinkedInPosts(accessToken, author);
+            allPosts.push(...posts);
+          }
+        }
+      }
+    }
+
+    if (allPosts.length === 0) {
+      return NextResponse.json({ success: false, error: "No posts fetched from connected platforms" }, { status: 404 });
+    }
+
+    const insights = await analysePlatformPosts(allPosts);
+
+    // Update CompanyIntelligence with learned fields
+    const existing = await prisma.companyIntelligence.findUnique({
+      where: { companyId },
+    });
+
+    const dataToUpdate = {
+      learnedBestDays: insights.bestDays,
+      learnedBestTimes: insights.bestTimes as any,
+      learnedBestPillars: insights.topContentTypes as any,
+      topPerformingTopics: insights.bestTopics as any,
+      topPerformingTypes: insights.topContentTypes as any,
+      avgEngagementRate: insights.avgEngagementRate,
+      lastIntelligenceUpdate: new Date(),
+    };
+
+    if (existing) {
+      await prisma.companyIntelligence.update({
+        where: { companyId },
+        data: dataToUpdate,
+      });
+    } else {
+      await prisma.companyIntelligence.create({
+        data: {
+          companyId,
+          ...dataToUpdate,
+        },
+      });
+    }
+
+    return NextResponse.json({ success: true, insights, postsAnalysed: allPosts.length });
+  } catch (error) {
+    console.error("[Intelligence Reconstruct] Error:", error);
+    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+  }
+}
+
+async function fetchFacebookPosts(pageId: string, accessToken: string): Promise<PlatformPost[]> {
+  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares,insights.metric(post_impressions)&access_token=${accessToken}&limit=30`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  const posts = data.data || [];
+  return posts
+    .filter((p: any) => p.message)
+    .map((p: any) => ({
+      id: p.id,
+      text: p.message || "",
+      createdAt: p.created_time,
+      likes: p.likes?.summary?.total_count || 0,
+      comments: p.comments?.summary?.total_count || 0,
+      shares: p.shares?.count || 0,
+      impressions: p.insights?.data?.[0]?.values?.[0]?.value || 0,
+    }));
+}
+
+async function fetchLinkedInPosts(accessToken: string, author: string): Promise<PlatformPost[]> {
+  const encodedAuthor = encodeURIComponent(author);
+  const url = `https://api.linkedin.com/v2/posts?q=author&author=${encodedAuthor}&count=30`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}`, "X-Restli-Protocol-Version": "2.0.0" },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const elements = data.elements || [];
+  return elements
+    .filter((p: any) => p.commentary)
+    .map((p: any) => ({
+      id: p.id,
+      text: p.commentary || "",
+      createdAt: p.created?.time || new Date().toISOString(),
+      likes: p.socialDetail?.totalSocialActivityCounts?.numLikes || 0,
+      comments: p.socialDetail?.totalSocialActivityCounts?.numComments || 0,
+      shares: p.socialDetail?.totalSocialActivityCounts?.numShares || 0,
+      impressions: p.socialDetail?.totalSocialActivityCounts?.numImpressions || 0,
+    }));
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\verify\route.ts ---
+
+// apps/web/src/app/api/platforms/verify/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { verifyFacebookToken } from "@/lib/publisher/facebook";
+import { verifyLinkedInToken } from "@/lib/publisher/linkedin";
+import { PlatformType } from "@prisma/client";
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "companyId query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const platforms = await prisma.platform.findMany({
+      where: { companyId, isConnected: true },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        connectionData: true,
+        updatedAt: true,
+      },
+    });
+
+    if (platforms.length === 0) {
+      return NextResponse.json({
+        companyId,
+        platforms: [],
+        message: "No connected platforms found",
+      });
+    }
+
+    const results = [];
+
+    for (const platform of platforms) {
+      const connectionData = (platform.connectionData || {}) as Record<string, unknown>;
+      let tokenValid = false;
+      let errorMessage: string | null = null;
+      let accountName: string | null = null;
+
+      if (platform.type === PlatformType.FACEBOOK) {
+        const pageAccessToken = (connectionData.pageAccessToken ||
+          connectionData.accessToken) as string | undefined;
+        const pageId = connectionData.pageId as string | undefined;
+
+        if (!pageAccessToken || !pageId) {
+          errorMessage = "Missing access token or page ID";
+        } else {
+          const verification = await verifyFacebookToken(pageAccessToken);
+          tokenValid = verification.valid;
+          if (!verification.valid) {
+            errorMessage = verification.error || "Token invalid";
+          } else if (verification.pageInfo) {
+            accountName = verification.pageInfo.name;
+          }
+        }
+      } else if (platform.type === PlatformType.LINKEDIN) {
+        const accessToken = connectionData.accessToken as string | undefined;
+        if (!accessToken) {
+          errorMessage = "Missing access token";
+        } else {
+          const verification = await verifyLinkedInToken(accessToken);
+          tokenValid = verification.valid;
+          if (!verification.valid) {
+            errorMessage = verification.error || "Token invalid";
+          } else if (verification.profile) {
+            accountName = verification.profile.name;
+          }
+        }
+      } else {
+        // Other platforms not yet implemented for verification
+        errorMessage = "Verification not implemented for this platform type";
+      }
+
+      results.push({
+        id: platform.id,
+        type: platform.type,
+        name: platform.name,
+        tokenValid,
+        accountName,
+        error: errorMessage,
+        lastUpdated: platform.updatedAt,
+      });
+    }
+
+    return NextResponse.json({
+      companyId,
+      platforms: results,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to verify platform tokens:", error);
+    return NextResponse.json(
+      { error: "Failed to verify platform tokens" },
+      { status: 500 }
+    );
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\platforms\route.ts ---
+
+// apps/web/src/app/api/platforms/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { PLATFORMS } from "@/lib/platforms";
+import { canAddPlatform } from "@/lib/access";
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get("companyId");
+
+    // If a specific company is requested, verify membership
+    if (companyId) {
+      const hasAccess =
+        user.role === "ADMIN" ||
+        user.memberships.some((m) => m.companyId === companyId);
+      if (!hasAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    const where: Record<string, unknown> = companyId
+      ? { companyId }
+      : user.role === "ADMIN"
+      ? {}
+      : { companyId: { in: user.memberships.map((m) => m.companyId) } };
+
+    const platforms = await prisma.platform.findMany({
+      where,
+      orderBy: { type: "asc" },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const connections = platforms.map((p) => {
+      const connectionData = p.connectionData as Record<string, unknown> | null;
+      return {
+        id: p.id,
+        platform: p.type.toLowerCase(),
+        accountName: p.username || p.name,
+        status: p.isConnected ? "connected" : "disconnected",
+        companyId: p.companyId,
+        company: p.company,
+        lastSyncAt: p.lastSyncAt,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        scopes: (connectionData?.scopes as string[]) || [],
+        expiresAt: connectionData?.expiresAt || null,
+      };
+    });
+
+    return NextResponse.json(connections);
+  } catch (error) {
+    console.error("Failed to fetch platform connections:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch platform connections" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { memberships: { select: { companyId: true } } },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { platform, accountName, companyId } = body;
+
+    if (!platform || !platform.trim()) {
+      return NextResponse.json(
+        { error: "Platform is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!accountName || !accountName.trim()) {
+      return NextResponse.json(
+        { error: "Account name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!companyId || !companyId.trim()) {
+      return NextResponse.json(
+        { error: "Company is required" },
+        { status: 400 }
+      );
+    }
+
+    // Membership check — replaces the old TEMP_USER_ID comparison.
+    const hasAccess =
+      user.role === "ADMIN" ||
+      user.memberships.some((m) => m.companyId === companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const platformConfig = PLATFORMS[platform];
+    if (!platformConfig) {
+      return NextResponse.json(
+        { error: `Unknown platform: ${platform}` },
+        { status: 400 }
+      );
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    }
+
+    // Enforce the license's maxPlatformsPerCompany cap.
+    const capCheck = await canAddPlatform(companyId);
+    if (!capCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: capCheck.reason || "Platform limit reached",
+          used: capCheck.used,
+          limit: capCheck.limit,
+        },
+        { status: 403 }
+      );
+    }
+
+    const platformType = platform.toUpperCase() as
+      | "LINKEDIN"
+      | "FACEBOOK"
+      | "TWITTER"
+      | "INSTAGRAM"
+      | "WORDPRESS";
+
+    const existing = await prisma.platform.findFirst({
+      where: { type: platformType, companyId },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `${platformConfig.name} is already connected to this company` },
+        { status: 409 }
+      );
+    }
+
+    const connectionData = {
+      connectedVia: "manual",
+      connectedAt: new Date().toISOString(),
+      scopes: platformConfig.defaultScopes || [],
+    };
+
+    const newPlatform = await prisma.platform.create({
+      data: {
+        type: platformType,
+        name: platformConfig.name,
+        username: accountName.trim(),
+        isConnected: true,
+        connectionData,
+        lastSyncAt: new Date(),
+        companyId,
+      },
+      include: {
+        company: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const connection = {
+      id: newPlatform.id,
+      platform: newPlatform.type.toLowerCase(),
+      accountName: newPlatform.username || newPlatform.name,
+      status: newPlatform.isConnected ? "connected" : "disconnected",
+      companyId: newPlatform.companyId,
+      company: newPlatform.company,
+      lastSyncAt: newPlatform.lastSyncAt,
+      createdAt: newPlatform.createdAt,
+      updatedAt: newPlatform.updatedAt,
+      scopes: (connectionData?.scopes as string[]) || [],
+      expiresAt: null,
+    };
+
+    return NextResponse.json(connection, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create platform connection:", error);
+    return NextResponse.json(
+      { error: "Failed to create platform connection" },
+      { status: 500 }
+    );
+  }
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\posts\[id]\publish\route.ts ---
+
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\publisher\index.ts ---
+
+// apps/web/src/lib/publisher/index.ts
+
+import { prisma } from '@/lib/prisma';
+import { createLinkedInPost, verifyLinkedInToken } from './linkedin';
+import { createFacebookPost, verifyFacebookToken } from './facebook';
+
+// ============================================
+// TYPES
+// ============================================
+
+export interface PublishResult {
+  success: boolean;
+  postId?: string;
+  postUrl?: string;
+  error?: string;
+  platform: string;
+}
+
+export interface PublishOptions {
+  postId: string;
+  dryRun?: boolean;
+}
+
+// ============================================
+// MAIN PUBLISH FUNCTION
+// ============================================
+
+/**
+ * Publish a GeneratedPost to its connected platform
+ */
+export async function publishPost(options: PublishOptions): Promise<PublishResult> {
+  const { postId, dryRun = false } = options;
+
+  // Fetch the post with platform and company info
+  const post = await prisma.generatedPost.findUnique({
+    where: { id: postId },
+    include: {
+      platform: true,
+      company: true,
+      postMedia: {
+        include: {
+          media: true,
+        },
+        orderBy: {
+          order: 'asc',
+        },
+      },
+    },
+  });
+
+  if (!post) {
+    return {
+      success: false,
+      error: 'Post not found',
+      platform: 'unknown',
+    };
+  }
+
+  if (post.status === 'PUBLISHED') {
+    return {
+      success: false,
+      error: 'Post is already published',
+      platform: post.platform.type.toLowerCase(),
+    };
+  }
+
+  const platform = post.platform;
+  const connectionData = platform.connectionData as Record<string, unknown> | null;
+
+  if (!platform.isConnected || !connectionData) {
+    return {
+      success: false,
+      error: `${platform.type} is not connected. Please reconnect the platform.`,
+      platform: platform.type.toLowerCase(),
+    };
+  }
+
+  // Build the content with hashtags
+  let content = post.content;
+  if (post.hashtags && post.hashtags.length > 0) {
+    content += '\n\n' + post.hashtags.map(tag => 
+      tag.startsWith('#') ? tag : `#${tag}`
+    ).join(' ');
+  }
+
+  // Extract media URLs from postMedia relation
+  const mediaUrls = post.postMedia
+    .map(pm => pm.media?.url)
+    .filter((url): url is string => !!url && url.trim().length > 0);
+
+  console.log('[Publisher] Post media URLs:', mediaUrls);
+
+  // Dry run - just validate without publishing
+  if (dryRun) {
+    return {
+      success: true,
+      platform: platform.type.toLowerCase(),
+      postId: 'dry-run',
+      postUrl: 'https://example.com/dry-run',
+    };
+  }
+
+  // Update post status to PUBLISHING
+  await prisma.generatedPost.update({
+    where: { id: postId },
+    data: {
+      status: 'PUBLISHING',
+    },
+  });
+
+  let result: PublishResult;
+
+  try {
+    switch (platform.type) {
+      case 'LINKEDIN':
+        result = await publishToLinkedIn(content, connectionData, mediaUrls);
+        break;
+
+      case 'FACEBOOK':
+        result = await publishToFacebook(content, connectionData, mediaUrls);
+        break;
+
+      default:
+        result = {
+          success: false,
+          error: `Publishing to ${platform.type} is not yet supported`,
+          platform: platform.type.toLowerCase(),
+        };
+    }
+
+    // Update post based on result
+    if (result.success) {
+      await prisma.generatedPost.update({
+        where: { id: postId },
+        data: {
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.generatedPost.update({
+        where: { id: postId },
+        data: {
+          status: 'FAILED',
+        },
+      });
+    }
+
+    return result;
+  } catch (error) {
+    // Handle unexpected errors
+    await prisma.generatedPost.update({
+      where: { id: postId },
+      data: {
+        status: 'FAILED',
+      },
+    });
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
+      platform: platform.type.toLowerCase(),
+    };
+  }
+}
+
+// ============================================
+// PLATFORM-SPECIFIC PUBLISHERS
+// ============================================
+
+async function publishToLinkedIn(
+  content: string,
+  connectionData: Record<string, unknown>,
+  mediaUrls: string[] = []
+): Promise<PublishResult> {
+  const accessToken = connectionData.accessToken as string;
+  const linkedinSub = connectionData.linkedinSub as string;
+  const postingMode = (connectionData.postingMode as 'personal' | 'organization') || 'personal';
+  const organizationId = connectionData.organizationId as string | null;
+
+  if (!accessToken || !linkedinSub) {
+    return {
+      success: false,
+      error: 'LinkedIn credentials not found. Please reconnect your account.',
+      platform: 'linkedin',
+    };
+  }
+
+  // Verify token is still valid
+  const tokenCheck = await verifyLinkedInToken(accessToken);
+  if (!tokenCheck.valid) {
+    return {
+      success: false,
+      error: `LinkedIn token invalid: ${tokenCheck.error}. Please reconnect your account.`,
+      platform: 'linkedin',
+    };
+  }
+
+  console.log('[LinkedIn Publisher] Publishing with mode:', postingMode, 'organizationId:', organizationId);
+
+  // Create the post with organization support
+  const result = await createLinkedInPost({
+    accessToken,
+    authorId: linkedinSub,
+    content,
+    mediaUrls,
+    postingMode,
+    organizationId,
+  });
+
+  return {
+    ...result,
+    platform: 'linkedin',
+  };
+}
+
+async function publishToFacebook(
+  content: string,
+  connectionData: Record<string, unknown>,
+  mediaUrls: string[] = []
+): Promise<PublishResult> {
+  const pageAccessToken = connectionData.accessToken as string;
+  const pageId = connectionData.pageId as string;
+
+  if (!pageAccessToken || !pageId) {
+    return {
+      success: false,
+      error: 'Facebook Page credentials not found. Please reconnect your account.',
+      platform: 'facebook',
+    };
+  }
+
+  // Verify token is still valid
+  const tokenCheck = await verifyFacebookToken(pageAccessToken);
+  if (!tokenCheck.valid) {
+    return {
+      success: false,
+      error: `Facebook token invalid: ${tokenCheck.error}. Please reconnect your account.`,
+      platform: 'facebook',
+    };
+  }
+
+  console.log('[Facebook Publisher] Publishing with', mediaUrls.length, 'media items');
+
+  // Create the post WITH media URLs
+  const result = await createFacebookPost({
+    pageAccessToken,
+    pageId,
+    content,
+    mediaUrls,
+  });
+
+  return {
+    ...result,
+    platform: 'facebook',
+  };
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Check if a platform connection is valid and ready to publish
+ */
+export async function validatePlatformConnection(platformId: string): Promise<{
+  valid: boolean;
+  error?: string;
+  platform?: string;
+}> {
+  const platform = await prisma.platform.findUnique({
+    where: { id: platformId },
+  });
+
+  if (!platform) {
+    return { valid: false, error: 'Platform not found' };
+  }
+
+  if (!platform.isConnected) {
+    return {
+      valid: false,
+      error: `${platform.type} is disconnected`,
+      platform: platform.type.toLowerCase(),
+    };
+  }
+
+  const connectionData = platform.connectionData as Record<string, unknown> | null;
+
+  if (!connectionData) {
+    return {
+      valid: false,
+      error: `${platform.type} connection data missing`,
+      platform: platform.type.toLowerCase(),
+    };
+  }
+
+  // Check token expiration if available
+  const expiresAt = connectionData.expiresAt as string | undefined;
+  if (expiresAt) {
+    const expirationDate = new Date(expiresAt);
+    if (expirationDate < new Date()) {
+      return {
+        valid: false,
+        error: `${platform.type} token has expired. Please reconnect.`,
+        platform: platform.type.toLowerCase(),
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    platform: platform.type.toLowerCase(),
+  };
+}
+
+/**
+ * Bulk publish multiple posts
+ */
+export async function publishMultiplePosts(postIds: string[]): Promise<{
+  results: PublishResult[];
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+}> {
+  const results: PublishResult[] = [];
+
+  for (const postId of postIds) {
+    const result = await publishPost({ postId });
+    results.push(result);
+
+    // Small delay between posts to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  return {
+    results,
+    summary: {
+      total: results.length,
+      succeeded: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+    },
+  };
+}
+
+--- C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\scheduler\index.ts ---
+
+// apps/web/src/lib/scheduler/index.ts
+
+import { prisma } from '@/lib/db';
+import { createLinkedInPost, verifyLinkedInToken } from '@/lib/publisher/linkedin';
+import { createFacebookPost, verifyFacebookToken } from '@/lib/publisher/facebook';
+import { PostStatus, PlatformType } from '@prisma/client';
+
+export interface SchedulerResult {
+  processed: number;
+  published: number;
+  failed: number;
+  errors: Array<{ postId: string; error: string }>;
+  tokenStatus?: Array<{
+    platformId: string;
+    type: PlatformType;
+    valid: boolean;
+    error?: string;
+  }>;
+  debug?: {
+    queryTime: string;
+    postsFound: number;
+    query: object;
+  };
+}
+
+/**
+ * Process all posts that are scheduled and due for publishing
+ */
+export async function processScheduledPosts(): Promise<SchedulerResult> {
+  const result: SchedulerResult = {
+    processed: 0,
+    published: 0,
+    failed: 0,
+    errors: [],
+    tokenStatus: [],
+  };
+
+  const now = new Date();
+
+  console.log(`[Scheduler] Starting scheduled post processing at ${now.toISOString()}`);
+  console.log(`[Scheduler] PostStatus.SCHEDULED value: "${PostStatus.SCHEDULED}"`);
+
+  try {
+    const whereClause = {
+      status: PostStatus.SCHEDULED,
+      scheduledFor: {
+        lte: now,
+      },
+    };
+
+    console.log(`[Scheduler] Query where clause:`, JSON.stringify(whereClause, null, 2));
+
+    const countAll = await prisma.generatedPost.count({
+      where: { status: PostStatus.SCHEDULED },
+    });
+    console.log(`[Scheduler] Total SCHEDULED posts (any time): ${countAll}`);
+
+    const countDue = await prisma.generatedPost.count({
+      where: whereClause,
+    });
+    console.log(`[Scheduler] SCHEDULED posts due now: ${countDue}`);
+
+    const duePosts = await prisma.generatedPost.findMany({
+      where: whereClause,
+      include: {
+        platform: true,
+        company: true,
+        postMedia: {
+          include: {
+            media: true,
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+      take: 10,
+      orderBy: {
+        scheduledFor: 'asc',
+      },
+    });
+
+    console.log(`[Scheduler] Found ${duePosts.length} posts due for publishing`);
+
+    result.debug = {
+      queryTime: now.toISOString(),
+      postsFound: duePosts.length,
+      query: whereClause,
+    };
+
+    // Pre-verify platform tokens for all platforms involved in due posts
+    const platformIds = [...new Set(duePosts.map((p) => p.platform.id))];
+    const tokenMap = new Map<string, { valid: boolean; error?: string }>();
+
+    for (const platformId of platformIds) {
+      const platform = duePosts.find((p) => p.platform.id === platformId)?.platform;
+      if (!platform) continue;
+
+      const connectionData = (platform.connectionData || {}) as Record<string, unknown>;
+      let valid = false;
+      let error: string | undefined;
+
+      if (platform.type === PlatformType.FACEBOOK) {
+        const pageAccessToken = (connectionData.pageAccessToken ||
+          connectionData.accessToken) as string | undefined;
+        if (!pageAccessToken) {
+          error = 'Missing Facebook access token';
+        } else {
+          const verification = await verifyFacebookToken(pageAccessToken);
+          valid = verification.valid;
+          if (!valid) error = verification.error || 'Facebook token invalid';
+        }
+      } else if (platform.type === PlatformType.LINKEDIN) {
+        const accessToken = connectionData.accessToken as string | undefined;
+        if (!accessToken) {
+          error = 'Missing LinkedIn access token';
+        } else {
+          const verification = await verifyLinkedInToken(accessToken);
+          valid = verification.valid;
+          if (!valid) error = verification.error || 'LinkedIn token invalid';
+        }
+      } else {
+        error = 'Token verification not implemented';
+      }
+
+      tokenMap.set(platformId, { valid, error });
+      result.tokenStatus?.push({
+        platformId,
+        type: platform.type,
+        valid,
+        error,
+      });
+    }
+
+    for (const post of duePosts) {
+      result.processed++;
+
+      try {
+        // Token check
+        const tokenCheck = tokenMap.get(post.platform.id);
+        if (tokenCheck && !tokenCheck.valid) {
+          throw new Error(
+            `Platform token invalid for ${post.platform.type}: ${tokenCheck.error || 'unknown'}`
+          );
+        }
+
+        // Mark as PUBLISHING to prevent duplicate processing
+        await prisma.generatedPost.update({
+          where: { id: post.id },
+          data: { status: PostStatus.PUBLISHING },
+        });
+
+        console.log(`[Scheduler] Publishing post ${post.id} to ${post.platform.type}`);
+        console.log(`[Scheduler] Post has ${post.postMedia?.length || 0} media attachments`);
+
+        const mediaUrls = post.postMedia?.map((pm) => pm.media.url) || [];
+
+        if (!post.platform.isConnected || !post.platform.connectionData) {
+          throw new Error(`Platform ${post.platform.type} is not connected`);
+        }
+
+        const connectionData = post.platform.connectionData as Record<string, unknown>;
+
+        let publishResult: { success: boolean; postId?: string; postUrl?: string; error?: string };
+
+        switch (post.platform.type) {
+          case PlatformType.LINKEDIN:
+            {
+              const linkedinSub = connectionData.linkedinSub as string | undefined;
+              const linkedinAccessToken = connectionData.accessToken as string | undefined;
+              if (!linkedinSub || !linkedinAccessToken) {
+                throw new Error('LinkedIn connection data missing. Please reconnect.');
+              }
+              publishResult = await createLinkedInPost({
+                content: post.content,
+                mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+                accessToken: linkedinAccessToken,
+                authorId: linkedinSub,
+                postingMode: (connectionData.postingMode as 'personal' | 'organization') || 'personal',
+                organizationId: connectionData.organizationId as string | null | undefined,
+              });
+            }
+            break;
+
+          case PlatformType.FACEBOOK:
+            {
+              const pageAccessToken = (connectionData.pageAccessToken ||
+                connectionData.accessToken) as string | undefined;
+              const pageId = connectionData.pageId as string | undefined;
+              if (!pageAccessToken || !pageId) {
+                throw new Error('Facebook connection data missing. Please reconnect.');
+              }
+              publishResult = await createFacebookPost({
+                content: post.content,
+                mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+                pageAccessToken: pageAccessToken,
+                pageId: pageId,
+              });
+            }
+            break;
+
+          default:
+            throw new Error(`Unsupported platform: ${post.platform.type}`);
+        }
+
+        if (publishResult.success) {
+          await prisma.generatedPost.update({
+            where: { id: post.id },
+            data: {
+              status: PostStatus.PUBLISHED,
+              publishedAt: new Date(),
+              externalPostId: publishResult.postId || null,
+              externalPostUrl: publishResult.postUrl || null,
+            },
+          });
+
+          console.log(`[Scheduler] ✅ Successfully published post ${post.id}`);
+          result.published++;
+        } else {
+          throw new Error(publishResult.error || 'Unknown publishing error');
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[Scheduler] ❌ Failed to publish post ${post.id}:`, errorMessage);
+
+        await prisma.generatedPost.update({
+          where: { id: post.id },
+          data: { status: PostStatus.FAILED },
+        });
+
+        result.failed++;
+        result.errors.push({
+          postId: post.id,
+          error: errorMessage,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[Scheduler] Fatal error:', error);
+    throw error;
+  }
+
+  console.log(
+    `[Scheduler] Completed: ${result.processed} processed, ${result.published} published, ${result.failed} failed`
+  );
+
+  return result;
+}
+
+/**
+ * Get upcoming scheduled posts for a company
+ */
+export async function getUpcomingScheduledPosts(companyId: string, limit = 10) {
+  return prisma.generatedPost.findMany({
+    where: {
+      companyId,
+      status: PostStatus.SCHEDULED,
+      scheduledFor: {
+        gte: new Date(),
+      },
+    },
+    include: {
+      platform: true,
+      postMedia: {
+        include: {
+          media: true,
+        },
+      },
+    },
+    orderBy: {
+      scheduledFor: 'asc',
+    },
+    take: limit,
+  });
+}
+
+/**
+ * Get failed posts for retry
+ */
+export async function getFailedPosts(companyId: string, limit = 10) {
+  return prisma.generatedPost.findMany({
+    where: {
+      companyId,
+      status: PostStatus.FAILED,
+    },
+    include: {
+      platform: true,
+      postMedia: {
+        include: {
+          media: true,
+        },
+      },
+    },
+    orderBy: {
+      updatedAt: 'desc',
+    },
+    take: limit,
+  });
+}
+
+/**
+ * Retry a failed post
+ */
+export async function retryFailedPost(postId: string): Promise<boolean> {
+  try {
+    await prisma.generatedPost.update({
+      where: { id: postId },
+      data: {
+        status: PostStatus.SCHEDULED,
+        scheduledFor: new Date(), // Retry immediately
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Scheduler] Failed to retry post ${postId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Schedule a post for a specific time
+ */
+export async function schedulePost(postId: string, scheduledFor: Date): Promise<boolean> {
+  try {
+    await prisma.generatedPost.update({
+      where: { id: postId },
+      data: {
+        status: PostStatus.SCHEDULED,
+        scheduledFor,
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Scheduler] Failed to schedule post ${postId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Cancel a scheduled post (revert to draft)
+ */
+export async function cancelScheduledPost(postId: string): Promise<boolean> {
+  try {
+    await prisma.generatedPost.update({
+      where: { id: postId },
+      data: {
+        status: PostStatus.DRAFT,
+        scheduledFor: null,
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Scheduler] Failed to cancel scheduled post ${postId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Get published posts that have external IDs (for analytics sync)
+ */
+export async function getPublishedPostsWithExternalIds(companyId: string, limit = 50) {
+  return prisma.generatedPost.findMany({
+    where: {
+      companyId,
+      status: PostStatus.PUBLISHED,
+      externalPostId: {
+        not: null,
+      },
+    },
+    include: {
+      platform: true,
+    },
+    orderBy: {
+      publishedAt: 'desc',
+    },
+    take: limit,
+  });
+}
+
+/**
+ * Update analytics for a published post
+ */
+export async function updatePostAnalytics(
+  postId: string,
+  analytics: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+    impressions?: number;
+  }
+): Promise<boolean> {
+  try {
+    await prisma.generatedPost.update({
+      where: { id: postId },
+      data: {
+        likes: analytics.likes ?? 0,
+        comments: analytics.comments ?? 0,
+        shares: analytics.shares ?? 0,
+        impressions: analytics.impressions ?? 0,
+        lastSyncedAt: new Date(),
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Scheduler] Failed to update analytics for post ${postId}:`, error);
+    return false;
+  }
+}
+
+
+========== Facebook OAuth : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\callback\route.ts ==========
+
+
+// apps/web/src/app/api/auth/facebook/callback/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import {
+  decodeOAuthState,
+  exchangeFacebookCode,
+  getLongLivedToken,
+  getFacebookPages,
+} from '@/lib/oauth/facebook';
+
+function getAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  let baseUrl = envUrl;
+  if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+  return baseUrl || '';
+}
+
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl();
+  const state = request.nextUrl.searchParams.get('state');
+  let companyId: string | null = null;
+
+  if (state) {
+    try {
+      const stateData = decodeOAuthState(state);
+      companyId = stateData.companyId || null;
+    } catch { /* invalid state */ }
+  }
+
+  try {
+    const code = request.nextUrl.searchParams.get('code');
+    const error = request.nextUrl.searchParams.get('error');
+    const errorReason = request.nextUrl.searchParams.get('error_reason');
+
+    if (error) {
+      const msg = encodeURIComponent(errorReason || error);
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId || ''}/platforms?error=facebook_denied&message=${msg}`, request.url)
+      );
+    }
+
+    if (!code || !state) {
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId || ''}/platforms?error=facebook_missing_params`, request.url)
+      );
+    }
+
+    const stateData = decodeOAuthState(state);
+    const { redirectUri: stateRedirectUri } = stateData;
+    companyId = stateData.companyId;
+
+    if (!companyId) {
+      return NextResponse.redirect(new URL(`/companies?error=facebook_invalid_state`, request.url));
+    }
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) {
+      return NextResponse.redirect(new URL(`/companies?error=company_not_found`, request.url));
+    }
+
+    const shortToken = await exchangeFacebookCode(code, stateRedirectUri);
+    const longLived = await getLongLivedToken(shortToken.access_token);
+    const pages = await getFacebookPages(longLived.access_token);
+
+    if (pages.length === 0) {
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId}/platforms?error=no_facebook_pages`, request.url)
+      );
+    }
+
+    // Single page â€“ connect directly
+    if (pages.length === 1) {
+      const page = pages[0];
+
+      const connectionData = {
+        accessToken: page.access_token,
+        userAccessToken: longLived.access_token,
+        expiresAt: new Date(Date.now() + (longLived.expires_in || 5184000) * 1000).toISOString(),
+        scopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
+        pageId: page.id,
+        pageName: page.name,
+        pageCategory: page.category,
+        connectedAt: new Date().toISOString(),
+      };
+
+      const existing = await prisma.platform.findFirst({
+        where: { type: 'FACEBOOK', companyId },
+      });
+
+      if (existing) {
+        await prisma.platform.update({
+          where: { id: existing.id },
+          data: { username: page.name, isConnected: true, connectionData, lastSyncAt: new Date() },
+        });
+      } else {
+        await prisma.platform.create({
+          data: {
+            type: 'FACEBOOK',
+            name: 'Facebook',
+            username: page.name,
+            isConnected: true,
+            connectionData,
+            lastSyncAt: new Date(),
+            companyId,
+          },
+        });
+      }
+
+      return NextResponse.redirect(
+        new URL(`/companies/${companyId}/platforms?connected=facebook`, request.url)
+      );
+    }
+
+    // Multiple pages â€“ create pending connection for page selector
+    const connectionData = {
+      userAccessToken: longLived.access_token,
+      expiresAt: new Date(Date.now() + (longLived.expires_in || 5184000) * 1000).toISOString(),
+      scopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
+      pendingPageSelection: true,
+      availablePages: pages.map((p) => ({ id: p.id, name: p.name, category: p.category })),
+      connectedAt: new Date().toISOString(),
+    };
+
+    const existing = await prisma.platform.findFirst({
+      where: { type: 'FACEBOOK', companyId },
+    });
+
+    let platformId: string;
+    if (existing) {
+      await prisma.platform.update({
+        where: { id: existing.id },
+        data: { username: 'Pending page selection', isConnected: false, connectionData, lastSyncAt: new Date() },
+      });
+      platformId = existing.id;
+    } else {
+      const newPlatform = await prisma.platform.create({
+        data: {
+          type: 'FACEBOOK',
+          name: 'Facebook',
+          username: 'Pending page selection',
+          isConnected: false,
+          connectionData,
+          lastSyncAt: new Date(),
+          companyId,
+        },
+      });
+      platformId = newPlatform.id;
+    }
+
+    return NextResponse.redirect(
+      new URL(`/companies/${companyId}/platforms?pending_facebook=${platformId}`, request.url)
+    );
+  } catch (error) {
+    console.error('Facebook callback failed:', error);
+    const msg = encodeURIComponent(error instanceof Error ? error.message : 'Facebook connection failed');
+    return NextResponse.redirect(
+      new URL(`/companies/${companyId || ''}/platforms?error=facebook_callback_failed&message=${msg}`, request.url)
+    );
+  }
+}
+
+
+========== Facebook OAuth : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\delete\route.ts ==========
+
+
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+
+// Facebook Data Deletion Callback
+// Facebook sends a signed request when a user removes your app
+// Docs: https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
+
+interface DecodedRequest {
+  user_id: string;
+  algorithm: string;
+  issued_at: number;
+}
+
+function parseSignedRequest(signedRequest: string, appSecret: string): DecodedRequest | null {
+  try {
+    const [encodedSig, payload] = signedRequest.split(".");
+    
+    if (!encodedSig || !payload) {
+      return null;
+    }
+
+    // Decode the payload
+    const data = JSON.parse(
+      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8")
+    ) as DecodedRequest;
+
+    // Verify the signature
+    const expectedSig = crypto
+      .createHmac("sha256", appSecret)
+      .update(payload)
+      .digest("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const sig = encodedSig.replace(/=+$/, "");
+
+    if (sig !== expectedSig) {
+      console.error("Facebook delete callback: Invalid signature");
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Facebook delete callback: Parse error", error);
+    return null;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
+    
+    if (!appSecret) {
+      console.error("Facebook delete callback: Missing app secret");
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    let signedRequest: string | null = null;
+
+    // Try to parse as form data first (Facebook's default)
+    try {
+      const formData = await request.formData();
+      signedRequest = formData.get("signed_request") as string;
+    } catch {
+      // If form data fails, try JSON
+      try {
+        const body = await request.json();
+        signedRequest = body.signed_request;
+      } catch {
+        // Neither worked
+      }
+    }
+
+    if (!signedRequest) {
+      return NextResponse.json(
+        { error: "Missing signed_request" },
+        { status: 400 }
+      );
+    }
+
+    const decoded = parseSignedRequest(signedRequest, appSecret);
+
+    if (!decoded) {
+      return NextResponse.json(
+        { error: "Invalid signed request" },
+        { status: 400 }
+      );
+    }
+
+    const facebookUserId = decoded.user_id;
+    console.log(`Facebook data deletion request received for user: ${facebookUserId}`);
+
+    // Log the deletion request
+    // In a production app, you would:
+    // 1. Delete user data from your database
+    // 2. Store a record of the deletion request for compliance
+    // 3. Send confirmation email if needed
+    
+    // For now, we acknowledge the request and return the required response
+    // The actual token cleanup happens when tokens expire or user disconnects manually
+
+    // Generate a confirmation code for tracking
+    const confirmationCode = `DEL_${facebookUserId}_${Date.now()}`;
+    
+    // Facebook requires a specific response format
+    const statusUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://atgihubrobosocial.vercel.app"}/api/auth/facebook/delete/status?code=${confirmationCode}`;
+
+    console.log(`Facebook deletion confirmed. Code: ${confirmationCode}`);
+
+    return NextResponse.json({
+      url: statusUrl,
+      confirmation_code: confirmationCode,
+    });
+  } catch (error) {
+    console.error("Facebook delete callback error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// GET endpoint for deletion status (required by Facebook)
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+
+  if (!code) {
+    return new NextResponse(
+      `<!DOCTYPE html>
+      <html>
+        <head><title>Data Deletion Status</title></head>
+        <body style="font-family: system-ui; padding: 40px; background: #1a1a2e; color: #eee;">
+          <h1>Data Deletion Status</h1>
+          <p>No confirmation code provided.</p>
+          <p>If you requested data deletion, please check your email for the confirmation code.</p>
+        </body>
+      </html>`,
+      {
+        headers: { "Content-Type": "text/html" },
+      }
+    );
+  }
+
+  // Return a user-friendly status page
+  return new NextResponse(
+    `<!DOCTYPE html>
+    <html>
+      <head>
+        <title>Data Deletion Confirmed | VSHAD RoboSocial</title>
+        <style>
+          body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 40px;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            max-width: 600px;
+            margin: 0 auto;
+          }
+          .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid #2a2a4a;
+          }
+          h1 { color: #4ade80; margin-top: 0; }
+          .code {
+            background: #0f0f1a;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+          }
+          .status {
+            display: inline-block;
+            background: #4ade80;
+            color: #0f0f1a;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>âœ“ Data Deletion Confirmed</h1>
+          <p><span class="status">COMPLETED</span></p>
+          <p>Your data has been successfully deleted from VSHAD RoboSocial.</p>
+          <p><strong>Confirmation Code:</strong></p>
+          <div class="code">${code}</div>
+          <p style="margin-top: 24px; color: #888; font-size: 14px;">
+            This includes all connected account tokens and associated data.
+            If you have any questions, please contact support.
+          </p>
+        </div>
+      </body>
+    </html>`,
+    {
+      headers: { "Content-Type": "text/html" },
+    }
+  );
+}
+
+
+========== Facebook OAuth : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\pages\route.ts ==========
+
+
+// apps/web/src/app/api/auth/facebook/pages/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getFacebookPages } from '@/lib/oauth/facebook';
+import type { Prisma } from '@prisma/client';
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Types
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+interface FacebookConnectionData {
+  accessToken?: string;
+  userAccessToken?: string;
+  expiresAt?: string | number | null;
+  scopes?: string[] | string | null;
+  pageId?: string;
+  pageName?: string;
+  pageCategory?: string;
+  connectedAt?: string;
+  pendingPageSelection?: boolean;
+  availablePages?: Array<{ id: string; name: string; category: string }>;
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// GET: Fetch available pages for a pending connection
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+export async function GET(request: NextRequest) {
+  try {
+    const connectionId = request.nextUrl.searchParams.get('connectionId');
+
+    if (!connectionId) {
+      return NextResponse.json(
+        { error: 'Connection ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const platform = await prisma.platform.findUnique({
+      where: { id: connectionId },
+    });
+
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'Connection not found' },
+        { status: 404 }
+      );
+    }
+
+    const connectionData = platform.connectionData as FacebookConnectionData | null;
+
+    if (!connectionData?.pendingPageSelection) {
+      return NextResponse.json(
+        { error: 'Connection is not pending page selection' },
+        { status: 400 }
+      );
+    }
+
+    const pages = connectionData.availablePages || [];
+
+    return NextResponse.json({ pages });
+  } catch (error) {
+    console.error('Failed to fetch Facebook pages:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch Facebook pages' },
+      { status: 500 }
+    );
+  }
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// POST: Select a page to complete the connection
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { connectionId, pageId } = body;
+
+    if (!connectionId || !pageId) {
+      return NextResponse.json(
+        { error: 'Connection ID and Page ID are required' },
+        { status: 400 }
+      );
+    }
+
+    const platform = await prisma.platform.findUnique({
+      where: { id: connectionId },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'Connection not found' },
+        { status: 404 }
+      );
+    }
+
+    const connectionData = platform.connectionData as FacebookConnectionData | null;
+
+    if (!connectionData?.pendingPageSelection) {
+      return NextResponse.json(
+        { error: 'Connection is not pending page selection' },
+        { status: 400 }
+      );
+    }
+
+    const userToken = connectionData.userAccessToken;
+
+    if (!userToken) {
+      return NextResponse.json(
+        { error: 'User token not found. Please reconnect Facebook.' },
+        { status: 400 }
+      );
+    }
+
+    // Fetch fresh page data with access tokens
+    const pages = await getFacebookPages(userToken);
+    const selectedPage = pages.find((p) => p.id === pageId);
+
+    if (!selectedPage) {
+      return NextResponse.json(
+        { error: 'Selected page not found. You may not have admin access to this page.' },
+        { status: 404 }
+      );
+    }
+
+    // Build connection data as Prisma-compatible JSON
+    const updatedConnectionData: Prisma.InputJsonValue = {
+      accessToken: selectedPage.access_token,
+      userAccessToken: userToken,
+      expiresAt: connectionData.expiresAt ?? null,
+      scopes: connectionData.scopes ?? null,
+      pageId: selectedPage.id,
+      pageName: selectedPage.name,
+      pageCategory: selectedPage.category,
+      connectedAt: new Date().toISOString(),
+      pendingPageSelection: false,
+    };
+
+    const updatedPlatform = await prisma.platform.update({
+      where: { id: connectionId },
+      data: {
+        username: selectedPage.name,
+        isConnected: true,
+        connectionData: updatedConnectionData,
+        lastSyncAt: new Date(),
+      },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Transform to match expected frontend format
+    const connection = {
+      id: updatedPlatform.id,
+      platform: updatedPlatform.type.toLowerCase(),
+      accountName: updatedPlatform.username || updatedPlatform.name,
+      status: 'connected',
+      companyId: updatedPlatform.companyId,
+      company: updatedPlatform.company,
+      lastSyncAt: updatedPlatform.lastSyncAt,
+      createdAt: updatedPlatform.createdAt,
+      updatedAt: updatedPlatform.updatedAt,
+    };
+
+    return NextResponse.json(connection);
+  } catch (error) {
+    console.error('Failed to select Facebook page:', error);
+    return NextResponse.json(
+      { error: 'Failed to connect Facebook page' },
+      { status: 500 }
+    );
+  }
+}
+
+
+========== Facebook OAuth : C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\route.ts ==========
+
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getFacebookAuthUrl } from '@/lib/oauth/facebook';
+
+export async function GET(request: NextRequest) {
+  try {
+    const companyId = request.nextUrl.searchParams.get('companyId');
+
+    if (!companyId) {
+      return NextResponse.redirect(
+        new URL('/platforms?error=missing_company', request.url)
+      );
+    }
+
+    if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
+      return NextResponse.redirect(
+        new URL('/platforms?error=facebook_not_configured', request.url)
+      );
+    }
+
+    const authUrl = getFacebookAuthUrl(companyId);
+    return NextResponse.redirect(authUrl);
+  } catch (error) {
+    console.error('Facebook OAuth init failed:', error);
+    return NextResponse.redirect(
+      new URL('/platforms?error=facebook_init_failed', request.url)
+    );
+  }
+}
+
+
+========== AUTH FOLDER TREE (paths only) ==========
+
+
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\callback\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\delete\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\facebook\pages\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\linkedin\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\linkedin\callback\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\linkedin\complete\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\register\route.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\app\api\auth\[...nextauth]\route.ts
+
+
+========== LIB TREE (facebook/linkedin/oauth/platform only) ==========
+
+
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\platforms.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\intelligence\extractors\linkedin.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\oauth\facebook.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\oauth\linkedin.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\publisher\facebook.ts
+C:\Dev\v2\robosocial\Robosocial-V2\apps\web\src\lib\publisher\linkedin.ts

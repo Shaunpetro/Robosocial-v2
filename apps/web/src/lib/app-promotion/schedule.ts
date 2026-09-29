@@ -1,90 +1,124 @@
 // apps/web/src/lib/app-promotion/schedule.ts
 
+const SAST_OFFSET_MINUTES = 2 * 60; // SAST is UTC+2
 const CYCLE_DAYS = 14;
-const POSTING_INTERVAL_DAYS = 2;
+
+export type SlotIndex = 1 | 2 | 3;
 
 export interface SlotWindow {
-  index: 1 | 2 | 3;
-  startUtcHour: number;
-  endUtcHour: number;
+  slotIndex: SlotIndex;
+  startUtc: Date;
+  endUtc: Date;
 }
 
 /**
- * Slot windows in UTC. SAST is UTC+2 with no DST.
+ * SAST slot windows. These sit one hour after each CSHAD scrape run
+ * (08:00, 12:00, 16:00 SAST), giving the scrape time to finish and the
+ * plan-slot job time to populate the schedule before the window opens.
  *
- *   Slot 1: 08:00-10:00 SAST -> 06:00-08:00 UTC
- *   Slot 2: 12:00-14:00 SAST -> 10:00-12:00 UTC
- *   Slot 3: 16:00-18:00 SAST -> 14:00-16:00 UTC
+ *   Slot 1: 09:00-11:00 SAST
+ *   Slot 2: 13:00-15:00 SAST
+ *   Slot 3: 17:00-19:00 SAST
  */
-export const SLOT_WINDOWS: SlotWindow[] = [
-  { index: 1, startUtcHour: 6, endUtcHour: 8 },
-  { index: 2, startUtcHour: 10, endUtcHour: 12 },
-  { index: 3, startUtcHour: 14, endUtcHour: 16 },
-];
+const SAST_SLOT_HOURS: Record<SlotIndex, [number, number]> = {
+  1: [9, 11],
+  2: [13, 15],
+  3: [17, 19],
+};
 
 /**
- * Returns true if the given moment falls on a posting day within the
- * 14-day cycle. Posting days are every other day starting from
- * rotationStartedAt. Over 14 days, seven days are posting days.
+ * Compute the slot window for a given SAST calendar date and slot index.
+ * Returned times are UTC `Date` objects.
  */
-export function isPostingDay(
-  rotationStartedAt: Date,
-  now: Date = new Date()
-): boolean {
-  const ms = now.getTime() - rotationStartedAt.getTime();
-  const days = Math.floor(ms / 86_400_000);
-  const cycleDay = ((days % CYCLE_DAYS) + CYCLE_DAYS) % CYCLE_DAYS;
-  return cycleDay % POSTING_INTERVAL_DAYS === 0;
-}
+export function getSlotWindow(slotIndex: SlotIndex, dateSast: Date): SlotWindow {
+  const [startHour, endHour] = SAST_SLOT_HOURS[slotIndex];
 
-export function getSlotWindow(index: 1 | 2 | 3): SlotWindow {
-  const w = SLOT_WINDOWS.find((s) => s.index === index);
-  if (!w) throw new Error(`Invalid slot index: ${index}`);
-  return w;
-}
+  const year = dateSast.getUTCFullYear();
+  const month = dateSast.getUTCMonth();
+  const day = dateSast.getUTCDate();
 
-/**
- * Returns the current slot index (1, 2, or 3) if the given moment is inside
- * a slot window, or null otherwise. Used by the run-slot route to validate
- * that the caller is inside an allowed window.
- */
-export function getCurrentSlotIndex(now: Date = new Date()): 1 | 2 | 3 | null {
-  const hour = now.getUTCHours();
-  for (const w of SLOT_WINDOWS) {
-    if (hour >= w.startUtcHour && hour < w.endUtcHour) return w.index;
-  }
-  return null;
+  // Convert SAST hour to UTC by subtracting the offset
+  const startUtc = new Date(
+    Date.UTC(year, month, day, startHour - 2, 0, 0, 0)
+  );
+  const endUtc = new Date(Date.UTC(year, month, day, endHour - 2, 0, 0, 0));
+
+  return { slotIndex, startUtc, endUtc };
 }
 
 /**
- * Picks a random time within the given slot window, biased toward the
- * middle so that posts do not cluster at the window edges. Returns a
- * Date in UTC.
+ * The 14-day posting cycle: posts occur on even-index days relative to the
+ * rotation anchor. This yields one posting day, one skip day, repeating, so
+ * all seven weekdays are covered across the cycle.
+ */
+export function isPostingDay(rotationStartedAt: Date, reference: Date): boolean {
+  const startMs = Date.UTC(
+    rotationStartedAt.getUTCFullYear(),
+    rotationStartedAt.getUTCMonth(),
+    rotationStartedAt.getUTCDate()
+  );
+  const refMs = Date.UTC(
+    reference.getUTCFullYear(),
+    reference.getUTCMonth(),
+    reference.getUTCDate()
+  );
+
+  const daysDiff = Math.floor((refMs - startMs) / 86_400_000);
+  const mod = ((daysDiff % CYCLE_DAYS) + CYCLE_DAYS) % CYCLE_DAYS;
+
+  return mod % 2 === 0;
+}
+
+/**
+ * Pick a target time within the slot window.
  *
- * This is the "sweet spot" picker for v1. v2 will replace the randomness
- * with a learned distribution from engagement analytics.
+ * v1: triangular distribution biased toward the middle of the window.
+ * v2: will consume engagement data to drift toward the observed peak.
  */
-export function pickSweetSpotTime(
-  window: SlotWindow,
-  now: Date = new Date()
-): Date {
-  const windowMinutes = (window.endUtcHour - window.startUtcHour) * 60;
-
-  // Triangular distribution: average of two uniforms peaks at 0.5.
+export function pickSweetSpotTime(window: SlotWindow): Date {
+  const totalMs = window.endUtc.getTime() - window.startUtc.getTime();
   const u1 = Math.random();
   const u2 = Math.random();
-  const centreBias = (u1 + u2) / 2;
+  const biased = (u1 + u2) / 2;
+  return new Date(window.startUtc.getTime() + Math.floor(totalMs * biased));
+}
 
-  const minutesIn = Math.floor(centreBias * windowMinutes);
+/**
+ * The UTC timestamp corresponding to 00:00 SAST today.
+ */
+export function startOfSastToday(reference: Date = new Date()): Date {
+  const sastNow = new Date(reference.getTime() + SAST_OFFSET_MINUTES * 60_000);
 
-  const target = new Date(now);
-  target.setUTCHours(window.startUtcHour, 0, 0, 0);
-  target.setUTCMinutes(target.getUTCMinutes() + minutesIn);
+  const sastMidnightAsUtc = new Date(
+    Date.UTC(
+      sastNow.getUTCFullYear(),
+      sastNow.getUTCMonth(),
+      sastNow.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
 
-  // Never schedule in the past
-  if (target.getTime() <= now.getTime()) {
-    target.setTime(now.getTime() + 60_000);
-  }
+  return new Date(sastMidnightAsUtc.getTime() - SAST_OFFSET_MINUTES * 60_000);
+}
 
-  return target;
+/**
+ * The SAST calendar date (as a UTC midnight Date) for a given reference.
+ * Used for `slotDate` on `PromoPostLog`.
+ */
+export function sastDateOnly(reference: Date = new Date()): Date {
+  const sastNow = new Date(reference.getTime() + SAST_OFFSET_MINUTES * 60_000);
+  return new Date(
+    Date.UTC(
+      sastNow.getUTCFullYear(),
+      sastNow.getUTCMonth(),
+      sastNow.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
 }
