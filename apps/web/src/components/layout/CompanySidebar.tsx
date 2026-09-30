@@ -4,7 +4,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
-import { Linkedin, Facebook, Instagram, Twitter, Globe, Sparkles, Star } from 'lucide-react'
+import { Linkedin, Facebook, Instagram, Twitter, Globe, Sparkles, Star, Megaphone } from 'lucide-react'
 
 interface Platform {
   id: string
@@ -136,6 +136,10 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
   const pathname = usePathname()
   const baseUrl = `/companies/${company.id}`
   const specialDatesHref = `/special-dates?companyId=${company.id}`
+  const appPromotionHref = `/app-promotion?companyId=${company.id}`
+
+  const hostCompanyId = process.env.NEXT_PUBLIC_APP_PROMOTION_HOST_COMPANY_ID
+  const showAppPromotion = !!hostCompanyId && company.id === hostCompanyId
 
   const needsOnboarding = !company.intelligence?.onboardingCompleted
 
@@ -150,9 +154,8 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
 
   return (
     <>
-      {/* Desktop Sidebar - Hidden on mobile */}
+      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 glass-subtle flex-col border-r border-[var(--border-default)]">
-        {/* Company Header */}
         <div className="p-4 border-b border-[var(--border-subtle)]">
           <Link
             href="/companies"
@@ -189,7 +192,6 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
           </div>
         </div>
 
-        {/* Onboarding Alert */}
         {needsOnboarding && (
           <div className="mx-3 mt-3">
             <Link
@@ -207,7 +209,6 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
           </div>
         )}
 
-        {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin">
           {navItems.map((item) => {
             const href = `${baseUrl}${item.href}`
@@ -233,7 +234,6 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
             )
           })}
 
-          {/* Special Dates Link (desktop) */}
           <Link
             href={specialDatesHref}
             className={`
@@ -247,9 +247,24 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
             <Star className="w-5 h-5" />
             Special Dates
           </Link>
+
+          {showAppPromotion && (
+            <Link
+              href={appPromotionHref}
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                ${pathname.startsWith('/app-promotion')
+                  ? 'bg-[var(--brand-primary)] text-white shadow-lg shadow-brand-500/25'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                }
+              `}
+            >
+              <Megaphone className="w-5 h-5" />
+              App Promotion
+            </Link>
+          )}
         </nav>
 
-        {/* Connected Platforms */}
         <div className="p-3 border-t border-[var(--border-subtle)]">
           <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2 px-3">
             Connected
@@ -279,7 +294,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile Header Bar - Visible only on mobile */}
+      {/* Mobile Header Bar */}
       <div className="md:hidden fixed top-16 left-0 right-0 z-30 bg-[var(--bg-primary)]/95 backdrop-blur-xl border-b border-[var(--border-default)]">
         <div className="flex items-center gap-3 px-4 py-2">
           <Link
@@ -317,7 +332,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation - Visible only on mobile */}
+      {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur-xl">
         <div className="flex items-center justify-around h-16 px-2">
           {mobileNavItems.map((item) => {
@@ -349,27 +364,6 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
             )
           })}
 
-          {/* Special Dates Link (mobile) */}
-          <Link
-            href={specialDatesHref}
-            className={`
-              flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[56px] transition-all duration-200
-              ${pathname.startsWith('/special-dates')
-                ? 'text-[var(--brand-primary)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-              }
-            `}
-          >
-            <div className={`
-              p-1.5 rounded-lg transition-colors
-              ${pathname.startsWith('/special-dates') ? 'bg-brand-500/10' : ''}
-            `}>
-              <Star className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-medium">Dates</span>
-          </Link>
-
-          {/* More Menu Button */}
           <div className="relative group">
             <button
               className="flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[56px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-all duration-200"
@@ -382,8 +376,7 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
               <span className="text-[10px] font-medium">More</span>
             </button>
 
-            {/* More Menu Dropdown - Opens upward */}
-            <div className="absolute bottom-full right-0 mb-2 w-48 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+            <div className="absolute bottom-full right-0 mb-2 w-56 py-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
               {moreMenuItems.map((item) => {
                 const href = `${baseUrl}${item.href}`
                 const isActive = pathname.startsWith(href)
@@ -405,6 +398,34 @@ export default function CompanySidebar({ company }: CompanySidebarProps) {
                   </Link>
                 )
               })}
+              <Link
+                href={specialDatesHref}
+                className={`
+                  flex items-center gap-3 px-4 py-2.5 text-sm transition-colors
+                  ${pathname.startsWith('/special-dates')
+                    ? 'text-[var(--brand-primary)] bg-brand-500/5'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                  }
+                `}
+              >
+                <Star className="w-5 h-5" />
+                Special Dates
+              </Link>
+              {showAppPromotion && (
+                <Link
+                  href={appPromotionHref}
+                  className={`
+                    flex items-center gap-3 px-4 py-2.5 text-sm transition-colors
+                    ${pathname.startsWith('/app-promotion')
+                      ? 'text-[var(--brand-primary)] bg-brand-500/5'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                    }
+                  `}
+                >
+                  <Megaphone className="w-5 h-5" />
+                  App Promotion
+                </Link>
+              )}
             </div>
           </div>
         </div>
