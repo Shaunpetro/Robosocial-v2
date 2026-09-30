@@ -717,6 +717,7 @@ model PromoPostLog {
   seenItem PromoSeenItem @relation(fields: [seenItemId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([slotDate, slotIndex])
   @@index([status, scheduledFor])

@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, Trash2, Send, Clock, Loader2 } from 'lucide-react'
+import { ExternalLink, Trash2, Send, Clock, Loader2, AlertCircle } from 'lucide-react'
 
 export interface PromoPost {
   id: string
@@ -11,6 +11,7 @@ export interface PromoPost {
   slotIndex: number
   scheduledFor: string | null
   postedAt: string | null
+  updatedAt: string
   status: 'PENDING' | 'POSTED' | 'FAILED' | 'DELETED'
   facebookUrl: string | null
   errorMessage: string | null
@@ -97,19 +98,41 @@ export function PostCard({
           <p className="text-sm text-[var(--text-primary)] line-clamp-2">
             {post.title}
           </p>
-          <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-tertiary)]">
-            <Clock className="w-3 h-3" />
-            {post.status === 'POSTED' && post.postedAt && (
-              <span>Posted {formatSast(post.postedAt)}</span>
-            )}
-            {post.status === 'PENDING' && post.scheduledFor && (
+
+          {post.status === 'PENDING' && post.scheduledFor && (
+            <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-tertiary)]">
+              <Clock className="w-3 h-3" />
               <span>Scheduled {formatSast(post.scheduledFor)}</span>
-            )}
-            {post.status === 'FAILED' && (
-              <span>Failed — {post.errorMessage || 'unknown'}</span>
-            )}
-            {post.status === 'DELETED' && <span>Deleted</span>}
-          </div>
+            </div>
+          )}
+
+          {post.status === 'POSTED' && post.postedAt && (
+            <div className="flex items-center gap-2 mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <Clock className="w-3 h-3" />
+              <span>Posted {formatSast(post.postedAt)}</span>
+            </div>
+          )}
+
+          {post.status === 'FAILED' && (
+            <div className="mt-1 space-y-0.5">
+              <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                <AlertCircle className="w-3 h-3" />
+                <span>Failed {formatSast(post.updatedAt)}</span>
+              </div>
+              {post.errorMessage && (
+                <p className="text-xs text-[var(--text-tertiary)] pl-5 break-words">
+                  {post.errorMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {post.status === 'DELETED' && (
+            <div className="flex items-center gap-2 mt-1 text-xs text-[var(--text-tertiary)]">
+              <Clock className="w-3 h-3" />
+              <span>Deleted {formatSast(post.updatedAt)}</span>
+            </div>
+          )}
         </div>
       </div>
 

@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
     slotIndex: l.slotIndex,
     scheduledFor: l.scheduledFor?.toISOString() || null,
     postedAt: l.postedAt?.toISOString() || null,
+    updatedAt: l.updatedAt.toISOString(),
     status: l.status,
     facebookUrl: l.facebookUrl,
     errorMessage: l.errorMessage,
