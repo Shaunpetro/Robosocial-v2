@@ -35,9 +35,10 @@ export async function generateMetadata({ params }: PageProps) {
     return { title: "Not found" };
   }
 
+  const siteName = "CSHAD iSentinel";
   const description = item.sourceName
-    ? `via ${item.sourceName}`
-    : "via CSHAD iSentinel News";
+    ? `${item.title} — via ${item.sourceName}`
+    : item.title;
 
   return {
     title: item.title,
@@ -45,8 +46,15 @@ export async function generateMetadata({ params }: PageProps) {
     openGraph: {
       title: item.title,
       description,
+      siteName,
       images: item.imageUrl ? [item.imageUrl] : [BRAND_FALLBACK_OG],
       type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: item.title,
+      description,
+      images: item.imageUrl ? [item.imageUrl] : [BRAND_FALLBACK_OG],
     },
   };
 }
@@ -96,6 +104,15 @@ export default async function BridgePage({ params }: PageProps) {
           </h1>
 
           <div className="space-y-2 pt-2">
+            <a
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-full px-4 py-3 rounded-xl bg-[var(--brand-primary)] text-white font-medium hover:opacity-90 transition-opacity"
+            >
+              Get the CSHAD iSentinel app
+            </a>
+
             {item.sourceUrl && (
               <a
                 href={item.sourceUrl}
@@ -106,15 +123,6 @@ export default async function BridgePage({ params }: PageProps) {
                 {sourceCtaLabel}
               </a>
             )}
-
-            <a
-              href={PLAY_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-full px-4 py-3 rounded-xl bg-[var(--brand-primary)] text-white font-medium hover:opacity-90 transition-opacity"
-            >
-              Get the CSHAD iSentinel app
-            </a>
           </div>
 
           <p className="text-xs text-[var(--text-tertiary)] text-center pt-2">

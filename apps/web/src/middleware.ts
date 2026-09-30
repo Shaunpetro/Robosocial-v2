@@ -6,13 +6,16 @@
 // This handles the "no session at all" case. The LicenseGuard component
 // handles the "session exists but license is inactive" case — both layers
 // are needed.
+//
+// /go/* is a public bridge route used by App Promotion Facebook posts.
+// It must remain reachable without authentication.
 
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|login|register|admin|activate|license-expired).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|login|register|admin|activate|license-expired|go).*)",
   ],
 };
 
