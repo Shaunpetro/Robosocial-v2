@@ -4,7 +4,7 @@ import { fetchRecentItems } from "./fetch-items";
 import { diffAndInsertItems } from "./diff";
 import { selectItemsForSlot } from "./select";
 import { buildCaption, buildBridgeUrl } from "./caption";
-import { getSlotWindow, sastDateOnly } from "./schedule";
+import { getSlotWindow, sastDateOnly, isPostingDay } from "./schedule";
 import { publishPromoToFacebook } from "./facebook";
 
 const POSTS_PER_SLOT = 3;
@@ -18,15 +18,61 @@ export interface PlanResult {
   slotIndex: number;
 }
 
+export interface PlanOptions {
+  /**
+   * When true, bypasses the posting-day rotation gate and the
+   * past-window check. Intended for manual testing only. The idempotency
+   * check for an already-planned slot still applies.
+   */
+  force?: boolean;
+}
+
 /**
- * Plan a slot: fetch from CSHAD, diff, select, and create PENDING logs with
- * scheduledFor timestamps. Idempotent — a second call for the same
- * (slotDate, slotIndex) is a no-op.
+ * Plan a slot: gate on posting day, confirm window is still ahead,
+ * fetch from CSHAD, diff, select, and create PENDING logs with
+ * scheduledFor timestamps distributed across the slot window.
+ *
+ * Idempotent: a second call for the same (slotDate, slotIndex) is a no-op.
  */
-export async function planSlot(slotIndex: 1 | 2 | 3): Promise<PlanResult> {
+export async function planSlot(
+  slotIndex: 1 | 2 | 3,
+  options: PlanOptions = {}
+): Promise<PlanResult> {
   const now = new Date();
   const slotDate = sastDateOnly(now);
+  const { force = false } = options;
 
+  // --- Rotation gate ---
+  if (!force) {
+    const config = await prisma.appPromotionConfig.findFirst({
+      where: { enabled: true },
+      orderBy: { rotationStartedAt: "asc" },
+    });
+
+    if (config && !isPostingDay(config.rotationStartedAt, now)) {
+      return {
+        planned: 0,
+        skipped: true,
+        reason: "not-a-posting-day",
+        slotDate: slotDate.toISOString(),
+        slotIndex,
+      };
+    }
+  }
+
+  // --- Past-window rejection ---
+  const window = getSlotWindow(slotIndex, now);
+  if (!force && window.startUtc.getTime() < now.getTime()) {
+    return {
+      planned: 0,
+      skipped: true,
+      reason: "slot-window-already-passed",
+      slotDate: slotDate.toISOString(),
+      slotIndex,
+    };
+  }
+
+  // --- Idempotency: already planned ---
   const existing = await prisma.promoPostLog.count({
     where: { slotDate, slotIndex },
   });
@@ -40,6 +86,7 @@ export async function planSlot(slotIndex: 1 | 2 | 3): Promise<PlanResult> {
     };
   }
 
+  // --- Fetch and diff ---
   const items = await fetchRecentItems();
   await diffAndInsertItems(items);
 
@@ -54,11 +101,9 @@ export async function planSlot(slotIndex: 1 | 2 | 3): Promise<PlanResult> {
     };
   }
 
-  const window = getSlotWindow(slotIndex, now);
-  const sliceMs = Math.floor(
-    Math.min(3_600_000, window.endUtc.getTime() - window.startUtc.getTime()) /
-      selected.length
-  );
+  // --- Distribute across the full slot window ---
+  const totalMs = window.endUtc.getTime() - window.startUtc.getTime();
+  const sliceMs = Math.floor(totalMs / selected.length);
 
   const rows = selected.map((item, i) => {
     const sliceStart = window.startUtc.getTime() + sliceMs * i;
@@ -88,85 +133,87 @@ export interface ExecuteResult {
   inspected: number;
 }
 
+/**
+ * Publish the single oldest PENDING post whose scheduledFor time has
+ * passed. One per call. This bounds each invocation well below the
+ * Vercel function timeout and eliminates the risk of a Facebook post
+ * succeeding while the database write fails.
+ */
 export async function executeDue(): Promise<ExecuteResult> {
   const now = new Date();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL;
 
-  const due = await prisma.promoPostLog.findMany({
+  const due = await prisma.promoPostLog.findFirst({
     where: { status: "PENDING", scheduledFor: { lte: now } },
     include: { seenItem: true },
     orderBy: { scheduledFor: "asc" },
-    take: 10,
   });
 
-  let executed = 0;
-  let failed = 0;
-
-  for (const log of due) {
-    const bridgeUrl = buildBridgeUrl(appUrl, log.seenItem.id);
-    const caption = buildCaption({
-      item: {
-        id: log.seenItem.id,
-        externalType: log.seenItem.externalType as any,
-        title: log.seenItem.title,
-        sourceUrl: log.seenItem.sourceUrl,
-        imageUrl: log.seenItem.imageUrl,
-        sourceName: log.seenItem.sourceName,
-        publishedAt: log.seenItem.publishedAt,
-      },
-      bridgeUrl,
-    });
-
-    const mediaUrls: string[] = [];
-    if (log.seenItem.externalType === "NEWS" && log.seenItem.imageUrl) {
-      mediaUrls.push(log.seenItem.imageUrl);
-    }
-
-    try {
-      const result = await publishPromoToFacebook({
-        content: caption,
-        link: mediaUrls.length === 0 ? bridgeUrl : undefined,
-        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
-      });
-
-      if (result.success && result.postId) {
-        await prisma.$transaction([
-          prisma.promoPostLog.update({
-            where: { id: log.id },
-            data: {
-              status: "POSTED",
-              facebookPostId: result.postId,
-              facebookUrl: result.postUrl || null,
-              postedAt: new Date(),
-            },
-          }),
-          prisma.promoSeenItem.update({
-            where: { id: log.seenItem.id },
-            data: { postedAt: new Date() },
-          }),
-        ]);
-        executed++;
-      } else {
-        await prisma.promoPostLog.update({
-          where: { id: log.id },
-          data: {
-            status: "FAILED",
-            errorMessage: result.error || "Unknown error",
-          },
-        });
-        failed++;
-      }
-    } catch (e) {
-      await prisma.promoPostLog.update({
-        where: { id: log.id },
-        data: {
-          status: "FAILED",
-          errorMessage: e instanceof Error ? e.message : "Unknown error",
-        },
-      });
-      failed++;
-    }
+  if (!due) {
+    return { executed: 0, failed: 0, inspected: 0 };
   }
 
-  return { executed, failed, inspected: due.length };
+  const bridgeUrl = buildBridgeUrl(appUrl, due.seenItem.id);
+  const caption = buildCaption({
+    item: {
+      id: due.seenItem.id,
+      externalType: due.seenItem.externalType as any,
+      title: due.seenItem.title,
+      sourceUrl: due.seenItem.sourceUrl,
+      imageUrl: due.seenItem.imageUrl,
+      sourceName: due.seenItem.sourceName,
+      publishedAt: due.seenItem.publishedAt,
+    },
+    bridgeUrl,
+  });
+
+  const mediaUrls: string[] = [];
+  if (due.seenItem.externalType === "NEWS" && due.seenItem.imageUrl) {
+    mediaUrls.push(due.seenItem.imageUrl);
+  }
+
+  try {
+    const result = await publishPromoToFacebook({
+      content: caption,
+      link: mediaUrls.length === 0 ? bridgeUrl : undefined,
+      mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+    });
+
+    if (result.success && result.postId) {
+      await prisma.$transaction([
+        prisma.promoPostLog.update({
+          where: { id: due.id },
+          data: {
+            status: "POSTED",
+            facebookPostId: result.postId,
+            facebookUrl: result.postUrl || null,
+            postedAt: new Date(),
+          },
+        }),
+        prisma.promoSeenItem.update({
+          where: { id: due.seenItem.id },
+          data: { postedAt: new Date() },
+        }),
+      ]);
+      return { executed: 1, failed: 0, inspected: 1 };
+    }
+
+    await prisma.promoPostLog.update({
+      where: { id: due.id },
+      data: {
+        status: "FAILED",
+        errorMessage: result.error || "Unknown error",
+      },
+    });
+    return { executed: 0, failed: 1, inspected: 1 };
+  } catch (e) {
+    await prisma.promoPostLog.update({
+      where: { id: due.id },
+      data: {
+        status: "FAILED",
+        errorMessage: e instanceof Error ? e.message : "Unknown error",
+      },
+    });
+    return { executed: 0, failed: 1, inspected: 1 };
+  }
 }
